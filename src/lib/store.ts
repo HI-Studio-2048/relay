@@ -1,0 +1,294 @@
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { getDb } from "@/lib/db";
+import {
+  contactFieldValues,
+  contactTags,
+  contacts,
+  customFields,
+  flowSessions,
+  flows,
+  messages,
+  tags,
+} from "@/lib/db/schema";
+import { EXAMPLE_LEAD_CAPTURE_FLOW } from "@/lib/example-flow";
+import type { ContactRecord, FlowDefinition, FlowSessionState } from "@/lib/types";
+import type { FlowRecord } from "@/lib/flow-engine";
+
+function now() {
+  return new Date();
+}
+
+export async function loadContactRecord(contactId: string): Promise<ContactRecord | null> {
+  const db = await getDb();
+  const [row] = await db.select().from(contacts).where(eq(contacts.id, contactId)).limit(1);
+  if (!row) return null;
+  const fieldRows = await db
+    .select({ key: customFields.key, value: contactFieldValues.value })
+    .from(contactFieldValues)
+    .innerJoin(customFields, eq(customFields.id, contactFieldValues.fieldId))
+    .where(eq(contactFieldValues.contactId, contactId));
+  const tagRows = await db
+    .select({ name: tags.name })
+    .from(contactTags)
+    .innerJoin(tags, eq(tags.id, contactTags.tagId))
+    .where(eq(contactTags.contactId, contactId));
+  return {
+    id: row.id,
+    telegramUserId: row.telegramUserId,
+    username: row.username,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    email: row.email,
+    phone: row.phone,
+    customFields: Object.fromEntries(fieldRows.map((field) => [field.key, field.value])),
+    tags: tagRows.map((tag) => tag.name),
+  };
+}
+
+export async function findContactByTelegram(botId: string, telegramUserId: string) {
+  const db = await getDb();
+  const [row] = await db
+    .select()
+    .from(contacts)
+    .where(and(eq(contacts.botId, botId), eq(contacts.telegramUserId, telegramUserId)))
+    .limit(1);
+  if (!row) return null;
+  return loadContactRecord(row.id);
+}
+
+export async function persistContact(botId: string, record: ContactRecord) {
+  const db = await getDb();
+  const existing = await db.select().from(contacts).where(eq(contacts.id, record.id)).limit(1);
+  const values = {
+    username: record.username,
+    firstName: record.firstName,
+    lastName: record.lastName,
+    email: record.email,
+    phone: record.phone,
+    updatedAt: now(),
+  };
+  if (existing[0]) {
+    await db.update(contacts).set(values).where(eq(contacts.id, record.id));
+  } else {
+    await db.insert(contacts).values({
+      id: record.id,
+      botId,
+      telegramUserId: record.telegramUserId,
+      ...values,
+      createdAt: now(),
+    });
+  }
+
+  const fieldDefs = await db.select().from(customFields).where(eq(customFields.botId, botId));
+  const byKey = new Map(fieldDefs.map((field) => [field.key, field]));
+  for (const [key, value] of Object.entries(record.customFields)) {
+    let field = byKey.get(key);
+    if (!field) {
+      field = {
+        id: crypto.randomUUID(),
+        botId,
+        key,
+        label: key,
+        fieldType: "text",
+      };
+      await db.insert(customFields).values(field);
+      byKey.set(key, field);
+    }
+    await db
+      .insert(contactFieldValues)
+      .values({ contactId: record.id, fieldId: field.id, value })
+      .onConflictDoUpdate({
+        target: [contactFieldValues.contactId, contactFieldValues.fieldId],
+        set: { value },
+      });
+  }
+
+  for (const tagName of record.tags) {
+    let [tag] = await db
+      .select()
+      .from(tags)
+      .where(and(eq(tags.botId, botId), eq(tags.name, tagName)))
+      .limit(1);
+    if (!tag) {
+      [tag] = await db
+        .insert(tags)
+        .values({ id: crypto.randomUUID(), botId, name: tagName, color: "#c4a574" })
+        .returning();
+    }
+    await db
+      .insert(contactTags)
+      .values({ contactId: record.id, tagId: tag.id })
+      .onConflictDoNothing();
+  }
+}
+
+export async function loadActiveSession(contactId: string): Promise<FlowSessionState | null> {
+  const db = await getDb();
+  const [row] = await db
+    .select()
+    .from(flowSessions)
+    .where(and(eq(flowSessions.contactId, contactId), eq(flowSessions.status, "active")))
+    .limit(1);
+  if (!row) return null;
+  return {
+    id: row.id,
+    contactId: row.contactId,
+    flowId: row.flowId,
+    stepId: row.stepId,
+    awaitingInput: row.awaitingInput,
+    status: row.status === "completed" ? "completed" : "active",
+  };
+}
+
+export async function persistSession(contactId: string, session: FlowSessionState | null) {
+  const db = await getDb();
+  await db.delete(flowSessions).where(eq(flowSessions.contactId, contactId));
+  if (!session) return;
+  await db.insert(flowSessions).values({
+    id: session.id,
+    contactId,
+    flowId: session.flowId,
+    stepId: session.stepId,
+    awaitingInput: session.awaitingInput,
+    status: session.status,
+    updatedAt: now(),
+  });
+}
+
+export async function loadActiveFlows(botId: string): Promise<FlowRecord[]> {
+  const db = await getDb();
+  const rows = await db.select().from(flows).where(eq(flows.botId, botId));
+  return rows.map((row) => ({
+    id: row.id,
+    triggerType: row.triggerType as FlowRecord["triggerType"],
+    triggerValue: row.triggerValue,
+    isActive: row.isActive,
+    definition: row.definition as FlowDefinition,
+  }));
+}
+
+export async function saveMessage(input: {
+  botId: string;
+  contactId: string;
+  direction: "inbound" | "outbound";
+  source: "user" | "flow" | "agent" | "broadcast";
+  body: string;
+  telegramMessageId?: string | null;
+}) {
+  const db = await getDb();
+  await db.insert(messages).values({
+    id: crypto.randomUUID(),
+    botId: input.botId,
+    contactId: input.contactId,
+    direction: input.direction,
+    source: input.source,
+    body: input.body,
+    telegramMessageId: input.telegramMessageId ?? null,
+  });
+}
+
+export async function listInbox(botId: string) {
+  const db = await getDb();
+  const latest = db
+    .select({
+      contactId: messages.contactId,
+      lastAt: sql<Date>`max(${messages.createdAt})`.as("last_at"),
+    })
+    .from(messages)
+    .where(eq(messages.botId, botId))
+    .groupBy(messages.contactId)
+    .as("latest");
+
+  return db
+    .select({
+      contact: contacts,
+      lastAt: latest.lastAt,
+    })
+    .from(latest)
+    .innerJoin(contacts, eq(contacts.id, latest.contactId))
+    .orderBy(desc(latest.lastAt));
+}
+
+export async function listMessages(contactId: string) {
+  const db = await getDb();
+  return db
+    .select()
+    .from(messages)
+    .where(eq(messages.contactId, contactId))
+    .orderBy(messages.createdAt);
+}
+
+export async function searchContacts(botId: string, query?: string, tagId?: string) {
+  const db = await getDb();
+  const filters = [eq(contacts.botId, botId)];
+  if (query) {
+    const like = `%${query}%`;
+    filters.push(
+      or(
+        ilike(contacts.firstName, like),
+        ilike(contacts.lastName, like),
+        ilike(contacts.username, like),
+        ilike(contacts.email, like),
+        ilike(contacts.phone, like),
+        ilike(contacts.telegramUserId, like),
+      )!,
+    );
+  }
+  let rows = await db
+    .select()
+    .from(contacts)
+    .where(and(...filters))
+    .orderBy(desc(contacts.updatedAt));
+  if (tagId) {
+    const tagged = await db
+      .select({ contactId: contactTags.contactId })
+      .from(contactTags)
+      .where(eq(contactTags.tagId, tagId));
+    const ids = new Set(tagged.map((row) => row.contactId));
+    rows = rows.filter((row) => ids.has(row.id));
+  }
+  return Promise.all(rows.map((row) => loadContactRecord(row.id)));
+}
+
+export async function contactsWithTag(botId: string, tagId: string) {
+  const db = await getDb();
+  const rows = await db
+    .select({ contact: contacts })
+    .from(contactTags)
+    .innerJoin(contacts, eq(contacts.id, contactTags.contactId))
+    .where(and(eq(contactTags.tagId, tagId), eq(contacts.botId, botId)));
+  return rows.map((row) => row.contact);
+}
+
+export async function seedBotDefaults(botId: string) {
+  const db = await getDb();
+  const existingTags = await db.select().from(tags).where(eq(tags.botId, botId));
+  if (existingTags.length === 0) {
+    await db.insert(tags).values([
+      { id: crypto.randomUUID(), botId, name: "lead", color: "#c4a574" },
+      { id: crypto.randomUUID(), botId, name: "qualified", color: "#6f8f6a" },
+    ]);
+  }
+  const existingFields = await db.select().from(customFields).where(eq(customFields.botId, botId));
+  if (existingFields.length === 0) {
+    await db.insert(customFields).values({
+      id: crypto.randomUUID(),
+      botId,
+      key: "company",
+      label: "Company",
+      fieldType: "text",
+    });
+  }
+  const existingFlows = await db.select().from(flows).where(eq(flows.botId, botId));
+  if (existingFlows.length === 0) {
+    await db.insert(flows).values({
+      id: crypto.randomUUID(),
+      botId,
+      name: "Lead capture",
+      triggerType: "start",
+      triggerValue: "/start",
+      isActive: true,
+      definition: EXAMPLE_LEAD_CAPTURE_FLOW,
+    });
+  }
+}
