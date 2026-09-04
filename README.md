@@ -99,7 +99,7 @@ Delete bot / flow / tag / field also require `confirm: true`.
 
 ## Railway (one service)
 
-<v1 is a single web service: HTTP + webhook + in-process worker.
+v1 is a single web service: HTTP + webhook + in-process worker.
 
 1. Create a Railway project. Add **Postgres** and **Redis**.
 2. Create one service from this repo (or deploy the Dockerfile). Nixpacks: `npm run build` / `npm run start`.
