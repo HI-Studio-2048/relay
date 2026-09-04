@@ -1,0 +1,2 @@
+-- Applied automatically on boot from src/lib/db/sql.ts
+-- See that file for the canonical statements.
