@@ -1,0 +1,122 @@
+export const MIGRATION_SQL = `
+CREATE TABLE IF NOT EXISTS bots (
+  id text PRIMARY KEY,
+  name text NOT NULL,
+  telegram_username text,
+  telegram_bot_id text,
+  token_encrypted text NOT NULL,
+  webhook_secret text NOT NULL,
+  webhook_url text,
+  status text NOT NULL DEFAULT 'disconnected',
+  last_health_at timestamptz,
+  last_health_error text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS contacts (
+  id text PRIMARY KEY,
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  telegram_user_id text NOT NULL,
+  username text,
+  first_name text,
+  last_name text,
+  language_code text,
+  email text,
+  phone text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS contacts_bot_tg_idx ON contacts(bot_id, telegram_user_id);
+
+CREATE TABLE IF NOT EXISTS tags (
+  id text PRIMARY KEY,
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  color text NOT NULL DEFAULT '#c4a574'
+);
+CREATE UNIQUE INDEX IF NOT EXISTS tags_bot_name_idx ON tags(bot_id, name);
+
+CREATE TABLE IF NOT EXISTS contact_tags (
+  contact_id text NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  tag_id text NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  PRIMARY KEY (contact_id, tag_id)
+);
+
+CREATE TABLE IF NOT EXISTS custom_fields (
+  id text PRIMARY KEY,
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  key text NOT NULL,
+  label text NOT NULL,
+  field_type text NOT NULL DEFAULT 'text'
+);
+CREATE UNIQUE INDEX IF NOT EXISTS custom_fields_bot_key_idx ON custom_fields(bot_id, key);
+
+CREATE TABLE IF NOT EXISTS contact_field_values (
+  contact_id text NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  field_id text NOT NULL REFERENCES custom_fields(id) ON DELETE CASCADE,
+  value text NOT NULL,
+  PRIMARY KEY (contact_id, field_id)
+);
+
+CREATE TABLE IF NOT EXISTS flows (
+  id text PRIMARY KEY,
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  trigger_type text NOT NULL,
+  trigger_value text,
+  is_active boolean NOT NULL DEFAULT true,
+  definition jsonb NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS flow_sessions (
+  id text PRIMARY KEY,
+  contact_id text NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  flow_id text NOT NULL REFERENCES flows(id) ON DELETE CASCADE,
+  step_id text NOT NULL,
+  awaiting_input boolean NOT NULL DEFAULT false,
+  status text NOT NULL DEFAULT 'active',
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id text PRIMARY KEY,
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  contact_id text NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  direction text NOT NULL,
+  source text NOT NULL,
+  body text NOT NULL,
+  telegram_message_id text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS messages_contact_created_idx ON messages(contact_id, created_at);
+
+CREATE TABLE IF NOT EXISTS broadcasts (
+  id text PRIMARY KEY,
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  body text NOT NULL,
+  tag_id text NOT NULL REFERENCES tags(id) ON DELETE RESTRICT,
+  status text NOT NULL DEFAULT 'draft',
+  confirmed_at timestamptz,
+  total_count integer NOT NULL DEFAULT 0,
+  sent_count integer NOT NULL DEFAULT 0,
+  failed_count integer NOT NULL DEFAULT 0,
+  last_error text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  started_at timestamptz,
+  finished_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS broadcast_recipients (
+  id text PRIMARY KEY,
+  broadcast_id text NOT NULL REFERENCES broadcasts(id) ON DELETE CASCADE,
+  contact_id text NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  status text NOT NULL DEFAULT 'pending',
+  error text,
+  sent_at timestamptz
+);
+CREATE UNIQUE INDEX IF NOT EXISTS broadcast_recipients_unique ON broadcast_recipients(broadcast_id, contact_id);
+`;

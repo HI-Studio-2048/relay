@@ -1,0 +1,194 @@
+import { relations } from "drizzle-orm";
+import {
+  boolean,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
+
+export const bots = pgTable("bots", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  telegramUsername: text("telegram_username"),
+  telegramBotId: text("telegram_bot_id"),
+  tokenEncrypted: text("token_encrypted").notNull(),
+  webhookSecret: text("webhook_secret").notNull(),
+  webhookUrl: text("webhook_url"),
+  status: text("status").notNull().default("disconnected"),
+  lastHealthAt: timestamp("last_health_at", { withTimezone: true }),
+  lastHealthError: text("last_health_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const contacts = pgTable(
+  "contacts",
+  {
+    id: text("id").primaryKey(),
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    telegramUserId: text("telegram_user_id").notNull(),
+    username: text("username"),
+    firstName: text("first_name"),
+    lastName: text("last_name"),
+    languageCode: text("language_code"),
+    email: text("email"),
+    phone: text("phone"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("contacts_bot_tg_idx").on(table.botId, table.telegramUserId)],
+);
+
+export const tags = pgTable(
+  "tags",
+  {
+    id: text("id").primaryKey(),
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    color: text("color").notNull().default("#c4a574"),
+  },
+  (table) => [uniqueIndex("tags_bot_name_idx").on(table.botId, table.name)],
+);
+
+export const contactTags = pgTable(
+  "contact_tags",
+  {
+    contactId: text("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    tagId: text("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (table) => [primaryKey({ columns: [table.contactId, table.tagId] })],
+);
+
+export const customFields = pgTable(
+  "custom_fields",
+  {
+    id: text("id").primaryKey(),
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    fieldType: text("field_type").notNull().default("text"),
+  },
+  (table) => [uniqueIndex("custom_fields_bot_key_idx").on(table.botId, table.key)],
+);
+
+export const contactFieldValues = pgTable(
+  "contact_field_values",
+  {
+    contactId: text("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    fieldId: text("field_id")
+      .notNull()
+      .references(() => customFields.id, { onDelete: "cascade" }),
+    value: text("value").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.contactId, table.fieldId] })],
+);
+
+export const flows = pgTable("flows", {
+  id: text("id").primaryKey(),
+  botId: text("bot_id")
+    .notNull()
+    .references(() => bots.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  triggerType: text("trigger_type").notNull(),
+  triggerValue: text("trigger_value"),
+  isActive: boolean("is_active").notNull().default(true),
+  definition: jsonb("definition").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const flowSessions = pgTable("flow_sessions", {
+  id: text("id").primaryKey(),
+  contactId: text("contact_id")
+    .notNull()
+    .references(() => contacts.id, { onDelete: "cascade" }),
+  flowId: text("flow_id")
+    .notNull()
+    .references(() => flows.id, { onDelete: "cascade" }),
+  stepId: text("step_id").notNull(),
+  awaitingInput: boolean("awaiting_input").notNull().default(false),
+  status: text("status").notNull().default("active"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const messages = pgTable("messages", {
+  id: text("id").primaryKey(),
+  botId: text("bot_id")
+    .notNull()
+    .references(() => bots.id, { onDelete: "cascade" }),
+  contactId: text("contact_id")
+    .notNull()
+    .references(() => contacts.id, { onDelete: "cascade" }),
+  direction: text("direction").notNull(),
+  source: text("source").notNull(),
+  body: text("body").notNull(),
+  telegramMessageId: text("telegram_message_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const broadcasts = pgTable("broadcasts", {
+  id: text("id").primaryKey(),
+  botId: text("bot_id")
+    .notNull()
+    .references(() => bots.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  body: text("body").notNull(),
+  tagId: text("tag_id")
+    .notNull()
+    .references(() => tags.id, { onDelete: "restrict" }),
+  status: text("status").notNull().default("draft"),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  totalCount: integer("total_count").notNull().default(0),
+  sentCount: integer("sent_count").notNull().default(0),
+  failedCount: integer("failed_count").notNull().default(0),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+});
+
+export const broadcastRecipients = pgTable(
+  "broadcast_recipients",
+  {
+    id: text("id").primaryKey(),
+    broadcastId: text("broadcast_id")
+      .notNull()
+      .references(() => broadcasts.id, { onDelete: "cascade" }),
+    contactId: text("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("pending"),
+    error: text("error"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (table) => [uniqueIndex("broadcast_recipients_unique").on(table.broadcastId, table.contactId)],
+);
+
+export const botsRelations = relations(bots, ({ many }) => ({
+  contacts: many(contacts),
+  tags: many(tags),
+  flows: many(flows),
+}));
+
+export const contactsRelations = relations(contacts, ({ one, many }) => ({
+  bot: one(bots, { fields: [contacts.botId], references: [bots.id] }),
+  tags: many(contactTags),
+  fieldValues: many(contactFieldValues),
+  messages: many(messages),
+}));
