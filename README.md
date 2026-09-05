@@ -12,7 +12,7 @@ Origin is the source of truth for this project.
 2. **Contacts** — upsert on `/start` and every inbound message (Telegram user id, username, name).
 3. **Tags + CRM fields** — native name/email/phone plus custom fields (company is seeded).
 4. **Lead capture** — flow steps write answers onto the contact. Visible in inbox/CRM and CSV export.
-5. **Flows** — triggers: `/start`, growth-link `/start <payload>`, command, exact keyword. Steps: text (optional image/GIF), callback or HTTPS URL buttons, capture, lead form, condition (yes/no), delay, tag add/remove, end. Admins edit them on a drag-and-drop canvas (React Flow); the engine still runs the same `FlowDefinition`. Telegram sends photos via `sendPhoto` and GIFs via `sendAnimation`.
+5. **Flows** — triggers: `/start`, growth-link `/start <payload>`, command, exact keyword. Steps: text (optional image/GIF), callback or HTTPS URL buttons, capture, lead form, condition (yes/no), delay, tag add/remove, subscribe/unsubscribe, end. Admins edit them on a drag-and-drop canvas (React Flow); the engine still runs the same `FlowDefinition`. Telegram sends photos via `sendPhoto` and GIFs via `sendAnimation`.
 6. **Broadcasts by tag** — compose audience, then **Confirm** (`confirm: true`) before anything queues. Status is tracked.
 7. **Live inbox** — inbound/outbound thread per contact; human reply from the UI.
 
@@ -100,9 +100,11 @@ Fresh seeds also create **Promo growth link** (`/start promo`) with a lead form,
 
 Open **Flows**, then click a flow (the seeded **Lead capture** flow appears after you connect a bot or run `POST /api/dev/seed`). The detail page is a ManyChat-style canvas:
 
-1. Drag **Message**, **Image / GIF**, **Buttons**, **Lead form**, **User input**, **Tag**, **Condition**, **Delay**, or **Stop** from the left palette — or drop an image/GIF file onto the canvas.
+1. Drag **Message**, **Image / GIF**, **Buttons**, **Lead form**, **User input**, **Tag**, **Subscribe**, **Condition**, **Delay**, or **Stop** from the left palette — or drop an image/GIF file onto the canvas.
 2. Connect handles. Button edges show the choice label. Conditions have **Yes** / **No**. The trigger node’s outgoing edge is `startStepId`.
-3. Select a node to edit copy, media, URL or callback buttons, form fields, tag add/remove, delay seconds, or condition rules.
+3. Select a node to edit copy, media, URL or callback buttons, form fields, tag add/remove, subscribe/unsubscribe, delay seconds, or condition rules.
+
+Subscribe writes a matching tag so tag-scoped broadcasts can target the list. Unsubscribe from `all` sets a contact-level opt-out; those contacts are excluded from the confirm-gated audience.
 4. **Save** (or ⌘/Ctrl+S) writes the existing `FlowDefinition` (plus optional `canvas` layout). Telegram is unchanged.
 5. **List** is the old form editor if you need raw step ids.
 

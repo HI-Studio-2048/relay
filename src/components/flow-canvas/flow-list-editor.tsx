@@ -24,6 +24,7 @@ function emptyStep(type: FlowStep["type"]): FlowStep {
     };
   }
   if (type === "tag") return { id, type, tagName: "lead", action: "add", next: "" };
+  if (type === "subscribe") return { id, type, listName: "newsletter", action: "subscribe", next: "" };
   if (type === "delay") return { id, type, seconds: 300, next: "" };
   if (type === "condition") {
     return { id, type, check: "tag", tagName: "lead", nextTrue: "", nextFalse: "" };
@@ -266,6 +267,33 @@ export function FlowListEditor({
                 />
               </>
             ) : null}
+            {step.type === "subscribe" ? (
+              <>
+                <select
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                  value={step.action}
+                  onChange={(event) =>
+                    updateStep(index, {
+                      ...step,
+                      action: event.target.value === "unsubscribe" ? "unsubscribe" : "subscribe",
+                    })
+                  }
+                >
+                  <option value="subscribe">Subscribe</option>
+                  <option value="unsubscribe">Unsubscribe</option>
+                </select>
+                <Input
+                  placeholder="List name (or all)"
+                  value={step.listName}
+                  onChange={(event) => updateStep(index, { ...step, listName: event.target.value })}
+                />
+                <Input
+                  placeholder="Next step id"
+                  value={step.next}
+                  onChange={(event) => updateStep(index, { ...step, next: event.target.value })}
+                />
+              </>
+            ) : null}
             {step.type === "delay" ? (
               <>
                 <Input
@@ -292,13 +320,22 @@ export function FlowListEditor({
                   className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                   value={step.check}
                   onChange={(event) =>
-                    updateStep(index, { ...step, check: event.target.value === "field" ? "field" : "tag" })
+                    updateStep(index, {
+                      ...step,
+                      check:
+                        event.target.value === "field"
+                          ? "field"
+                          : event.target.value === "subscription"
+                            ? "subscription"
+                            : "tag",
+                    })
                   }
                 >
                   <option value="tag">Has tag</option>
+                  <option value="subscription">Subscribed to list</option>
                   <option value="field">Field value</option>
                 </select>
-                {step.check === "tag" ? (
+                {step.check === "tag" || step.check === "subscription" ? (
                   <Input
                     placeholder="Tag name"
                     value={step.tagName ?? ""}
@@ -359,7 +396,7 @@ export function FlowListEditor({
       ))}
 
       <div className="flex flex-wrap gap-2">
-        {(["text", "capture", "form", "tag", "condition", "delay", "end"] as const).map((type) => (
+        {(["text", "capture", "form", "tag", "subscribe", "condition", "delay", "end"] as const).map((type) => (
           <Button
             key={type}
             variant="outline"
