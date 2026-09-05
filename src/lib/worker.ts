@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { isBroadcastable } from "@/lib/broadcast";
 import { decryptSecret } from "@/lib/crypto";
 import { getDb } from "@/lib/db";
 import { bots, broadcastRecipients, broadcasts, contacts } from "@/lib/db/schema";
@@ -42,6 +43,13 @@ async function handleBroadcast(broadcastId: string) {
     try {
       const [contact] = await db.select().from(contacts).where(eq(contacts.id, recipient.contactId)).limit(1);
       if (!contact) throw new Error("Contact missing");
+      if (!isBroadcastable(contact)) {
+        await db
+          .update(broadcastRecipients)
+          .set({ status: "failed", error: "Unsubscribed" })
+          .where(eq(broadcastRecipients.id, recipient.id));
+        continue;
+      }
       await acquireSendSlot(broadcast.botId, contact.telegramUserId);
       const sent = await sendMessage(token, contact.telegramUserId, broadcast.body);
       await db

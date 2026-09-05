@@ -107,6 +107,13 @@ export const EXAMPLE_GROWTH_LINK_FLOW: FlowDefinition = {
       type: "tag",
       tagName: "qualified",
       action: "add",
+      next: "opt_in",
+    },
+    {
+      id: "opt_in",
+      type: "subscribe",
+      listName: "newsletter",
+      action: "subscribe",
       next: "thanks",
     },
     {
