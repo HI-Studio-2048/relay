@@ -49,73 +49,74 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --background: #f4f6f8;
+  --foreground: #1b1f24;
+  --card: #ffffff;
+  --card-foreground: #1b1f24;
+  --popover: #ffffff;
+  --popover-foreground: #1b1f24;
+  --primary: #0084ff;
+  --primary-foreground: #ffffff;
+  --secondary: #eef1f4;
+  --secondary-foreground: #1b1f24;
+  --muted: #eef1f4;
+  --muted-foreground: #6b7280;
+  --accent: #eef1f4;
+  --accent-foreground: #1b1f24;
+  --destructive: #e11d48;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #0084ff;
+  --chart-1: #0084ff;
+  --chart-2: #00c853;
+  --chart-3: #00c2cb;
+  --chart-4: #7b61ff;
+  --chart-5: #8b95a1;
+  --radius: 0.75rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1b1f24;
+  --sidebar-primary: #0084ff;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f4f6f8;
+  --sidebar-accent-foreground: #1b1f24;
+  --sidebar-border: #e5e7eb;
+  --sidebar-ring: #0084ff;
 }
 
+/* One visual system: canvas / Flow AI light. No copper dark admin theme. */
 .dark {
-  --background: oklch(0.155 0.018 52);
-  --foreground: oklch(0.965 0.012 82);
-  --card: oklch(0.205 0.016 52);
-  --card-foreground: oklch(0.965 0.012 82);
-  --popover: oklch(0.205 0.016 52);
-  --popover-foreground: oklch(0.965 0.012 82);
-  --primary: oklch(0.82 0.11 72);
-  --primary-foreground: oklch(0.2 0.03 52);
-  --secondary: oklch(0.255 0.016 52);
-  --secondary-foreground: oklch(0.95 0.01 80);
-  --muted: oklch(0.245 0.015 52);
-  --muted-foreground: oklch(0.72 0.02 68);
-  --accent: oklch(0.27 0.024 58);
-  --accent-foreground: oklch(0.96 0.01 80);
-  --destructive: oklch(0.7 0.16 25);
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 11%);
-  --ring: oklch(0.74 0.08 72);
-  --chart-1: oklch(0.82 0.11 72);
-  --chart-2: oklch(0.65 0.06 150);
-  --chart-3: oklch(0.55 0.06 230);
-  --chart-4: oklch(0.7 0.08 40);
-  --chart-5: oklch(0.45 0.03 55);
-  --radius: 0.7rem;
-  --sidebar: oklch(0.13 0.016 52);
-  --sidebar-foreground: oklch(0.95 0.01 80);
-  --sidebar-primary: oklch(0.82 0.11 72);
-  --sidebar-primary-foreground: oklch(0.2 0.03 52);
-  --sidebar-accent: oklch(0.22 0.018 52);
-  --sidebar-accent-foreground: oklch(0.96 0.01 80);
-  --sidebar-border: oklch(1 0 0 / 7%);
-  --sidebar-ring: oklch(0.74 0.08 72);
+  --background: #f4f6f8;
+  --foreground: #1b1f24;
+  --card: #ffffff;
+  --card-foreground: #1b1f24;
+  --popover: #ffffff;
+  --popover-foreground: #1b1f24;
+  --primary: #0084ff;
+  --primary-foreground: #ffffff;
+  --secondary: #eef1f4;
+  --secondary-foreground: #1b1f24;
+  --muted: #eef1f4;
+  --muted-foreground: #6b7280;
+  --accent: #eef1f4;
+  --accent-foreground: #1b1f24;
+  --destructive: #e11d48;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #0084ff;
+  --chart-1: #0084ff;
+  --chart-2: #00c853;
+  --chart-3: #00c2cb;
+  --chart-4: #7b61ff;
+  --chart-5: #8b95a1;
+  --radius: 0.75rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1b1f24;
+  --sidebar-primary: #0084ff;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f4f6f8;
+  --sidebar-accent-foreground: #1b1f24;
+  --sidebar-border: #e5e7eb;
+  --sidebar-ring: #0084ff;
 }
 
 @layer base {
@@ -132,13 +133,11 @@
 
 /* Console chrome only. Do not restyle the canvas (.relay-flow). */
 .relay-chrome-page {
-  background-image:
-    radial-gradient(1200px 480px at 12% -10%, color-mix(in oklch, var(--primary) 9%, transparent), transparent 60%);
+  background: #f4f6f8;
 }
 
 .relay-topbar {
-  background: color-mix(in oklch, var(--sidebar) 82%, transparent);
-  backdrop-filter: blur(14px);
+  background: #ffffff;
 }
 
 .relay-nav-item {
