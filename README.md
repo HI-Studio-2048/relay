@@ -12,7 +12,7 @@ Origin is the source of truth for this project.
 2. **Contacts** — upsert on `/start` and every inbound message (Telegram user id, username, name).
 3. **Tags + CRM fields** — native name/email/phone plus custom fields (company is seeded).
 4. **Lead capture** — flow steps write answers onto the contact. Visible in inbox/CRM and CSV export.
-5. **Flows** — triggers: `/start`, command, exact keyword. Steps: text (optional image/GIF), inline-button branches, capture, tag, end. Admins edit them on a drag-and-drop canvas (React Flow); the engine still runs the same linear `FlowDefinition`. Telegram sends photos via `sendPhoto` and GIFs via `sendAnimation`.
+5. **Flows** — triggers: `/start`, growth-link `/start <payload>`, command, exact keyword. Steps: text (optional image/GIF), callback or HTTPS URL buttons, capture, lead form, condition (yes/no), delay, tag add/remove, end. Admins edit them on a drag-and-drop canvas (React Flow); the engine still runs the same `FlowDefinition`. Telegram sends photos via `sendPhoto` and GIFs via `sendAnimation`.
 6. **Broadcasts by tag** — compose audience, then **Confirm** (`confirm: true`) before anything queues. Status is tracked.
 7. **Live inbox** — inbound/outbound thread per contact; human reply from the UI.
 
@@ -88,19 +88,25 @@ Connecting a bot seeds this flow (also editable under **Flows** → open the flo
 
 Answers write to the contact. Open **Contacts** or **Inbox**, or download **Export CSV**.
 
-Keyword / command flows work the same way: set the trigger, add text + button branches, optional capture steps.
+Keyword / command / growth-link flows work the same way: set the trigger, then add steps on the canvas.
+
+### Growth links
+
+Set the trigger to **Growth link** and a payload such as `promo`. Share `https://t.me/<bot>?start=promo`. Telegram delivers `/start promo`, and Relay starts that flow. A generic `/start` flow still matches when the payload is missing or does not match any growth-link flow.
+
+Fresh seeds also create **Promo growth link** (`/start promo`) with a lead form, condition, delay, URL button, and tag. Existing databases are not overwritten.
 
 ### Visual canvas
 
 Open **Flows**, then click a flow (the seeded **Lead capture** flow appears after you connect a bot or run `POST /api/dev/seed`). The detail page is a ManyChat-style canvas:
 
-1. Drag **Message**, **Image / GIF**, **Buttons**, **Capture**, **Tag**, or **End** from the left palette — or drop an image/GIF file onto the canvas.
-2. Connect handles. Button edges show the choice label. The trigger node’s outgoing edge is `startStepId`.
-3. Select a node to edit copy, media, buttons, capture field, or tag in the side panel.
+1. Drag **Message**, **Image / GIF**, **Buttons**, **Lead form**, **User input**, **Tag**, **Condition**, **Delay**, or **Stop** from the left palette — or drop an image/GIF file onto the canvas.
+2. Connect handles. Button edges show the choice label. Conditions have **Yes** / **No**. The trigger node’s outgoing edge is `startStepId`.
+3. Select a node to edit copy, media, URL or callback buttons, form fields, tag add/remove, delay seconds, or condition rules.
 4. **Save** (or ⌘/Ctrl+S) writes the existing `FlowDefinition` (plus optional `canvas` layout). Telegram is unchanged.
 5. **List** is the old form editor if you need raw step ids.
 
-`npm test` includes serialize/deserialize smoke: canvas ↔ definition round-trips the seeded lead-capture flow and the engine still walks `/start`. Media nodes persist `media.url` + `kind` on the text step.
+`npm test` includes serialize/deserialize smoke: canvas ↔ definition round-trips the seeded lead-capture and growth-link flows. The engine walks `/start`, `/start promo`, forms, conditions, delays, tag remove, and URL buttons. Media nodes persist `media.url` + `kind` on the text step.
 
 ### Images and GIFs
 
@@ -122,7 +128,7 @@ Delete bot / flow / tag / field also require `confirm: true`.
 
 ## Railway (one service)
 
-V1 is a single web service: HTTP + webhook + in-process worker.
+v1 is a single web service: HTTP + webhook + in-process worker.
 
 1. Create a Railway project. Add **Postgres** and **Redis**.
 2. Create one service from this repo (or deploy the Dockerfile). Nixpacks: `npm run build` / `npm run start`.
@@ -156,4 +162,4 @@ SQL lives in `src/lib/db/sql.ts` and is applied on boot. Drizzle schema: `src/li
 npm test
 ```
 
-Covers lead-capture field writes + the full `/start` example flow, and the confirm-before-broadcast gate (missing/false/`"true"` are all rejected).
+Covers lead-capture field writes + the full `/start` example flow, growth-link `/start` payloads, forms/conditions/delays/tag remove/URL buttons, and the confirm-before-broadcast gate (missing/false/`"true"` are all rejected).

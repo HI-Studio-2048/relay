@@ -244,7 +244,7 @@ function CanvasStage({
   const onDataChange = (id: string, data: CanvasNodeData) => {
     setNodes((current) => current.map((node) => (node.id === id ? { ...node, data } : node)));
     if (data.kind === "buttons") {
-      const handles = new Set(data.buttons.map((button) => button.id));
+      const handles = new Set(data.buttons.filter((button) => !button.url).map((button) => button.id));
       setEdges((current) =>
         current.filter((edge) => edge.source !== id || !edge.sourceHandle?.startsWith("btn-") || handles.has(edge.sourceHandle)),
       );
