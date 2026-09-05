@@ -4,14 +4,13 @@ import { bots, growthLinkEvents, growthLinks } from "@/lib/db/schema";
 import { linksForFlow, nextShareSlug, presentGrowthLink, slugifyName } from "@/lib/growth";
 import { publicUrl } from "@/lib/env";
 
-export type { GrowthLinkView } from "@/lib/growth";
-
 export {
   SLUG_PATTERN,
   applyGrowthAttribution,
   assertSlug,
   attributedContact,
   growthRedirectPath,
+  type GrowthLinkView,
   linksForFlow,
   nextShareSlug,
   parseStartPayload,
@@ -89,8 +88,12 @@ export async function listGrowthLinks(botId: string, options?: { origin?: string
   );
 }
 
-export async function listGrowthLinksForFlow(botId: string, flowId: string) {
-  return linksForFlow(await listGrowthLinks(botId), flowId);
+export async function listGrowthLinksForFlow(
+  botId: string,
+  flowId: string,
+  options?: { origin?: string | null },
+) {
+  return listGrowthLinks(botId, { origin: options?.origin, flowId });
 }
 
 export async function findGrowthLinkByFlowId(botId: string, flowId: string) {
