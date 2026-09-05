@@ -24,6 +24,7 @@ function emptyStep(type: FlowStep["type"]): FlowStep {
     };
   }
   if (type === "tag") return { id, type, tagName: "lead", action: "add", next: "" };
+  if (type === "set_field") return { id, type, field: "custom:source", value: "flow", next: "" };
   if (type === "subscribe") return { id, type, listName: "newsletter", action: "subscribe", next: "" };
   if (type === "delay") return { id, type, seconds: 300, next: "" };
   if (type === "condition") {
@@ -267,6 +268,27 @@ export function FlowListEditor({
                 />
               </>
             ) : null}
+            {step.type === "set_field" ? (
+              <>
+                <Input
+                  placeholder="Field (name, email, phone, custom:company)"
+                  value={step.field}
+                  onChange={(event) =>
+                    updateStep(index, { ...step, field: event.target.value as typeof step.field })
+                  }
+                />
+                <Input
+                  placeholder="Value (empty clears)"
+                  value={step.value}
+                  onChange={(event) => updateStep(index, { ...step, value: event.target.value })}
+                />
+                <Input
+                  placeholder="Next step id"
+                  value={step.next}
+                  onChange={(event) => updateStep(index, { ...step, next: event.target.value })}
+                />
+              </>
+            ) : null}
             {step.type === "subscribe" ? (
               <>
                 <select
@@ -396,7 +418,7 @@ export function FlowListEditor({
       ))}
 
       <div className="flex flex-wrap gap-2">
-        {(["text", "capture", "form", "tag", "subscribe", "condition", "delay", "end"] as const).map((type) => (
+        {(["text", "capture", "form", "tag", "set_field", "subscribe", "condition", "delay", "end"] as const).map((type) => (
           <Button
             key={type}
             variant="outline"

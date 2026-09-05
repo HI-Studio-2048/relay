@@ -12,9 +12,10 @@ Origin is the source of truth for this project.
 2. **Contacts** — upsert on `/start` and every inbound message (Telegram user id, username, name).
 3. **Tags + CRM fields** — native name/email/phone plus custom fields (company is seeded).
 4. **Lead capture** — flow steps write answers onto the contact. Visible in inbox/CRM and CSV export.
-5. **Flows** — triggers: `/start`, growth-link `/start <payload>`, command, exact keyword. Steps: text (optional image/GIF), callback or HTTPS URL buttons, capture, lead form, condition (yes/no), delay, tag add/remove, subscribe/unsubscribe, end. Admins edit them on a drag-and-drop canvas (React Flow); the engine still runs the same `FlowDefinition`. Telegram sends photos via `sendPhoto` and GIFs via `sendAnimation`.
+5. **Flows** — triggers: `/start`, growth-link `/start <payload>`, command, exact keyword. Steps: text (optional image/GIF), callback or HTTPS URL buttons, capture, lead form, condition (yes/no), delay, tag add/remove, set CRM field, subscribe/unsubscribe, end. Admins edit them on a drag-and-drop canvas (React Flow); the engine still runs the same `FlowDefinition`. Telegram sends photos via `sendPhoto` and GIFs via `sendAnimation`.
 6. **Broadcasts by tag** — compose audience, then **Confirm** (`confirm: true`) before anything queues. Status is tracked.
 7. **Live inbox** — inbound/outbound thread per contact; human reply from the UI.
+8. **Growth links** — trackable Telegram start links (`t.me/<bot>?start=param`). Short URL `/go/<slug>` counts a click then redirects. `/start param` attributes the contact, can apply a tag / UTM fields, and can kick a linked flow.
 
 One process serves the web UI, the webhook, and the worker (`WORKER_MODE=all`).
 
@@ -41,7 +42,7 @@ npm test
 npm run build
 ```
 
-Local-only `POST /api/dev/seed` (disabled in production) creates a demo bot, a lead contact with CRM fields, an inbox thread, and a broadcast sitting on the confirm gate — enough to click through the UI without Telegram. Connect a real BotFather token before anything should actually send.
+Local-only `POST /api/dev/seed` (disabled in production) creates a demo bot, a lead contact with CRM fields, an inbox thread, a growth link, and a broadcast sitting on the confirm gate — enough to click through the UI without Telegram. Connect a real BotFather token before anything should actually send.
 
 ## Environment
 
@@ -92,23 +93,30 @@ Keyword / command / growth-link flows work the same way: set the trigger, then a
 
 ### Growth links
 
-Set the trigger to **Growth link** and a payload such as `promo`. Share `https://t.me/<bot>?start=promo`. Telegram delivers `/start promo`, and Relay starts that flow. A generic `/start` flow still matches when the payload is missing or does not match any growth-link flow.
+**Admin → Growth → Links** creates trackable Telegram start links. Each link has a slug (Telegram start param), optional tag, optional linked flow, and optional UTM source/medium/campaign.
 
-Fresh seeds also create **Promo growth link** (`/start promo`) with a lead form, condition, delay, URL button, and tag. Existing databases are not overwritten.
+- Short URL `/go/<slug>` increments the click count, then 302s to `https://t.me/<bot>?start=<slug>`.
+- QR is a `api.qrserver.com` image of the short URL (no extra dependency).
+- Telegram `/start <slug>` attributes the contact (tag + UTM fields), increments starts, and kicks the linked flow. Attribution is applied before the flow runs so conditions can see the tag.
+- Linked flows are matched through the engine’s existing `start_param` trigger — the flow canvas is unchanged.
+
+You can also set a flow trigger to **Growth link** and a payload such as `promo` on the canvas. Share `https://t.me/<bot>?start=promo`. A generic `/start` flow still matches when the payload is missing or does not match.
+
+Fresh seeds create an **Instagram bio** link (`ig_bio`) and a **Promo campaign** link (`promo`) plus the **Promo growth link** flow. Existing databases are not overwritten.
 
 ### Visual canvas
 
 Open **Flows**, then click a flow (the seeded **Lead capture** flow appears after you connect a bot or run `POST /api/dev/seed`). The detail page is a ManyChat-style canvas:
 
-1. Drag **Message**, **Image / GIF**, **Buttons**, **Lead form**, **User input**, **Tag**, **Subscribe**, **Condition**, **Delay**, or **Stop** from the left palette — or drop an image/GIF file onto the canvas.
+1. Drag **Message**, **Image / GIF**, **Buttons**, **Lead form**, **User input**, **Tag**, **Set field**, **Subscribe**, **Condition**, **Delay**, or **Stop** from the left palette — or drop an image/GIF file onto the canvas.
 2. Connect handles. Button edges show the choice label. Conditions have **Yes** / **No**. The trigger node’s outgoing edge is `startStepId`.
-3. Select a node to edit copy, media, URL or callback buttons, form fields, tag add/remove, subscribe/unsubscribe, delay seconds, or condition rules.
+3. Select a node to edit copy, media, URL or callback buttons, form fields, tag add/remove, a CRM field value, subscribe/unsubscribe, delay seconds, or condition rules.
 
 Subscribe writes a matching tag so tag-scoped broadcasts can target the list. Unsubscribe from `all` sets a contact-level opt-out; those contacts are excluded from the confirm-gated audience.
 4. **Save** (or ⌘/Ctrl+S) writes the existing `FlowDefinition` (plus optional `canvas` layout). Telegram is unchanged.
 5. **List** is the old form editor if you need raw step ids.
 
-`npm test` includes serialize/deserialize smoke: canvas ↔ definition round-trips the seeded lead-capture and growth-link flows. The engine walks `/start`, `/start promo`, forms, conditions, delays, tag remove, and URL buttons. Media nodes persist `media.url` + `kind` on the text step.
+`npm test` includes serialize/deserialize smoke: canvas ↔ definition round-trips the seeded lead-capture and growth-link flows. The engine walks `/start`, `/start promo`, forms, conditions, delays, tag remove, set CRM field, and URL buttons. Media nodes persist `media.url` + `kind` on the text step.
 
 ### Images and GIFs
 
@@ -154,7 +162,7 @@ Keep both on the same Postgres + Redis. Do not run two `all` instances against o
 
 ## Schema
 
-Postgres tables: `bots`, `contacts`, `tags`, `contact_tags`, `custom_fields`, `contact_field_values`, `flows`, `flow_sessions`, `messages`, `broadcasts`, `broadcast_recipients`.
+Postgres tables: `bots`, `contacts`, `tags`, `contact_tags`, `custom_fields`, `contact_field_values`, `flows`, `flow_sessions`, `messages`, `broadcasts`, `broadcast_recipients`, `growth_links`, `growth_link_events`.
 
 SQL lives in `src/lib/db/sql.ts` and is applied on boot. Drizzle schema: `src/lib/db/schema.ts`.
 
