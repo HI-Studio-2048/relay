@@ -1,14 +1,16 @@
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { MANYCHAT } from "@/components/flow-canvas/node-colors";
+import { NODE_TONE } from "@/components/flow-canvas/node-colors";
+import { RELAY, RELAY_SHADOW, themeHex, type ThemeTone } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
-export { MANYCHAT, NODE_TONE } from "@/components/flow-canvas/node-colors";
+export { MANYCHAT, RELAY, RELAY_CSS_VARS, RELAY_RADIUS, RELAY_SHADOW, relayVar } from "@/lib/theme";
+export { NODE_TONE };
 
-export type ToneName = "start" | "content" | "input" | "action" | "stop";
+export type ToneName = ThemeTone;
 
 export function toneHex(tone?: ToneName, hex?: string) {
-  return hex ?? (tone ? MANYCHAT[tone] : MANYCHAT.content);
+  return themeHex(tone, hex);
 }
 
 export function ToneChip({
@@ -43,8 +45,11 @@ export function CanvasCard({
 }) {
   return (
     <div
-      className={cn("rounded-2xl bg-white shadow-[0_1px_3px_rgba(16,24,40,0.10)]", className)}
-      style={{ border: `1px solid ${accent ?? MANYCHAT.cardBorder}` }}
+      className={cn("rounded-2xl bg-white", className)}
+      style={{
+        border: `1px solid ${accent ?? RELAY.cardBorder}`,
+        boxShadow: RELAY_SHADOW,
+      }}
     >
       {children}
     </div>
