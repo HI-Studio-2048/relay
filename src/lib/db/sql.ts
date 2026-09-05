@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS custom_fields (
 CREATE UNIQUE INDEX IF NOT EXISTS custom_fields_bot_key_idx ON custom_fields(bot_id, key);
 
 CREATE TABLE IF NOT EXISTS contact_field_values (
-  contact_id text NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  contact_id text NOT NULL REFERENCES custom_fields(id) ON DELETE CASCADE,
   field_id text NOT NULL REFERENCES custom_fields(id) ON DELETE CASCADE,
   value text NOT NULL,
   PRIMARY KEY (contact_id, field_id)
@@ -119,4 +119,7 @@ CREATE TABLE IF NOT EXISTS broadcast_recipients (
   sent_at timestamptz
 );
 CREATE UNIQUE INDEX IF NOT EXISTS broadcast_recipients_unique ON broadcast_recipients(broadcast_id, contact_id);
+
+ALTER TABLE flow_sessions ADD COLUMN IF NOT EXISTS resume_at timestamptz;
+ALTER TABLE flow_sessions ADD COLUMN IF NOT EXISTS form_index integer;
 `;

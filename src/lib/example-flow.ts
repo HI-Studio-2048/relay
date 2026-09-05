@@ -69,3 +69,62 @@ export const EXAMPLE_LEAD_CAPTURE_FLOW: FlowDefinition = {
     },
   ],
 };
+
+/** Growth-link demo: /start promo. Fresh seeds only — existing DB rows are not overwritten. */
+export const EXAMPLE_GROWTH_LINK_FLOW: FlowDefinition = {
+  startStepId: "welcome",
+  steps: [
+    {
+      id: "welcome",
+      type: "text",
+      text: "You opened the promo link. Leave details and we will follow up.",
+      buttons: [
+        { text: "Continue", next: "lead_form" },
+        { text: "HI Studio site", url: "https://histudio.test" },
+      ],
+    },
+    {
+      id: "lead_form",
+      type: "form",
+      intro: "Two quick questions:",
+      fields: [
+        { field: "name", prompt: "What's your name?" },
+        { field: "email", prompt: "What's the best email?" },
+      ],
+      next: "has_email",
+    },
+    {
+      id: "has_email",
+      type: "condition",
+      check: "field",
+      field: "email",
+      op: "set",
+      nextTrue: "tag_qualified",
+      nextFalse: "wait",
+    },
+    {
+      id: "tag_qualified",
+      type: "tag",
+      tagName: "qualified",
+      action: "add",
+      next: "thanks",
+    },
+    {
+      id: "wait",
+      type: "delay",
+      seconds: 0,
+      next: "nudge",
+    },
+    {
+      id: "nudge",
+      type: "text",
+      text: "No email this time — we will skip the qualified tag.",
+      next: "thanks",
+    },
+    {
+      id: "thanks",
+      type: "end",
+      text: "Thanks. You came in through the promo growth link.",
+    },
+  ],
+};
