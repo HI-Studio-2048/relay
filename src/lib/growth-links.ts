@@ -4,6 +4,8 @@ import { bots, growthLinkEvents, growthLinks } from "@/lib/db/schema";
 import { linksForFlow, nextShareSlug, presentGrowthLink, slugifyName } from "@/lib/growth";
 import { publicUrl } from "@/lib/env";
 
+export type { GrowthLinkView } from "@/lib/growth";
+
 export {
   SLUG_PATTERN,
   applyGrowthAttribution,
