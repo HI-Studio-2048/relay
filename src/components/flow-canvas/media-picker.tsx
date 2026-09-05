@@ -1,11 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type DragEvent } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { FlowMedia } from "@/lib/types";
+import { cn } from "@/lib/utils";
+
+export async function uploadMediaFile(file: File): Promise<FlowMedia> {
+  const body = new FormData();
+  body.append("file", file);
+  const response = await fetch("/api/media", { method: "POST", body });
+  const data = (await response.json()) as { media?: FlowMedia; error?: string };
+  if (!response.ok || !data.media) throw new Error(data.error || "Upload failed");
+  return data.media;
+}
+
+export async function attachMediaUrl(url: string): Promise<FlowMedia> {
+  const response = await fetch("/api/media", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ url }),
+  });
+  const data = (await response.json()) as { media?: FlowMedia; error?: string };
+  if (!response.ok || !data.media) throw new Error(data.error || "Could not attach URL");
+  return data.media;
+}
+
+export function isImageFile(file: File): boolean {
+  if (file.type.startsWith("image/")) return true;
+  return /\.(gif|png|jpe?g|webp)$/i.test(file.name);
+}
 
 export function MediaThumb({ media, className = "h-28" }: { media?: FlowMedia; className?: string }) {
   if (!media?.url) return null;
@@ -30,17 +56,18 @@ export function MediaPicker({
 }) {
   const [url, setUrl] = useState(value?.url?.startsWith("https://") ? value.url : "");
   const [busy, setBusy] = useState(false);
+  const [over, setOver] = useState(false);
+
+  useEffect(() => {
+    setUrl(value?.url?.startsWith("https://") ? value.url : "");
+  }, [value?.url]);
 
   const upload = async (file: File) => {
     setBusy(true);
     try {
-      const body = new FormData();
-      body.append("file", file);
-      const response = await fetch("/api/media", { method: "POST", body });
-      const data = (await response.json()) as { media?: FlowMedia; error?: string };
-      if (!response.ok || !data.media) throw new Error(data.error || "Upload failed");
-      onChange(data.media);
-      toast.success(data.media.kind === "animation" ? "GIF attached" : "Image attached");
+      const media = await uploadMediaFile(file);
+      onChange(media);
+      toast.success(media.kind === "animation" ? "GIF attached" : "Image attached");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed");
     } finally {
@@ -52,14 +79,8 @@ export function MediaPicker({
     if (!url.trim()) return;
     setBusy(true);
     try {
-      const response = await fetch("/api/media", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url }),
-      });
-      const data = (await response.json()) as { media?: FlowMedia; error?: string };
-      if (!response.ok || !data.media) throw new Error(data.error || "Could not attach URL");
-      onChange(data.media);
+      const media = await attachMediaUrl(url);
+      onChange(media);
       toast.success("Media URL attached");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not attach URL");
@@ -68,10 +89,35 @@ export function MediaPicker({
     }
   };
 
+  const onDrop = (event: DragEvent) => {
+    event.preventDefault();
+    setOver(false);
+    const file = [...event.dataTransfer.files].find(isImageFile);
+    if (file) void upload(file);
+  };
+
   return (
     <div className="space-y-2">
       <Label>Image or GIF</Label>
-      <MediaThumb media={value} />
+      <div
+        onDragOver={(event) => {
+          event.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={onDrop}
+        className={cn(
+          "rounded-lg border border-dashed p-2",
+          over ? "border-primary bg-primary/5" : "border-border",
+        )}
+      >
+        <MediaThumb media={value} />
+        {!value ? (
+          <p className="px-1 py-3 text-center text-[11px] text-muted-foreground">
+            Drop a JPEG, PNG, WebP, or GIF here
+          </p>
+        ) : null}
+      </div>
       <input
         type="file"
         accept="image/jpeg,image/png,image/webp,image/gif"

@@ -50,7 +50,7 @@ export function NodePalette({
         );
       })}
       <p className="hidden px-1 text-[11px] leading-snug text-muted-foreground md:block">
-        Drag onto the canvas or click to drop in the center. Connect handles to set the next step.
+        Drag a step onto the canvas, or drop an image/GIF file to create a media node.
       </p>
     </aside>
   );

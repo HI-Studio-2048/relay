@@ -27,7 +27,7 @@ function NodeFrame({
   return (
     <div
       className={cn(
-        "w-[240px] rounded-xl border bg-card shadow-md",
+        "w-[248px] rounded-xl border bg-card shadow-md",
         selected ? "border-primary ring-2 ring-primary/35" : "border-border",
       )}
     >
@@ -71,7 +71,9 @@ export function MediaNode({ selected, data }: NodeProps<FlowNode<"media">>) {
       {data.media ? (
         <MediaThumb media={data.media} className="h-28" />
       ) : (
-        <p className="text-[11px] text-muted-foreground">Upload or attach a URL</p>
+        <div className="flex h-20 items-center justify-center rounded-md border border-dashed border-rose-300/40 bg-rose-500/5 px-2 text-center text-[11px] text-muted-foreground">
+          Drop an image or GIF, or attach one in the inspector
+        </div>
       )}
       {data.text ? <Preview>{data.text}</Preview> : null}
       <Handle type="source" position={Position.Right} id="next" className={handleClass} />

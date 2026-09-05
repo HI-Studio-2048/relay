@@ -3,7 +3,9 @@
 import {
   Background,
   BackgroundVariant,
+  ConnectionLineType,
   Controls,
+  MarkerType,
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
@@ -18,16 +20,20 @@ import "@xyflow/react/dist/style.css";
 import {
   forwardRef,
   useCallback,
+  useEffect,
   useImperativeHandle,
   useMemo,
   useState,
   type DragEvent,
 } from "react";
+import { toast } from "sonner";
+import { isImageFile, uploadMediaFile } from "@/components/flow-canvas/media-picker";
 import { NodeInspector, type FlowMeta, type InspectorField } from "@/components/flow-canvas/node-inspector";
 import { NodePalette } from "@/components/flow-canvas/node-palette";
 import { flowNodeTypes } from "@/components/flow-canvas/nodes";
 import {
   TRIGGER_NODE_ID,
+  canvasEdgeLabel,
   canvasToDefinition,
   createCanvasNode,
   definitionToCanvas,
@@ -38,6 +44,7 @@ import {
   type CanvasNode,
   type CanvasNodeData,
   type CanvasNodeKind,
+  type CanvasValidation,
 } from "@/lib/flow-canvas";
 import type { FlowDefinition } from "@/lib/types";
 
@@ -47,6 +54,17 @@ export type FlowCanvasHandle = {
 };
 
 type RfNode = Node<CanvasNodeData, CanvasNodeKind>;
+
+const defaultEdgeOptions: Partial<Edge> = {
+  type: "smoothstep",
+  style: { strokeWidth: 1.75 },
+  markerEnd: {
+    type: MarkerType.ArrowClosed,
+    width: 16,
+    height: 16,
+    color: "var(--xy-edge-stroke-default)",
+  },
+};
 
 function toRf(graph: ReturnType<typeof definitionToCanvas>): { nodes: RfNode[]; edges: Edge[] } {
   return {
@@ -63,6 +81,8 @@ function toRf(graph: ReturnType<typeof definitionToCanvas>): { nodes: RfNode[]; 
       target: edge.target,
       sourceHandle: edge.sourceHandle,
       targetHandle: edge.targetHandle,
+      label: canvasEdgeLabel(graph.nodes, edge),
+      ...defaultEdgeOptions,
     })),
   };
 }
@@ -91,6 +111,7 @@ function CanvasStage({
   customFields,
   tagNames,
   onMetaChange,
+  onValidationChange,
   canvasRef,
 }: {
   initialDefinition: FlowDefinition;
@@ -98,6 +119,7 @@ function CanvasStage({
   customFields: InspectorField[];
   tagNames: string[];
   onMetaChange: (patch: Partial<FlowMeta>) => void;
+  onValidationChange?: (validation: CanvasValidation) => void;
   canvasRef: React.Ref<FlowCanvasHandle>;
 }) {
   const seed = useMemo(() => toRf(definitionToCanvas(initialDefinition)), [initialDefinition]);
@@ -116,6 +138,25 @@ function CanvasStage({
     }),
     [graph],
   );
+
+  useEffect(() => {
+    onValidationChange?.(validateCanvas(graph()));
+  }, [graph, onValidationChange]);
+
+  const labeledEdges = useMemo(() => {
+    const mapped = fromRf(nodes, edges);
+    return edges.map((edge) => ({
+      ...edge,
+      ...defaultEdgeOptions,
+      label: canvasEdgeLabel(mapped.nodes, {
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle ?? "out",
+        targetHandle: edge.targetHandle ?? "in",
+      }),
+    }));
+  }, [nodes, edges]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -153,21 +194,48 @@ function CanvasStage({
       };
       setNodes((current) => [...current, node]);
       setSelectedId(created.id);
+      return created.id;
     },
     [screenToFlowPosition, setNodes],
+  );
+
+  const attachFileAt = useCallback(
+    async (file: File, position: { x: number; y: number }) => {
+      const id = addNode("media", position);
+      try {
+        const media = await uploadMediaFile(file);
+        setNodes((current) =>
+          current.map((node) =>
+            node.id === id && (node.data.kind === "media" || node.data.kind === "message")
+              ? { ...node, data: { ...node.data, media } }
+              : node,
+          ),
+        );
+        toast.success(media.kind === "animation" ? "GIF node added" : "Image node added");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Upload failed");
+      }
+    },
+    [addNode, setNodes],
   );
 
   const onDrop = useCallback(
     (event: DragEvent) => {
       event.preventDefault();
+      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const file = [...event.dataTransfer.files].find(isImageFile);
+      if (file) {
+        void attachFileAt(file, position);
+        return;
+      }
       const kind = event.dataTransfer.getData("application/relay-node") as Exclude<
         CanvasNodeKind,
         "trigger"
       >;
       if (!kind) return;
-      addNode(kind, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+      addNode(kind, position);
     },
-    [addNode, screenToFlowPosition],
+    [addNode, attachFileAt, screenToFlowPosition],
   );
 
   const selected = nodes.find((node) => node.id === selectedId) ?? null;
@@ -195,7 +263,7 @@ function CanvasStage({
       <div className="relative min-h-[52vh] min-w-0 flex-1 md:min-h-0">
         <ReactFlow
           nodes={nodes}
-          edges={edges}
+          edges={labeledEdges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
@@ -209,18 +277,22 @@ function CanvasStage({
             setSelectedId(selectedNodes[0]?.id ?? null);
           }}
           isValidConnection={isValidCanvasConnection}
+          defaultEdgeOptions={defaultEdgeOptions}
+          connectionLineType={ConnectionLineType.SmoothStep}
+          snapToGrid
+          snapGrid={[16, 16]}
           fitView
-          fitViewOptions={{ padding: 0.2 }}
+          fitViewOptions={{ padding: 0.24 }}
           deleteKeyCode={["Backspace", "Delete"]}
           onBeforeDelete={async ({ nodes: pending, edges: pendingEdges }) => {
             const keep = pending.filter((node) => node.id !== TRIGGER_NODE_ID);
             if (keep.length === 0) return false;
             return { nodes: keep, edges: pendingEdges };
           }}
-          proOptions={{ hideAttribution: false }}
+          proOptions={{ hideAttribution: true }}
           className="relay-flow"
         >
-          <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="var(--border)" />
+          <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--border)" />
           <Controls showInteractive={false} />
           <MiniMap
             pannable
@@ -260,6 +332,7 @@ export const FlowCanvasEditor = forwardRef<
     customFields: InspectorField[];
     tagNames: string[];
     onMetaChange: (patch: Partial<FlowMeta>) => void;
+    onValidationChange?: (validation: CanvasValidation) => void;
   }
 >(function FlowCanvasEditor(props, ref) {
   return (

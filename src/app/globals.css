@@ -84,37 +84,38 @@
 }
 
 .dark {
-  --background: oklch(0.17 0.02 55);
-  --foreground: oklch(0.96 0.01 80);
-  --card: oklch(0.21 0.018 55);
-  --card-foreground: oklch(0.96 0.01 80);
-  --popover: oklch(0.21 0.018 55);
-  --popover-foreground: oklch(0.96 0.01 80);
-  --primary: oklch(0.8 0.1 75);
-  --primary-foreground: oklch(0.2 0.03 55);
-  --secondary: oklch(0.27 0.02 55);
+  --background: oklch(0.155 0.018 52);
+  --foreground: oklch(0.965 0.012 82);
+  --card: oklch(0.205 0.016 52);
+  --card-foreground: oklch(0.965 0.012 82);
+  --popover: oklch(0.205 0.016 52);
+  --popover-foreground: oklch(0.965 0.012 82);
+  --primary: oklch(0.82 0.11 72);
+  --primary-foreground: oklch(0.2 0.03 52);
+  --secondary: oklch(0.255 0.016 52);
   --secondary-foreground: oklch(0.95 0.01 80);
-  --muted: oklch(0.26 0.018 55);
-  --muted-foreground: oklch(0.72 0.02 70);
-  --accent: oklch(0.28 0.03 60);
-  --accent-foreground: oklch(0.95 0.01 80);
+  --muted: oklch(0.245 0.015 52);
+  --muted-foreground: oklch(0.72 0.02 68);
+  --accent: oklch(0.27 0.024 58);
+  --accent-foreground: oklch(0.96 0.01 80);
   --destructive: oklch(0.7 0.16 25);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.72 0.08 75);
-  --chart-1: oklch(0.8 0.1 75);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 11%);
+  --ring: oklch(0.74 0.08 72);
+  --chart-1: oklch(0.82 0.11 72);
   --chart-2: oklch(0.65 0.06 150);
   --chart-3: oklch(0.55 0.06 230);
   --chart-4: oklch(0.7 0.08 40);
   --chart-5: oklch(0.45 0.03 55);
-  --sidebar: oklch(0.15 0.02 55);
+  --radius: 0.7rem;
+  --sidebar: oklch(0.13 0.016 52);
   --sidebar-foreground: oklch(0.95 0.01 80);
-  --sidebar-primary: oklch(0.8 0.1 75);
-  --sidebar-primary-foreground: oklch(0.2 0.03 55);
-  --sidebar-accent: oklch(0.26 0.02 55);
-  --sidebar-accent-foreground: oklch(0.95 0.01 80);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.72 0.08 75);
+  --sidebar-primary: oklch(0.82 0.11 72);
+  --sidebar-primary-foreground: oklch(0.2 0.03 52);
+  --sidebar-accent: oklch(0.22 0.018 52);
+  --sidebar-accent-foreground: oklch(0.96 0.01 80);
+  --sidebar-border: oklch(1 0 0 / 7%);
+  --sidebar-ring: oklch(0.74 0.08 72);
 }
 
 @layer base {
@@ -127,6 +128,12 @@
   html {
     @apply font-sans;
   }
+}
+
+/* Console chrome only. Do not restyle the canvas (.relay-flow). */
+.relay-chrome-page {
+  background-image:
+    radial-gradient(1200px 480px at 12% -10%, color-mix(in oklch, var(--primary) 9%, transparent), transparent 60%);
 }
 
 .relay-flow.react-flow {
@@ -145,9 +152,21 @@
 }
 
 .relay-flow .react-flow__attribution {
-  background: transparent !important;
-  color: var(--muted-foreground);
-  opacity: 0.7;
+  display: none;
+}
+
+.relay-flow .react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+.relay-flow .react-flow__edge-text {
+  fill: var(--foreground);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.relay-flow .react-flow__edge-textbg {
+  fill: var(--card);
 }
 
 .relay-flow .react-flow__controls {

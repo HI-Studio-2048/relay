@@ -3,13 +3,14 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { FlowListEditor } from "@/components/flow-canvas/flow-list-editor";
 import type { FlowCanvasHandle } from "@/components/flow-canvas/flow-canvas-editor";
 import type { FlowMeta, InspectorField } from "@/components/flow-canvas/node-inspector";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client";
+import type { CanvasValidation } from "@/lib/flow-canvas";
 import type { FlowEditorRecord } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +37,7 @@ export function FlowWorkspace({
   const [view, setView] = useState<"canvas" | "list">("canvas");
   const [canvasEpoch, setCanvasEpoch] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [validation, setValidation] = useState<CanvasValidation>({ errors: [], warnings: [] });
   const canvasRef = useRef<FlowCanvasHandle>(null);
   const router = useRouter();
 
@@ -47,16 +49,16 @@ export function FlowWorkspace({
     return next;
   };
 
-  const save = async () => {
+  const save = useCallback(async () => {
     const next = view === "canvas" ? pullCanvas() : flow;
     if (view === "canvas") {
-      const validation = canvasRef.current?.getValidation();
-      if (validation?.errors.length) {
-        toast.error(validation.errors[0]);
+      const current = canvasRef.current?.getValidation() ?? validation;
+      if (current.errors.length) {
+        toast.error(current.errors[0]);
         return;
       }
-      if (validation?.warnings.length) {
-        toast.message(validation.warnings[0]);
+      if (current.warnings.length) {
+        toast.message(current.warnings[0]);
       }
     }
     setSaving(true);
@@ -66,14 +68,24 @@ export function FlowWorkspace({
         body: JSON.stringify(next),
       });
       setFlow({ ...data.flow, botId: next.botId });
-      if (view === "canvas") setCanvasEpoch((value) => value + 1);
       toast.success("Flow saved");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Save failed");
     } finally {
       setSaving(false);
     }
-  };
+  }, [flow, validation, view]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void save();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [save]);
 
   const remove = async () => {
     if (!window.confirm("Delete this flow?")) return;
@@ -103,6 +115,11 @@ export function FlowWorkspace({
     setFlow((current) => ({ ...current, ...patch }));
   };
 
+  const status =
+    validation.errors[0] ??
+    validation.warnings[0] ??
+    "Connect handles to set the next step. Drop an image or GIF onto the canvas.";
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -111,6 +128,18 @@ export function FlowWorkspace({
             ← Flows
           </Link>
           <h1 className="truncate font-heading text-xl tracking-tight">{flow.name || "Untitled flow"}</h1>
+          <p
+            className={cn(
+              "mt-0.5 truncate text-[11px]",
+              validation.errors.length
+                ? "text-destructive"
+                : validation.warnings.length
+                  ? "text-amber-600 dark:text-amber-400"
+                  : "text-muted-foreground",
+            )}
+          >
+            {status}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-lg bg-muted p-0.5">
@@ -153,6 +182,7 @@ export function FlowWorkspace({
           customFields={customFields}
           tagNames={tagNames}
           onMetaChange={onMetaChange}
+          onValidationChange={setValidation}
         />
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-8">

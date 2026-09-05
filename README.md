@@ -64,7 +64,7 @@ Never commit tokens or `.env*`. Tokens are never logged (outbound logs are redac
 1. Open Telegram and talk to [@BotFather](https://t.me/BotFather).
 2. `/newbot`, copy the token. Do not paste it into chat logs or commit it.
 3. Set `PUBLIC_URL` to the HTTPS origin Telegram can reach (Railway domain or an ngrok/Cloudflare tunnel for local webhooks).
-4. In Relay → **Bot**, paste the token and connect. Relay stores it encrypted and calls `setWebhook` on `/api/telegram/webhook/<botId>`.
+4. In Relay → **Settings**, paste the token and connect. Relay stores it encrypted and calls `setWebhook` on `/api/telegram/webhook/<botId>`.
 5. Use **Run health check** (`getMe` + `getWebhookInfo`).
 6. Message the bot `/start`. The seeded lead-capture flow should ask for name, email, phone, and company, then tag `lead`.
 
@@ -81,9 +81,10 @@ ngrok http 43173
 Connecting a bot seeds this flow (also editable under **Flows** → open the flow → **Canvas**):
 
 1. Welcome + buttons: **Yes, let's go** / **Not now**
-2. Capture **name** → **email** → **phone** → custom **company**
-3. Apply tag `lead`
-4. Closing confirmation
+2. Image/GIF intro (Telegram `sendAnimation`)
+3. Capture **name** → **email** → **phone** → custom **company**
+4. Apply tag `lead`
+5. Closing confirmation
 
 Answers write to the contact. Open **Contacts** or **Inbox**, or download **Export CSV**.
 
@@ -93,17 +94,17 @@ Keyword / command flows work the same way: set the trigger, add text + button br
 
 Open **Flows**, then click a flow (the seeded **Lead capture** flow appears after you connect a bot or run `POST /api/dev/seed`). The detail page is a ManyChat-style canvas:
 
-1. Drag **Message**, **Image / GIF**, **Buttons**, **Capture**, **Tag**, or **End** from the left palette.
-2. Connect handles. The trigger node’s outgoing edge is `startStepId`.
-3. Select a node to edit copy, buttons, capture field, or tag in the side panel.
-4. **Save** writes the existing `FlowDefinition` (plus optional `canvas` layout). Telegram is unchanged.
+1. Drag **Message**, **Image / GIF**, **Buttons**, **Capture**, **Tag**, or **End** from the left palette — or drop an image/GIF file onto the canvas.
+2. Connect handles. Button edges show the choice label. The trigger node’s outgoing edge is `startStepId`.
+3. Select a node to edit copy, media, buttons, capture field, or tag in the side panel.
+4. **Save** (or ⌘/Ctrl+S) writes the existing `FlowDefinition` (plus optional `canvas` layout). Telegram is unchanged.
 5. **List** is the old form editor if you need raw step ids.
 
 `npm test` includes serialize/deserialize smoke: canvas ↔ definition round-trips the seeded lead-capture flow and the engine still walks `/start`. Media nodes persist `media.url` + `kind` on the text step.
 
 ### Images and GIFs
 
-On a **Message**, **Image / GIF**, or **Buttons** node, upload a JPEG/PNG/WebP/GIF or paste an `https://` URL.
+On a **Message**, **Image / GIF**, or **Buttons** node, upload or drop a JPEG/PNG/WebP/GIF, or paste an `https://` URL. Empty browser mime types still work when the filename ends in `.gif` / `.png` / `.jpg` / `.webp`.
 
 - Uploads are stored under `MEDIA_DIR` (default `.data/media`) and served at `/api/media/:id`. Mount a Railway volume there if you want files to survive deploys. No extra API keys.
 - Public HTTPS URLs are stored as-is. Telegram fetches them.
@@ -121,7 +122,7 @@ Delete bot / flow / tag / field also require `confirm: true`.
 
 ## Railway (one service)
 
-v1 is a single web service: HTTP + webhook + in-process worker.
+V1 is a single web service: HTTP + webhook + in-process worker.
 
 1. Create a Railway project. Add **Postgres** and **Redis**.
 2. Create one service from this repo (or deploy the Dockerfile). Nixpacks: `npm run build` / `npm run start`.
