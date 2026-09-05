@@ -1,10 +1,22 @@
-export type TriggerType = "start" | "keyword" | "command";
+export type TriggerType = "start" | "keyword" | "command" | "start_param";
 
 export type CaptureField = "name" | "email" | "phone" | `custom:${string}`;
 
 export type FlowButton = {
   text: string;
-  next: string;
+  next?: string;
+  url?: string;
+};
+
+export type TagAction = "add" | "remove";
+
+export type ConditionCheck = "tag" | "field";
+
+export type ConditionOp = "eq" | "contains" | "set";
+
+export type FormField = {
+  field: CaptureField;
+  prompt: string;
 };
 
 /** Telegram sendPhoto vs sendAnimation. Stored on text steps; the engine ignores unknown extra fields on older flows. */
@@ -48,6 +60,31 @@ export type FlowStep =
       id: string;
       type: "tag";
       tagName: string;
+      action?: TagAction;
+      next: string;
+    }
+  | {
+      id: string;
+      type: "delay";
+      seconds: number;
+      next: string;
+    }
+  | {
+      id: string;
+      type: "condition";
+      check: ConditionCheck;
+      tagName?: string;
+      field?: CaptureField;
+      op?: ConditionOp;
+      value?: string;
+      nextTrue: string;
+      nextFalse: string;
+    }
+  | {
+      id: string;
+      type: "form";
+      intro?: string;
+      fields: FormField[];
       next: string;
     }
   | {
@@ -91,6 +128,8 @@ export type FlowSessionState = {
   stepId: string;
   awaitingInput: boolean;
   status: "active" | "completed";
+  formIndex?: number;
+  resumeAt?: string | null;
 };
 
 export type InboundEvent = {
@@ -107,7 +146,7 @@ export type InboundEvent = {
 export type OutboundReply = {
   text: string;
   media?: FlowMedia;
-  buttons?: { text: string; data: string }[];
+  buttons?: { text: string; data?: string; url?: string }[];
   source: "flow" | "agent" | "broadcast";
 };
 
