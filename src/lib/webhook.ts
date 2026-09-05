@@ -13,9 +13,10 @@ import {
   persistSession,
   saveMessage,
 } from "@/lib/store";
+import { outboundPreview } from "@/lib/media";
 import {
   answerCallbackQuery,
-  sendMessage,
+  sendFlowReply,
   type TelegramUpdate,
 } from "@/lib/telegram";
 
@@ -78,13 +79,13 @@ export async function processTelegramUpdate(botId: string, update: TelegramUpdat
 
   for (const reply of result.replies) {
     await acquireSendSlot(botId, telegramUserId);
-    const sent = await sendMessage(token, telegramUserId, reply.text, reply.buttons);
+    const sent = await sendFlowReply(token, telegramUserId, reply);
     await saveMessage({
       botId,
       contactId: result.contact.id,
       direction: "outbound",
       source: reply.source === "flow" ? "flow" : "agent",
-      body: reply.text,
+      body: outboundPreview(reply.text, reply.media),
       telegramMessageId: String(sent.message_id),
     });
   }

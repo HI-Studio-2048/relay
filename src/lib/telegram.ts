@@ -1,4 +1,12 @@
 import { log } from "@/lib/logger";
+import {
+  mediaCaption,
+  parseStoredMediaUrl,
+  readMediaFile,
+  telegramMediaField,
+  telegramSendMethod,
+} from "@/lib/media";
+import type { FlowMedia, OutboundReply } from "@/lib/types";
 
 type TelegramOk<T> = { ok: true; result: T };
 type TelegramErr = { ok: false; description?: string; error_code?: number };
@@ -10,6 +18,15 @@ export class TelegramApiError extends Error {
   }
 }
 
+async function parseTelegram<T>(method: string, response: Response): Promise<T> {
+  const json = (await response.json()) as TelegramOk<T> | TelegramErr;
+  if (!json.ok) {
+    log.warn(`Telegram ${method} failed`, json.description ?? response.status);
+    throw new TelegramApiError(json.description ?? `Telegram ${method} failed`);
+  }
+  return json.result;
+}
+
 async function call<T>(token: string, method: string, body?: Record<string, unknown>): Promise<T> {
   const url = `https://api.telegram.org/bot${token}/${method}`;
   const response = await fetch(url, {
@@ -17,12 +34,13 @@ async function call<T>(token: string, method: string, body?: Record<string, unkn
     headers: body ? { "content-type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  const json = (await response.json()) as TelegramOk<T> | TelegramErr;
-  if (!json.ok) {
-    log.warn(`Telegram ${method} failed`, json.description ?? response.status);
-    throw new TelegramApiError(json.description ?? `Telegram ${method} failed`);
-  }
-  return json.result;
+  return parseTelegram<T>(method, response);
+}
+
+async function callForm<T>(token: string, method: string, form: FormData): Promise<T> {
+  const url = `https://api.telegram.org/bot${token}/${method}`;
+  const response = await fetch(url, { method: "POST", body: form });
+  return parseTelegram<T>(method, response);
 }
 
 export type TelegramUser = {
@@ -62,6 +80,13 @@ export async function deleteWebhook(token: string) {
   return call<boolean>(token, "deleteWebhook", { drop_pending_updates: false });
 }
 
+function replyMarkup(buttons?: { text: string; data: string }[]) {
+  if (!buttons?.length) return undefined;
+  return {
+    inline_keyboard: [buttons.map((button) => ({ text: button.text, callback_data: button.data }))],
+  };
+}
+
 export async function sendMessage(
   token: string,
   chatId: string,
@@ -71,14 +96,51 @@ export async function sendMessage(
   return call<{ message_id: number }>(token, "sendMessage", {
     chat_id: chatId,
     text,
-    reply_markup: buttons?.length
-      ? {
-          inline_keyboard: [
-            buttons.map((button) => ({ text: button.text, callback_data: button.data })),
-          ],
-        }
-      : undefined,
+    reply_markup: replyMarkup(buttons),
   });
+}
+
+export async function sendMedia(
+  token: string,
+  chatId: string,
+  media: FlowMedia,
+  caption?: string,
+  buttons?: { text: string; data: string }[],
+) {
+  const method = telegramSendMethod(media);
+  const field = telegramMediaField(media);
+  const markup = replyMarkup(buttons);
+  const trimmed = mediaCaption(caption);
+  const parsed = parseStoredMediaUrl(media.url);
+
+  if (parsed?.type === "local") {
+    const file = await readMediaFile(parsed.id);
+    const form = new FormData();
+    form.append("chat_id", chatId);
+    form.append(
+      field,
+      new Blob([Buffer.from(file.bytes)], { type: file.record.mime }),
+      file.record.filename,
+    );
+    if (trimmed) form.append("caption", trimmed);
+    if (markup) form.append("reply_markup", JSON.stringify(markup));
+    return callForm<{ message_id: number }>(token, method, form);
+  }
+
+  const remote = parsed?.type === "remote" ? parsed.url : media.url;
+  return call<{ message_id: number }>(token, method, {
+    chat_id: chatId,
+    [field]: remote,
+    caption: trimmed,
+    reply_markup: markup,
+  });
+}
+
+export async function sendFlowReply(token: string, chatId: string, reply: OutboundReply) {
+  if (reply.media) {
+    return sendMedia(token, chatId, reply.media, reply.text, reply.buttons);
+  }
+  return sendMessage(token, chatId, reply.text, reply.buttons);
 }
 
 export async function answerCallbackQuery(token: string, callbackQueryId: string) {
