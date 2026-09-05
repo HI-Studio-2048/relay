@@ -159,6 +159,27 @@ export function NodeInspector({
         <FormEditor data={data} customFields={customFields} onChange={(next) => onDataChange(selectedId, next)} />
       ) : null}
 
+      {data.kind === "set_field" ? (
+        <div className="space-y-3">
+          <FieldSelect
+            field={data.field}
+            customFields={customFields}
+            onChange={(field) => onDataChange(selectedId, { ...data, field })}
+          />
+          <div className="space-y-1">
+            <Label>Value</Label>
+            <Input
+              value={data.value}
+              onChange={(event) => onDataChange(selectedId, { ...data, value: event.target.value })}
+              placeholder="Written onto the contact"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Empty clears the field. Telegram does not ask the contact — use User input or a lead form for that.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {data.kind === "tag" ? (
         <div className="space-y-3">
           <div className="space-y-1">
