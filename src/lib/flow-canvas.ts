@@ -1,18 +1,33 @@
 import type {
   CaptureField,
+  ConditionCheck,
+  ConditionOp,
   FlowCanvasLayout,
   FlowDefinition,
   FlowMedia,
   FlowStep,
+  FormField,
+  TagAction,
 } from "@/lib/types";
 
 export const TRIGGER_NODE_ID = "__trigger";
 
-export type CanvasNodeKind = "trigger" | "message" | "media" | "buttons" | "capture" | "tag" | "end";
+export type CanvasNodeKind =
+  | "trigger"
+  | "message"
+  | "media"
+  | "buttons"
+  | "capture"
+  | "form"
+  | "tag"
+  | "delay"
+  | "condition"
+  | "end";
 
 export type CanvasButton = {
   id: string;
   text: string;
+  url?: string;
 };
 
 export type CanvasNodeData =
@@ -21,7 +36,17 @@ export type CanvasNodeData =
   | { kind: "media"; text: string; media?: FlowMedia }
   | { kind: "buttons"; text: string; buttons: CanvasButton[]; media?: FlowMedia }
   | { kind: "capture"; field: CaptureField; prompt: string }
-  | { kind: "tag"; tagName: string }
+  | { kind: "form"; intro: string; fields: FormField[] }
+  | { kind: "tag"; tagName: string; action: TagAction }
+  | { kind: "delay"; seconds: number }
+  | {
+      kind: "condition";
+      check: ConditionCheck;
+      tagName: string;
+      field: CaptureField;
+      op: ConditionOp;
+      value: string;
+    }
   | { kind: "end"; text?: string };
 
 export type CanvasNode = {
@@ -69,6 +94,8 @@ export function edgeId(source: string, sourceHandle: string, target: string): st
 }
 
 export function canvasEdgeLabel(nodes: CanvasNode[], edge: CanvasEdge): string | undefined {
+  if (edge.sourceHandle === "yes") return "Yes";
+  if (edge.sourceHandle === "no") return "No";
   const source = nodes.find((node) => node.id === edge.source);
   if (source?.data.kind !== "buttons") return undefined;
   const label = source.data.buttons.find((button) => button.id === edge.sourceHandle)?.text.trim();
@@ -84,13 +111,14 @@ function childrenOf(definition: FlowDefinition, id: string): string[] {
   const step = definition.steps.find((item) => item.id === id);
   if (!step) return [];
   if (step.type === "end") return [];
+  if (step.type === "condition") return unique([step.nextTrue, step.nextFalse]);
   if (step.type === "text") {
     if (step.buttons && step.buttons.length > 0) {
-      return unique(step.buttons.map((button) => button.next));
+      return unique(step.buttons.map((button) => button.next ?? ""));
     }
     return step.next ? [step.next] : [];
   }
-  return step.next ? [step.next] : [];
+  return "next" in step && step.next ? [step.next] : [];
 }
 
 export function autoLayout(definition: FlowDefinition): Record<string, { x: number; y: number }> {
@@ -150,6 +178,7 @@ function nodeFromStep(step: FlowStep, position: { x: number; y: number }): Canva
         buttons: step.buttons.map((button, index) => ({
           id: buttonHandleId(index),
           text: button.text,
+          ...(button.url ? { url: button.url } : {}),
         })),
       },
     };
@@ -183,7 +212,38 @@ function nodeFromStep(step: FlowStep, position: { x: number; y: number }): Canva
       id: step.id,
       type: "tag",
       position,
-      data: { kind: "tag", tagName: step.tagName },
+      data: { kind: "tag", tagName: step.tagName, action: step.action === "remove" ? "remove" : "add" },
+    };
+  }
+  if (step.type === "delay") {
+    return {
+      id: step.id,
+      type: "delay",
+      position,
+      data: { kind: "delay", seconds: step.seconds },
+    };
+  }
+  if (step.type === "condition") {
+    return {
+      id: step.id,
+      type: "condition",
+      position,
+      data: {
+        kind: "condition",
+        check: step.check,
+        tagName: step.tagName ?? "lead",
+        field: step.field ?? "email",
+        op: step.op ?? "set",
+        value: step.value ?? "",
+      },
+    };
+  }
+  if (step.type === "form") {
+    return {
+      id: step.id,
+      type: "form",
+      position,
+      data: { kind: "form", intro: step.intro ?? "", fields: step.fields },
     };
   }
   return {
@@ -210,8 +270,30 @@ function outgoingEdgesForStep(step: FlowStep): CanvasEdge[] {
       ];
     });
   }
+  if (step.type === "condition") {
+    return [
+      step.nextTrue
+        ? {
+            id: edgeId(step.id, "yes", step.nextTrue),
+            source: step.id,
+            target: step.nextTrue,
+            sourceHandle: "yes",
+            targetHandle: "in",
+          }
+        : null,
+      step.nextFalse
+        ? {
+            id: edgeId(step.id, "no", step.nextFalse),
+            source: step.id,
+            target: step.nextFalse,
+            sourceHandle: "no",
+            targetHandle: "in",
+          }
+        : null,
+    ].filter((edge): edge is CanvasEdge => Boolean(edge));
+  }
   if (step.type === "end") return [];
-  const next = step.type === "text" ? step.next : step.next;
+  const next = "next" in step ? step.next : undefined;
   if (!next) return [];
   return [
     {
@@ -288,7 +370,7 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
         ...(node.data.media ? { media: node.data.media } : {}),
         buttons: node.data.buttons.map((button) => ({
           text: button.text,
-          next: nextFromHandle(graph.edges, node.id, button.id) ?? "",
+          ...(button.url ? { url: button.url } : { next: nextFromHandle(graph.edges, node.id, button.id) ?? "" }),
         })),
       });
       continue;
@@ -305,12 +387,53 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
       continue;
     }
 
+    if (node.data.kind === "form") {
+      steps.push({
+        id: node.id,
+        type: "form",
+        intro: node.data.intro || undefined,
+        fields: node.data.fields,
+        next: nextFromHandle(graph.edges, node.id, "next") ?? "",
+      });
+      continue;
+    }
+
     if (node.data.kind === "tag") {
       steps.push({
         id: node.id,
         type: "tag",
         tagName: node.data.tagName,
+        action: node.data.action,
         next: nextFromHandle(graph.edges, node.id, "next") ?? "",
+      });
+      continue;
+    }
+
+    if (node.data.kind === "delay") {
+      steps.push({
+        id: node.id,
+        type: "delay",
+        seconds: node.data.seconds,
+        next: nextFromHandle(graph.edges, node.id, "next") ?? "",
+      });
+      continue;
+    }
+
+    if (node.data.kind === "condition") {
+      steps.push({
+        id: node.id,
+        type: "condition",
+        check: node.data.check,
+        ...(node.data.check === "tag" ? { tagName: node.data.tagName } : {}),
+        ...(node.data.check === "field"
+          ? {
+              field: node.data.field,
+              op: node.data.op,
+              ...(node.data.op !== "set" && node.data.value ? { value: node.data.value } : {}),
+            }
+          : {}),
+        nextTrue: nextFromHandle(graph.edges, node.id, "yes") ?? "",
+        nextFalse: nextFromHandle(graph.edges, node.id, "no") ?? "",
       });
       continue;
     }
@@ -350,15 +473,51 @@ export function engineDefinition(definition: FlowDefinition): FlowDefinition {
             : {}),
           ...(step.next ? { next: step.next } : {}),
           ...(step.buttons
-            ? { buttons: step.buttons.map((button) => ({ text: button.text, next: button.next })) }
+            ? {
+                buttons: step.buttons.map((button) => ({
+                  text: button.text,
+                  ...(button.url ? { url: button.url } : { next: button.next ?? "" }),
+                })),
+              }
             : {}),
         };
       }
       if (step.type === "capture") {
         return { id: step.id, type: "capture", field: step.field, prompt: step.prompt, next: step.next };
       }
+      if (step.type === "form") {
+        return {
+          id: step.id,
+          type: "form",
+          ...(step.intro ? { intro: step.intro } : {}),
+          fields: step.fields,
+          next: step.next,
+        };
+      }
       if (step.type === "tag") {
-        return { id: step.id, type: "tag", tagName: step.tagName, next: step.next };
+        return {
+          id: step.id,
+          type: "tag",
+          tagName: step.tagName,
+          ...(step.action === "remove" ? { action: "remove" as const } : {}),
+          next: step.next,
+        };
+      }
+      if (step.type === "delay") {
+        return { id: step.id, type: "delay", seconds: step.seconds, next: step.next };
+      }
+      if (step.type === "condition") {
+        return {
+          id: step.id,
+          type: "condition",
+          check: step.check,
+          ...(step.check === "tag" && step.tagName ? { tagName: step.tagName } : {}),
+          ...(step.check === "field" && step.field ? { field: step.field } : {}),
+          ...(step.check === "field" && step.op ? { op: step.op } : {}),
+          ...(step.check === "field" && step.op !== "set" && step.value ? { value: step.value } : {}),
+          nextTrue: step.nextTrue,
+          nextFalse: step.nextFalse,
+        };
       }
       return { id: step.id, type: "end", ...(step.text ? { text: step.text } : {}) };
     }),
@@ -396,8 +555,32 @@ export function createCanvasNode(
         position,
         data: { kind: "capture", field: "name", prompt: "What's your name?" },
       };
+    case "form":
+      return {
+        id,
+        type: "form",
+        position,
+        data: {
+          kind: "form",
+          intro: "A few quick details:",
+          fields: [
+            { field: "name", prompt: "What's your name?" },
+            { field: "email", prompt: "What's the best email?" },
+            { field: "phone", prompt: "And a phone number?" },
+          ],
+        },
+      };
     case "tag":
-      return { id, type: "tag", position, data: { kind: "tag", tagName: "lead" } };
+      return { id, type: "tag", position, data: { kind: "tag", tagName: "lead", action: "add" } };
+    case "delay":
+      return { id, type: "delay", position, data: { kind: "delay", seconds: 300 } };
+    case "condition":
+      return {
+        id,
+        type: "condition",
+        position,
+        data: { kind: "condition", check: "tag", tagName: "lead", field: "email", op: "set", value: "" },
+      };
     case "end":
       return { id, type: "end", position, data: { kind: "end", text: "Done." } };
   }
@@ -456,6 +639,12 @@ export function validateCanvas(graph: CanvasGraph): CanvasValidation {
       }
       for (const button of node.data.buttons) {
         if (!button.text.trim()) warnings.push("A button is missing a label.");
+        if (button.url) {
+          if (!/^https:\/\//i.test(button.url)) {
+            warnings.push(`Button “${button.text || "untitled"}” URL should start with https://`);
+          }
+          continue;
+        }
         const dest = nextFromHandle(graph.edges, node.id, button.id);
         if (!dest) warnings.push(`Button “${button.text || "untitled"}” is not connected.`);
         else if (!stepIds.has(dest)) errors.push(`Button “${button.text}” points at a missing step.`);
@@ -476,6 +665,20 @@ export function validateCanvas(graph: CanvasGraph): CanvasValidation {
       if (!node.data.tagName.trim()) errors.push("A tag step is missing a tag name.");
       const dest = nextFromHandle(graph.edges, node.id, "next");
       if (!dest) warnings.push("A tag step has no next step.");
+    }
+    if (node.data.kind === "form" && node.data.fields.length === 0) {
+      warnings.push("A lead form has no fields.");
+    }
+    if (node.data.kind === "condition") {
+      if (node.data.check === "tag" && !node.data.tagName.trim()) {
+        errors.push("A condition is missing a tag name.");
+      }
+      if (!nextFromHandle(graph.edges, node.id, "yes") || !nextFromHandle(graph.edges, node.id, "no")) {
+        warnings.push("A condition is missing a Yes or No branch.");
+      }
+    }
+    if (node.data.kind === "delay" && node.data.seconds < 0) {
+      errors.push("A delay cannot be negative.");
     }
   }
 
