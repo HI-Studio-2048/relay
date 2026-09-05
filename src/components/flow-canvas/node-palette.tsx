@@ -1,6 +1,6 @@
 "use client";
 
-import { Filter, GitBranch, Hash, ImageIcon, MessageSquare, Square, Timer, UserRound, ClipboardList } from "lucide-react";
+import { Bell, Filter, GitBranch, Hash, ImageIcon, MessageSquare, Square, Timer, UserRound, ClipboardList } from "lucide-react";
 import { NODE_TONE } from "@/components/flow-canvas/node-colors";
 import type { CanvasNodeKind } from "@/lib/flow-canvas";
 
@@ -27,6 +27,7 @@ const GROUPS: {
       { kind: "form", label: "Lead form", hint: "Name, email, phone", icon: ClipboardList },
       { kind: "capture", label: "User input", hint: "One field", icon: UserRound },
       { kind: "tag", label: "Tag", hint: "Add or remove", icon: Hash },
+      { kind: "subscribe", label: "Subscribe", hint: "Opt in or out", icon: Bell },
       { kind: "condition", label: "Condition", hint: "Yes / no branch", icon: Filter },
       { kind: "delay", label: "Delay", hint: "Wait, then continue", icon: Timer },
       { kind: "end", label: "Stop", hint: "Stop the flow", icon: Square },

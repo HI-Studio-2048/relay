@@ -2,6 +2,7 @@
 
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import {
+  Bell,
   ClipboardList,
   Filter,
   Flag,
@@ -216,6 +217,22 @@ export function TagNode({ selected, data }: NodeProps<FlowNode<"tag">>) {
   );
 }
 
+export function SubscribeNode({ selected, data }: NodeProps<FlowNode<"subscribe">>) {
+  const action = data.action === "unsubscribe" ? "Unsubscribe" : "Subscribe";
+  const list = data.listName.trim();
+  return (
+    <NodeFrame selected={selected} kind="subscribe" icon={Bell} title="Action">
+      <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("subscribe")} />
+      <Preview>
+        {data.action === "unsubscribe" && (!list || list.toLowerCase() === "all")
+          ? "Unsubscribe from all broadcasts"
+          : `${action} ${list ? `“${list}”` : "a list"}`}
+      </Preview>
+      <Handle type="source" position={Position.Right} id="next" className={handleClass()} style={handleStyle("subscribe")} />
+    </NodeFrame>
+  );
+}
+
 export function DelayNode({ selected, data }: NodeProps<FlowNode<"delay">>) {
   return (
     <NodeFrame selected={selected} kind="delay" icon={Timer} title="Action">
@@ -282,6 +299,7 @@ export const flowNodeTypes = {
   capture: CaptureNode,
   form: FormNode,
   tag: TagNode,
+  subscribe: SubscribeNode,
   delay: DelayNode,
   condition: ConditionNode,
   end: EndNode,
