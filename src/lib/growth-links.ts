@@ -21,6 +21,7 @@ export {
   slugifyName,
   telegramStartUrl,
 } from "@/lib/growth";
+export type { GrowthLinkView } from "@/lib/growth";
 
 function slugEquals(value: string) {
   return sql`lower(${growthLinks.slug}) = ${value.trim().toLowerCase()}`;

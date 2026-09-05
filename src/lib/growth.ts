@@ -45,6 +45,23 @@ export function linksForFlow<T extends { flowId: string | null }>(links: T[], fl
   return links.filter((link) => link.flowId === flowId);
 }
 
+export type GrowthLinkView = {
+  id: string;
+  name: string;
+  slug: string;
+  tagName: string | null;
+  flowId: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  clickCount: number;
+  startCount: number;
+  telegramUrl: string | null;
+  shortUrl: string;
+  qrUrl: string;
+  flowName?: string | null;
+};
+
 export function qrImageUrl(target: string): string {
   return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(target)}`;
 }

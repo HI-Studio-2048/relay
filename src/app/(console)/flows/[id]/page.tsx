@@ -1,11 +1,11 @@
 import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { FlowWorkspace } from "@/components/flow-canvas/flow-workspace";
+import { FlowSharePanel } from "@/components/chrome/flow-share-panel";
 import { getDb } from "@/lib/db";
 import { customFields, flows, tags } from "@/lib/db/schema";
 import { listGrowthLinksForFlow } from "@/lib/growth-links";
 import type { FlowDefinition, TriggerType } from "@/lib/types";
-import { FlowSharePanel } from "./flow-share-panel";
 
 export const dynamic = "force-dynamic";
 
