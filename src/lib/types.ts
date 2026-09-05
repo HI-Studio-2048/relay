@@ -10,7 +10,9 @@ export type FlowButton = {
 
 export type TagAction = "add" | "remove";
 
-export type ConditionCheck = "tag" | "field";
+export type SubscribeAction = "subscribe" | "unsubscribe";
+
+export type ConditionCheck = "tag" | "field" | "subscription";
 
 export type ConditionOp = "eq" | "contains" | "set";
 
@@ -89,6 +91,13 @@ export type FlowStep =
     }
   | {
       id: string;
+      type: "subscribe";
+      listName: string;
+      action: SubscribeAction;
+      next: string;
+    }
+  | {
+      id: string;
       type: "end";
       text?: string;
     };
@@ -119,6 +128,8 @@ export type ContactRecord = {
   phone: string | null;
   customFields: Record<string, string>;
   tags: string[];
+  subscriptions?: string[];
+  unsubscribed?: boolean;
 };
 
 export type FlowSessionState = {

@@ -39,6 +39,8 @@ export const contacts = pgTable(
     languageCode: text("language_code"),
     email: text("email"),
     phone: text("phone"),
+    unsubscribed: boolean("unsubscribed").notNull().default(false),
+    subscriptions: jsonb("subscriptions").$type<string[]>().notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

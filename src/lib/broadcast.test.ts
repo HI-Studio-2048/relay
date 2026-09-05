@@ -4,6 +4,7 @@ import {
   CONFIRM_REQUIRED,
   assertConfirm,
   canDispatchBroadcast,
+  isBroadcastable,
   nextBroadcastStatusAfterConfirm,
 } from "@/lib/broadcast";
 
@@ -28,6 +29,12 @@ describe("confirm-before-broadcast", () => {
     expect(canDispatchBroadcast({ status: "queued", confirm: true }).ok).toBe(false);
     expect(canDispatchBroadcast({ status: "sending", confirm: true }).ok).toBe(false);
     expect(canDispatchBroadcast({ status: "sent", confirm: true }).ok).toBe(false);
+  });
+
+  it("skips globally unsubscribed contacts", () => {
+    expect(isBroadcastable({})).toBe(true);
+    expect(isBroadcastable({ unsubscribed: false })).toBe(true);
+    expect(isBroadcastable({ unsubscribed: true })).toBe(false);
   });
 
   it("assertConfirm throws a typed error for delete-style actions", () => {

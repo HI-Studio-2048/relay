@@ -122,4 +122,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS broadcast_recipients_unique ON broadcast_recip
 
 ALTER TABLE flow_sessions ADD COLUMN IF NOT EXISTS resume_at timestamptz;
 ALTER TABLE flow_sessions ADD COLUMN IF NOT EXISTS form_index integer;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS unsubscribed boolean NOT NULL DEFAULT false;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS subscriptions jsonb NOT NULL DEFAULT '[]';
 `;

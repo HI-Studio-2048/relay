@@ -40,3 +40,8 @@ export function canDispatchBroadcast(input: {
 export function nextBroadcastStatusAfterConfirm(): Extract<BroadcastStatus, "queued"> {
   return "queued";
 }
+
+/** Global unsubscribe skips tag-scoped broadcasts. Confirm gate is unchanged. */
+export function isBroadcastable(contact: { unsubscribed?: boolean | null }): boolean {
+  return !contact.unsubscribed;
+}
