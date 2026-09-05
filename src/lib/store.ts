@@ -110,6 +110,13 @@ export async function persistContact(botId: string, record: ContactRecord) {
         set: { value },
       });
   }
+  for (const field of byKey.values()) {
+    if (!(field.key in record.customFields)) {
+      await db
+        .delete(contactFieldValues)
+        .where(and(eq(contactFieldValues.contactId, record.id), eq(contactFieldValues.fieldId, field.id)));
+    }
+  }
 
   const wanted = new Set(record.tags);
   const existingLinks = await db

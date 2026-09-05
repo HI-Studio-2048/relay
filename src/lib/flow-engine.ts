@@ -1,4 +1,4 @@
-import { applyCapturedValue, parseCaptureField } from "@/lib/lead-capture";
+import { applyCapturedValue, assignFieldValue, parseCaptureField } from "@/lib/lead-capture";
 import type {
   CaptureField,
   ConditionOp,
@@ -225,6 +225,17 @@ export function executeFrom(
 
     if (step.type === "tag") {
       nextContact = applyTag(nextContact, step.tagName, step.action === "remove" ? "remove" : "add");
+      current = { ...current, stepId: step.next, awaitingInput: false, resumeAt: null };
+      continue;
+    }
+
+    if (step.type === "set_field") {
+      try {
+        const field = parseCaptureField(step.field);
+        nextContact = assignFieldValue(nextContact, field, step.value ?? "");
+      } catch {
+        // Unknown field keys are ignored so a bad step does not stall Telegram.
+      }
       current = { ...current, stepId: step.next, awaitingInput: false, resumeAt: null };
       continue;
     }
