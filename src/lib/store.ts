@@ -1,6 +1,9 @@
-import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, isNotNull, lte, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import {
+  bots,
+  broadcastRecipients,
+  broadcasts,
   contactFieldValues,
   contactTags,
   contacts,
@@ -10,7 +13,7 @@ import {
   messages,
   tags,
 } from "@/lib/db/schema";
-import { EXAMPLE_LEAD_CAPTURE_FLOW } from "@/lib/example-flow";
+import { EXAMPLE_GROWTH_LINK_FLOW, EXAMPLE_LEAD_CAPTURE_FLOW } from "@/lib/example-flow";
 import type { ContactRecord, FlowDefinition, FlowSessionState } from "@/lib/types";
 import type { FlowRecord } from "@/lib/flow-engine";
 
@@ -103,6 +106,20 @@ export async function persistContact(botId: string, record: ContactRecord) {
       });
   }
 
+  const wanted = new Set(record.tags);
+  const existingLinks = await db
+    .select({ tagId: contactTags.tagId, name: tags.name })
+    .from(contactTags)
+    .innerJoin(tags, eq(tags.id, contactTags.tagId))
+    .where(eq(contactTags.contactId, record.id));
+  for (const link of existingLinks) {
+    if (!wanted.has(link.name)) {
+      await db
+        .delete(contactTags)
+        .where(and(eq(contactTags.contactId, record.id), eq(contactTags.tagId, link.tagId)));
+    }
+  }
+
   for (const tagName of record.tags) {
     let [tag] = await db
       .select()
@@ -137,6 +154,8 @@ export async function loadActiveSession(contactId: string): Promise<FlowSessionS
     stepId: row.stepId,
     awaitingInput: row.awaitingInput,
     status: row.status === "completed" ? "completed" : "active",
+    formIndex: row.formIndex ?? undefined,
+    resumeAt: row.resumeAt ? row.resumeAt.toISOString() : null,
   };
 }
 
@@ -151,8 +170,20 @@ export async function persistSession(contactId: string, session: FlowSessionStat
     stepId: session.stepId,
     awaitingInput: session.awaitingInput,
     status: session.status,
+    formIndex: session.formIndex ?? null,
+    resumeAt: session.resumeAt ? new Date(session.resumeAt) : null,
     updatedAt: now(),
   });
+}
+
+export async function listDueDelaySessions() {
+  const db = await getDb();
+  return db
+    .select()
+    .from(flowSessions)
+    .where(
+      and(eq(flowSessions.status, "active"), isNotNull(flowSessions.resumeAt), lte(flowSessions.resumeAt, new Date())),
+    );
 }
 
 export async function loadActiveFlows(botId: string): Promise<FlowRecord[]> {
@@ -281,14 +312,25 @@ export async function seedBotDefaults(botId: string) {
   }
   const existingFlows = await db.select().from(flows).where(eq(flows.botId, botId));
   if (existingFlows.length === 0) {
-    await db.insert(flows).values({
-      id: crypto.randomUUID(),
-      botId,
-      name: "Lead capture",
-      triggerType: "start",
-      triggerValue: "/start",
-      isActive: true,
-      definition: EXAMPLE_LEAD_CAPTURE_FLOW,
-    });
+    await db.insert(flows).values([
+      {
+        id: crypto.randomUUID(),
+        botId,
+        name: "Lead capture",
+        triggerType: "start",
+        triggerValue: "/start",
+        isActive: true,
+        definition: EXAMPLE_LEAD_CAPTURE_FLOW,
+      },
+      {
+        id: crypto.randomUUID(),
+        botId,
+        name: "Promo growth link",
+        triggerType: "start_param",
+        triggerValue: "promo",
+        isActive: true,
+        definition: EXAMPLE_GROWTH_LINK_FLOW,
+      },
+    ]);
   }
 }
