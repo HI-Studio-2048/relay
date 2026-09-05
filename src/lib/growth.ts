@@ -41,29 +41,43 @@ export function growthRedirectPath(slug: string): string {
   return `/go/${encodeURIComponent(slug)}`;
 }
 
+export function qrImageUrl(target: string): string {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(target)}`;
+}
+
 export function linksForFlow<T extends { flowId: string | null }>(links: T[], flowId: string) {
   return links.filter((link) => link.flowId === flowId);
 }
 
-export type GrowthLinkView = {
-  id: string;
-  name: string;
-  slug: string;
-  tagName: string | null;
-  flowId: string | null;
-  utmSource: string | null;
-  utmMedium: string | null;
-  utmCampaign: string | null;
-  clickCount: number;
-  startCount: number;
-  telegramUrl: string | null;
-  shortUrl: string;
-  qrUrl: string;
-  flowName?: string | null;
-};
+/** First unused Telegram start param, preferring `preferred` then `_2`, `_3`, … */
+export function nextShareSlug(preferred: string, taken: Iterable<string>): string {
+  const existing = new Set([...taken].map((item) => item.toLowerCase()));
+  const raw = preferred.trim();
+  const base = (SLUG_PATTERN.test(raw) ? raw : slugifyName(raw)).toLowerCase();
+  assertSlug(base);
+  if (!existing.has(base.toLowerCase())) return base;
+  for (let n = 2; n < 1000; n += 1) {
+    const suffix = `_${n}`;
+    const next = `${base.slice(0, 64 - suffix.length)}${suffix}`;
+    if (!existing.has(next.toLowerCase())) return assertSlug(next);
+  }
+  throw new Error("Could not allocate a unique start param");
+}
 
-export function qrImageUrl(target: string): string {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(target)}`;
+export function presentGrowthLink<T extends { slug: string }>(
+  row: T,
+  input: { telegramUsername?: string | null; origin?: string | null },
+) {
+  const telegramUrl = telegramStartUrl(input.telegramUsername, row.slug);
+  const redirectPath = growthRedirectPath(row.slug);
+  const origin = input.origin?.replace(/\/$/, "") ?? "";
+  const shortUrl = origin ? `${origin}${redirectPath}` : redirectPath;
+  return {
+    ...row,
+    telegramUrl,
+    shortUrl,
+    qrUrl: qrImageUrl(shortUrl),
+  };
 }
 
 export function preferLinkedFlow(

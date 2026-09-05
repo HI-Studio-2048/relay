@@ -3,20 +3,26 @@ import { getDb } from "@/lib/db";
 import { flows, growthLinks } from "@/lib/db/schema";
 import {
   assertSlug,
-  linksForFlow,
+  ensureFlowShareLink,
   listGrowthLinks,
+  originFromRequest,
+  presentStoredGrowthLink,
   slugifyName,
 } from "@/lib/growth-links";
 import { fail, json, readJson } from "@/lib/http";
 
 export async function GET(request: Request) {
   try {
-    const search = new URL(request.url).searchParams;
-    const botId = search.get("botId");
-    const flowId = search.get("flowId");
+    const url = new URL(request.url);
+    const botId = url.searchParams.get("botId");
     if (!botId) return json({ error: "botId is required" }, 400);
-    const links = await listGrowthLinks(botId);
-    return json({ links: flowId ? linksForFlow(links, flowId) : links });
+    const flowId = url.searchParams.get("flowId");
+    return json({
+      links: await listGrowthLinks(botId, {
+        origin: originFromRequest(request),
+        flowId,
+      }),
+    });
   } catch (error) {
     return fail(error);
   }
@@ -33,10 +39,32 @@ export async function POST(request: Request) {
       utmSource?: string | null;
       utmMedium?: string | null;
       utmCampaign?: string | null;
+      ensure?: boolean;
     }>(request);
-    if (!body.botId || !body.name?.trim()) return json({ error: "botId and name are required" }, 400);
-    const slug = assertSlug(body.slug?.trim() ? body.slug : slugifyName(body.name));
+    if (!body.botId) return json({ error: "botId is required" }, 400);
     const db = await getDb();
+    const origin = originFromRequest(request);
+
+    if (body.ensure) {
+      if (!body.flowId) return json({ error: "flowId is required" }, 400);
+      const [flow] = await db.select().from(flows).where(eq(flows.id, body.flowId)).limit(1);
+      if (!flow || flow.botId !== body.botId) return json({ error: "Flow not found for this bot" }, 404);
+      const preferredSlug =
+        flow.triggerType === "start_param" && flow.triggerValue?.trim() ? flow.triggerValue : null;
+      const { link, created } = await ensureFlowShareLink({
+        botId: body.botId,
+        flowId: flow.id,
+        flowName: flow.name,
+        preferredSlug,
+      });
+      return json({
+        link: await presentStoredGrowthLink(link, { origin }),
+        created,
+      });
+    }
+
+    if (!body.name?.trim()) return json({ error: "botId and name are required" }, 400);
+    const slug = assertSlug(body.slug?.trim() ? body.slug : slugifyName(body.name));
 
     if (body.flowId) {
       const [flow] = await db.select().from(flows).where(eq(flows.id, body.flowId)).limit(1);
@@ -57,7 +85,9 @@ export async function POST(request: Request) {
         utmCampaign: body.utmCampaign?.trim() || null,
       })
       .returning();
-    const [enriched] = (await listGrowthLinks(body.botId)).filter((item) => item.id === link?.id);
+    const [enriched] = (
+      await listGrowthLinks(body.botId, { origin })
+    ).filter((item) => item.id === link?.id);
     return json({ link: enriched ?? link });
   } catch (error) {
     const message = error instanceof Error ? error.message.toLowerCase() : "";
