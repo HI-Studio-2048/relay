@@ -144,6 +144,48 @@ describe("conditions, tags, forms, delays, and URL buttons", () => {
     ).toBe(false);
   });
 
+  it("subscribes to a list, then unsubscribes globally", () => {
+    const definition: FlowDefinition = {
+      startStepId: "in",
+      steps: [
+        { id: "in", type: "subscribe", listName: "newsletter", action: "subscribe", next: "out" },
+        { id: "out", type: "subscribe", listName: "all", action: "unsubscribe", next: "done" },
+        { id: "done", type: "end", text: "ok" },
+      ],
+    };
+    const subscribed = executeFrom(
+      {
+        startStepId: "in",
+        steps: [
+          { id: "in", type: "subscribe", listName: "newsletter", action: "subscribe", next: "done" },
+          { id: "done", type: "end", text: "in" },
+        ],
+      },
+      { id: "s", contactId: "c1", flowId: "f", stepId: "in", awaitingInput: false, status: "active" },
+      emptyContact(),
+    );
+    expect(subscribed.contact.tags).toContain("newsletter");
+    expect(subscribed.contact.subscriptions).toContain("newsletter");
+    expect(subscribed.contact.unsubscribed).toBe(false);
+    expect(
+      evaluateCondition(subscribed.contact, {
+        id: "c",
+        type: "condition",
+        check: "subscription",
+        tagName: "newsletter",
+        nextTrue: "y",
+        nextFalse: "n",
+      }),
+    ).toBe(true);
+
+    const stopped = executeFrom(
+      definition,
+      { id: "s", contactId: "c1", flowId: "f", stepId: "in", awaitingInput: false, status: "active" },
+      emptyContact(),
+    );
+    expect(stopped.contact.unsubscribed).toBe(true);
+  });
+
   it("adds and removes tags", () => {
     const definition: FlowDefinition = {
       startStepId: "add",
@@ -315,6 +357,7 @@ describe("conditions, tags, forms, delays, and URL buttons", () => {
     const finished = runFlow(flows, state, { telegramUserId: "1001", text: "daniel@histudio.test" });
     expect(state.contact?.email).toBe("daniel@histudio.test");
     expect(state.contact?.tags).toContain("qualified");
+    expect(state.contact?.subscriptions).toContain("newsletter");
     expect(finished.session).toBeNull();
     expect(finished.replies.at(-1)?.text).toMatch(/promo growth link/);
   });
@@ -326,6 +369,7 @@ describe("canvas serialize for new step kinds", () => {
     expect(graph.nodes.find((node) => node.id === "lead_form")?.type).toBe("form");
     expect(graph.nodes.find((node) => node.id === "has_email")?.type).toBe("condition");
     expect(graph.nodes.find((node) => node.id === "wait")?.type).toBe("delay");
+    expect(graph.nodes.find((node) => node.id === "opt_in")?.type).toBe("subscribe");
     expect(graph.edges).toContainEqual(
       expect.objectContaining({ source: "has_email", sourceHandle: "yes", target: "tag_qualified" }),
     );
