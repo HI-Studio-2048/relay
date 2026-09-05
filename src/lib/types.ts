@@ -67,6 +67,13 @@ export type FlowStep =
     }
   | {
       id: string;
+      type: "set_field";
+      field: CaptureField;
+      value: string;
+      next: string;
+    }
+  | {
+      id: string;
       type: "delay";
       seconds: number;
       next: string;

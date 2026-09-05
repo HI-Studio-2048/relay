@@ -52,6 +52,30 @@ export function applyCapturedValue(
   };
 }
 
+/** Silent assign for flow "set field" steps. Empty clears. Invalid email is skipped. */
+export function assignFieldValue(
+  contact: ContactRecord,
+  field: CaptureField,
+  raw: string,
+): ContactRecord {
+  const value = raw.trim();
+  if (!value) {
+    if (field === "name") return { ...contact, firstName: null, lastName: null };
+    if (field === "email") return { ...contact, email: null };
+    if (field === "phone") return { ...contact, phone: null };
+    const key = field.slice("custom:".length);
+    if (!key) return contact;
+    const customFields = { ...contact.customFields };
+    delete customFields[key];
+    return { ...contact, customFields };
+  }
+  try {
+    return applyCapturedValue(contact, field, value);
+  } catch {
+    return contact;
+  }
+}
+
 export function displayName(contact: Pick<ContactRecord, "firstName" | "lastName" | "username" | "telegramUserId">) {
   const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim();
   if (name) return name;
