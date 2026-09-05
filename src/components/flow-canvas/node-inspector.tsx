@@ -1,6 +1,7 @@
 "use client";
 
 import { MediaPicker } from "@/components/flow-canvas/media-picker";
+import { NODE_TONE } from "@/components/flow-canvas/node-colors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,7 +60,10 @@ export function NodeInspector({
     <aside className="max-h-[42vh] w-full shrink-0 overflow-y-auto border-t bg-sidebar/80 p-4 md:max-h-none md:w-80 md:border-t-0 md:border-l">
       <div className="mb-3 flex items-start justify-between gap-2">
         <div>
-          <p className="text-sm font-medium capitalize">{data.kind}</p>
+          <p className="flex items-center gap-2 text-sm font-medium capitalize">
+            <span className="size-2.5 rounded-full" style={{ background: NODE_TONE[data.kind].hex }} />
+            {data.kind}
+          </p>
           <p className="text-[11px] text-muted-foreground">{isTrigger ? "Flow start" : selectedId}</p>
         </div>
         {!isTrigger ? (

@@ -136,11 +136,31 @@
     radial-gradient(1200px 480px at 12% -10%, color-mix(in oklch, var(--primary) 9%, transparent), transparent 60%);
 }
 
+.relay-topbar {
+  background: color-mix(in oklch, var(--sidebar) 82%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.relay-nav-item {
+  position: relative;
+}
+
+.relay-nav-item[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 0;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
 .relay-flow.react-flow {
   --xy-background-color: transparent;
   --xy-node-border-default: var(--border);
   --xy-node-background-color-default: var(--card);
-  --xy-edge-stroke-default: color-mix(in oklch, var(--foreground) 32%, transparent);
+  --xy-edge-stroke-default: color-mix(in oklch, var(--foreground) 55%, transparent);
   --xy-edge-stroke-selected-default: var(--primary);
   --xy-connectionline-stroke-default: var(--primary);
   --xy-minimap-background-color-default: var(--card);

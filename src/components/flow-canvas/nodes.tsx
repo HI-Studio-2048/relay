@@ -3,39 +3,50 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { Flag, GitBranch, Hash, ImageIcon, MessageSquare, Square, UserRound } from "lucide-react";
 import { MediaThumb } from "@/components/flow-canvas/media-picker";
+import { NODE_TONE } from "@/components/flow-canvas/node-colors";
 import { cn } from "@/lib/utils";
 import type { CanvasNodeData } from "@/lib/flow-canvas";
 
 type FlowNode<K extends CanvasNodeData["kind"]> = Node<Extract<CanvasNodeData, { kind: K }>, K>;
 
-const handleClass =
-  "!size-2.5 !border-2 !bg-background !border-primary hover:!bg-primary";
+function handleClass(kind: CanvasNodeData["kind"]) {
+  return cn(
+    "!size-2.5 !border-2 !bg-background",
+    NODE_TONE[kind].handle,
+  );
+}
 
 function NodeFrame({
   selected,
-  accent,
+  kind,
   icon: Icon,
   title,
   children,
 }: {
   selected: boolean;
-  accent: string;
+  kind: CanvasNodeData["kind"];
   icon: typeof Flag;
   title: string;
   children: React.ReactNode;
 }) {
+  const tone = NODE_TONE[kind];
   return (
     <div
       className={cn(
-        "w-[248px] rounded-xl border bg-card shadow-md",
-        selected ? "border-primary ring-2 ring-primary/35" : "border-border",
+        "w-[248px] overflow-hidden rounded-xl border bg-card shadow-md",
+        selected ? "ring-2 ring-offset-2 ring-offset-background" : "border-border",
       )}
+      style={
+        selected
+          ? { borderColor: tone.hex, boxShadow: `0 0 0 3px ${tone.hex}55` }
+          : { borderColor: `${tone.hex}66` }
+      }
     >
-      <div className={cn("flex items-center gap-1.5 rounded-t-[11px] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide", accent)}>
+      <div className={cn("flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide", tone.header)}>
         <Icon className="size-3.5" />
         {title}
       </div>
-      <div className="space-y-1.5 px-3 py-2.5 text-sm">{children}</div>
+      <div className={cn("space-y-1.5 px-3 py-2.5 text-sm", tone.wash)}>{children}</div>
     </div>
   );
 }
@@ -46,45 +57,45 @@ function Preview({ children }: { children: React.ReactNode }) {
 
 export function TriggerNode({ selected }: NodeProps<FlowNode<"trigger">>) {
   return (
-    <NodeFrame selected={selected} accent="bg-primary/15 text-primary" icon={Flag} title="Trigger">
+    <NodeFrame selected={selected} kind="trigger" icon={Flag} title="Trigger">
       <Preview>Starts this flow</Preview>
-      <Handle type="source" position={Position.Right} id="out" className={handleClass} />
+      <Handle type="source" position={Position.Right} id="out" className={handleClass("trigger")} />
     </NodeFrame>
   );
 }
 
 export function MessageNode({ selected, data }: NodeProps<FlowNode<"message">>) {
   return (
-    <NodeFrame selected={selected} accent="bg-sky-500/15 text-sky-300" icon={MessageSquare} title="Message">
-      <Handle type="target" position={Position.Left} id="in" className={handleClass} />
+    <NodeFrame selected={selected} kind="message" icon={MessageSquare} title="Message">
+      <Handle type="target" position={Position.Left} id="in" className={handleClass("message")} />
       <MediaThumb media={data.media} className="h-24" />
       <Preview>{data.text || "Empty message"}</Preview>
-      <Handle type="source" position={Position.Right} id="next" className={handleClass} />
+      <Handle type="source" position={Position.Right} id="next" className={handleClass("message")} />
     </NodeFrame>
   );
 }
 
 export function MediaNode({ selected, data }: NodeProps<FlowNode<"media">>) {
   return (
-    <NodeFrame selected={selected} accent="bg-rose-500/15 text-rose-300" icon={ImageIcon} title="Image / GIF">
-      <Handle type="target" position={Position.Left} id="in" className={handleClass} />
+    <NodeFrame selected={selected} kind="media" icon={ImageIcon} title="Image / GIF">
+      <Handle type="target" position={Position.Left} id="in" className={handleClass("media")} />
       {data.media ? (
         <MediaThumb media={data.media} className="h-28" />
       ) : (
-        <div className="flex h-20 items-center justify-center rounded-md border border-dashed border-rose-300/40 bg-rose-500/5 px-2 text-center text-[11px] text-muted-foreground">
+        <div className="flex h-20 items-center justify-center rounded-md border border-dashed border-rose-400/50 bg-rose-500/10 px-2 text-center text-[11px] text-rose-200">
           Drop an image or GIF, or attach one in the inspector
         </div>
       )}
       {data.text ? <Preview>{data.text}</Preview> : null}
-      <Handle type="source" position={Position.Right} id="next" className={handleClass} />
+      <Handle type="source" position={Position.Right} id="next" className={handleClass("media")} />
     </NodeFrame>
   );
 }
 
 export function ButtonsNode({ selected, data }: NodeProps<FlowNode<"buttons">>) {
   return (
-    <NodeFrame selected={selected} accent="bg-violet-500/15 text-violet-300" icon={GitBranch} title="Buttons">
-      <Handle type="target" position={Position.Left} id="in" className={handleClass} />
+    <NodeFrame selected={selected} kind="buttons" icon={GitBranch} title="Buttons">
+      <Handle type="target" position={Position.Left} id="in" className={handleClass("buttons")} />
       <MediaThumb media={data.media} className="h-20" />
       <Preview>{data.text || "Choose an option"}</Preview>
       <div className="space-y-1 pt-1">
@@ -94,14 +105,14 @@ export function ButtonsNode({ selected, data }: NodeProps<FlowNode<"buttons">>) 
           data.buttons.map((button) => (
             <div
               key={button.id}
-              className="relative flex items-center rounded-md bg-muted/70 px-2 py-1 pr-3"
+              className="relative flex items-center rounded-md bg-violet-500/15 px-2 py-1 pr-3 ring-1 ring-violet-400/30"
             >
               <span className="truncate text-xs">{button.text || "Untitled"}</span>
               <Handle
                 type="source"
                 position={Position.Right}
                 id={button.id}
-                className={cn(handleClass, "!right-[-15px]")}
+                className={cn(handleClass("buttons"), "!right-[-15px]")}
               />
             </div>
           ))
@@ -116,29 +127,29 @@ export function CaptureNode({ selected, data }: NodeProps<FlowNode<"capture">>) 
     ? `custom · ${data.field.slice("custom:".length)}`
     : data.field;
   return (
-    <NodeFrame selected={selected} accent="bg-emerald-500/15 text-emerald-300" icon={UserRound} title="Capture">
-      <Handle type="target" position={Position.Left} id="in" className={handleClass} />
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{fieldLabel}</p>
+    <NodeFrame selected={selected} kind="capture" icon={UserRound} title="Capture">
+      <Handle type="target" position={Position.Left} id="in" className={handleClass("capture")} />
+      <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-300">{fieldLabel}</p>
       <Preview>{data.prompt || "Ask a question"}</Preview>
-      <Handle type="source" position={Position.Right} id="next" className={handleClass} />
+      <Handle type="source" position={Position.Right} id="next" className={handleClass("capture")} />
     </NodeFrame>
   );
 }
 
 export function TagNode({ selected, data }: NodeProps<FlowNode<"tag">>) {
   return (
-    <NodeFrame selected={selected} accent="bg-amber-500/15 text-amber-300" icon={Hash} title="Tag">
-      <Handle type="target" position={Position.Left} id="in" className={handleClass} />
+    <NodeFrame selected={selected} kind="tag" icon={Hash} title="Tag">
+      <Handle type="target" position={Position.Left} id="in" className={handleClass("tag")} />
       <Preview>{data.tagName ? `#${data.tagName}` : "No tag"}</Preview>
-      <Handle type="source" position={Position.Right} id="next" className={handleClass} />
+      <Handle type="source" position={Position.Right} id="next" className={handleClass("tag")} />
     </NodeFrame>
   );
 }
 
 export function EndNode({ selected, data }: NodeProps<FlowNode<"end">>) {
   return (
-    <NodeFrame selected={selected} accent="bg-muted text-muted-foreground" icon={Square} title="End">
-      <Handle type="target" position={Position.Left} id="in" className={handleClass} />
+    <NodeFrame selected={selected} kind="end" icon={Square} title="End">
+      <Handle type="target" position={Position.Left} id="in" className={handleClass("end")} />
       <Preview>{data.text || "Stop the flow"}</Preview>
     </NodeFrame>
   );

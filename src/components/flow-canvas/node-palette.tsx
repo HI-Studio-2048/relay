@@ -1,7 +1,9 @@
 "use client";
 
 import { GitBranch, Hash, ImageIcon, MessageSquare, Square, UserRound } from "lucide-react";
+import { NODE_TONE } from "@/components/flow-canvas/node-colors";
 import type { CanvasNodeKind } from "@/lib/flow-canvas";
+import { cn } from "@/lib/utils";
 
 export const PALETTE_ITEMS: {
   kind: Exclude<CanvasNodeKind, "trigger">;
@@ -41,7 +43,9 @@ export function NodePalette({
             onClick={() => onAdd(item.kind)}
             className="flex min-w-36 items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-2 text-left text-sm hover:bg-muted/60 md:min-w-0"
           >
-            <Icon className="size-4 shrink-0 text-muted-foreground" />
+            <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-md", NODE_TONE[item.kind].chip)}>
+              <Icon className="size-3.5" />
+            </span>
             <span className="min-w-0">
               <span className="block font-medium">{item.label}</span>
               <span className="hidden truncate text-[11px] text-muted-foreground md:block">{item.hint}</span>

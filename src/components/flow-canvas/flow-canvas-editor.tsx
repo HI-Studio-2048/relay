@@ -28,6 +28,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { isImageFile, uploadMediaFile } from "@/components/flow-canvas/media-picker";
+import { nodeHex } from "@/components/flow-canvas/node-colors";
 import { NodeInspector, type FlowMeta, type InspectorField } from "@/components/flow-canvas/node-inspector";
 import { NodePalette } from "@/components/flow-canvas/node-palette";
 import { flowNodeTypes } from "@/components/flow-canvas/nodes";
@@ -298,15 +299,7 @@ function CanvasStage({
             pannable
             zoomable
             className="!bg-card !shadow-none"
-            nodeColor={(node) => {
-              if (node.type === "trigger") return "var(--primary)";
-              if (node.type === "capture") return "#34d399";
-              if (node.type === "buttons") return "#a78bfa";
-              if (node.type === "media") return "#fb7185";
-              if (node.type === "tag") return "#fbbf24";
-              if (node.type === "end") return "#6b7280";
-              return "#7dd3fc";
-            }}
+            nodeColor={(node) => nodeHex(node.type)}
           />
         </ReactFlow>
       </div>
