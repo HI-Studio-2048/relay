@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { bots, growthLinkEvents, growthLinks } from "@/lib/db/schema";
 import {
   growthRedirectPath,
+  linksForFlow,
   qrImageUrl,
   telegramStartUrl,
 } from "@/lib/growth";
@@ -13,6 +14,7 @@ export {
   assertSlug,
   attributedContact,
   growthRedirectPath,
+  linksForFlow,
   parseStartPayload,
   preferLinkedFlow,
   qrImageUrl,
@@ -89,4 +91,8 @@ export async function listGrowthLinks(botId: string) {
       qrUrl: qrImageUrl(shortUrl),
     };
   });
+}
+
+export async function listGrowthLinksForFlow(botId: string, flowId: string) {
+  return linksForFlow(await listGrowthLinks(botId), flowId);
 }

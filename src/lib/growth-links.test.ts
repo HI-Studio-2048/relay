@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyGrowthAttribution,
   attributedContact,
+  linksForFlow,
   parseStartPayload,
   preferLinkedFlow,
   slugifyName,
@@ -73,6 +74,16 @@ describe("growth links", () => {
     expect(ordered[0]?.id).toBe("ads-flow");
     expect(ordered[0]?.triggerType).toBe("start_param");
     expect(ordered[0]?.triggerValue).toBe("ads");
+  });
+
+  it("keeps only growth links tied to one flow", () => {
+    const links = [
+      { id: "a", flowId: "flow-1" },
+      { id: "b", flowId: null },
+      { id: "c", flowId: "flow-2" },
+      { id: "d", flowId: "flow-1" },
+    ];
+    expect(linksForFlow(links, "flow-1").map((link) => link.id)).toEqual(["a", "d"]);
   });
 
   it("attributes a new contact before the flow runs", () => {

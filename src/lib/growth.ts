@@ -41,6 +41,10 @@ export function growthRedirectPath(slug: string): string {
   return `/go/${encodeURIComponent(slug)}`;
 }
 
+export function linksForFlow<T extends { flowId: string | null }>(links: T[], flowId: string) {
+  return links.filter((link) => link.flowId === flowId);
+}
+
 export function qrImageUrl(target: string): string {
   return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(target)}`;
 }
