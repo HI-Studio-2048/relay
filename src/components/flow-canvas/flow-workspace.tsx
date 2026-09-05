@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { FlowListEditor } from "@/components/flow-canvas/flow-list-editor";
+import { FlowShareButton } from "@/components/flow-canvas/flow-share-dialog";
 import type { FlowCanvasHandle } from "@/components/flow-canvas/flow-canvas-editor";
 import type { FlowMeta, InspectorField } from "@/components/flow-canvas/node-inspector";
 import { Button } from "@/components/ui/button";
@@ -115,10 +116,13 @@ export function FlowWorkspace({
     setFlow((current) => ({ ...current, ...patch }));
   };
 
-  const status =
-    validation.errors[0] ??
-    validation.warnings[0] ??
-    "Connect handles to set the next step. Drop an image or GIF onto the canvas.";
+  const firstIssue = validation.errors[0] ?? validation.warnings[0];
+  const extraIssues = validation.errors.length + validation.warnings.length - (firstIssue ? 1 : 0);
+  const status = firstIssue
+    ? extraIssues > 0
+      ? `${firstIssue} (+${extraIssues} more)`
+      : firstIssue
+    : "Connect handles to set the next step. Drop an image or GIF onto a content node or the canvas.";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -164,6 +168,7 @@ export function FlowWorkspace({
               List
             </button>
           </div>
+          <FlowShareButton botId={flow.botId} flowId={flow.id} />
           <Button size="sm" onClick={() => void save()} disabled={saving}>
             {saving ? "Saving…" : "Save"}
           </Button>
