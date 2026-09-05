@@ -48,6 +48,12 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+html,
+html.dark,
+.dark {
+  color-scheme: light;
+}
+
 :root {
   --background: #f4f6f8;
   --foreground: #1b1f24;

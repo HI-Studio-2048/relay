@@ -78,10 +78,13 @@ export function CreateGrowthLinkForm({
       />
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <Label htmlFor="growth-name">Name</Label>
+          <Label htmlFor="growth-name" className="text-[13px] font-medium text-[#1b1f24]">
+            Name
+          </Label>
           <Input
             id="growth-name"
             placeholder="Instagram bio"
+            className="border-[#e5e7eb] bg-white text-[#1b1f24] placeholder:text-[#6b7280]"
             value={name}
             onChange={(event) => {
               setName(event.target.value);
@@ -90,10 +93,13 @@ export function CreateGrowthLinkForm({
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="growth-slug">Start param</Label>
+          <Label htmlFor="growth-slug" className="text-[13px] font-medium text-[#1b1f24]">
+            Start param
+          </Label>
           <Input
             id="growth-slug"
             placeholder="ig_bio"
+            className="border-[#e5e7eb] bg-white text-[#1b1f24] placeholder:text-[#6b7280]"
             value={slug}
             onChange={(event) => {
               setSlugTouched(true);
@@ -102,11 +108,14 @@ export function CreateGrowthLinkForm({
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="growth-tag">Tag on start</Label>
+          <Label htmlFor="growth-tag" className="text-[13px] font-medium text-[#1b1f24]">
+            Tag on start
+          </Label>
           <Input
             id="growth-tag"
             list="growth-tag-options"
             placeholder="lead — or type a new tag"
+            className="border-[#e5e7eb] bg-white text-[#1b1f24] placeholder:text-[#6b7280]"
             value={tagName}
             onChange={(event) => setTagName(event.target.value)}
           />
@@ -117,9 +126,13 @@ export function CreateGrowthLinkForm({
           </datalist>
         </div>
         <div className="space-y-1">
-          <Label>Start this flow</Label>
+          <Label htmlFor="growth-flow" className="text-[13px] font-medium text-[#1b1f24]">
+            Start this flow
+          </Label>
           <select
-            className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm"
+            id="growth-flow"
+            className="h-8 w-full rounded-lg border border-[#e5e7eb] bg-white px-2.5 text-sm text-[#1b1f24] outline-none focus-visible:border-[#0084ff] focus-visible:ring-3 focus-visible:ring-[#0084ff]/20"
+            style={{ colorScheme: "light" }}
             value={flowId}
             onChange={(event) => setFlowId(event.target.value)}
           >
@@ -132,19 +145,44 @@ export function CreateGrowthLinkForm({
           </select>
         </div>
         <div className="space-y-1">
-          <Label htmlFor="utm-source">UTM source</Label>
-          <Input id="utm-source" value={utmSource} onChange={(event) => setUtmSource(event.target.value)} />
+          <Label htmlFor="utm-source" className="text-[13px] font-medium text-[#1b1f24]">
+            UTM source
+          </Label>
+          <Input
+            id="utm-source"
+            className="border-[#e5e7eb] bg-white text-[#1b1f24] placeholder:text-[#6b7280]"
+            value={utmSource}
+            onChange={(event) => setUtmSource(event.target.value)}
+          />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="utm-medium">UTM medium</Label>
-          <Input id="utm-medium" value={utmMedium} onChange={(event) => setUtmMedium(event.target.value)} />
+          <Label htmlFor="utm-medium" className="text-[13px] font-medium text-[#1b1f24]">
+            UTM medium
+          </Label>
+          <Input
+            id="utm-medium"
+            className="border-[#e5e7eb] bg-white text-[#1b1f24] placeholder:text-[#6b7280]"
+            value={utmMedium}
+            onChange={(event) => setUtmMedium(event.target.value)}
+          />
         </div>
         <div className="space-y-1 sm:col-span-2">
-          <Label htmlFor="utm-campaign">UTM campaign</Label>
-          <Input id="utm-campaign" value={utmCampaign} onChange={(event) => setUtmCampaign(event.target.value)} />
+          <Label htmlFor="utm-campaign" className="text-[13px] font-medium text-[#1b1f24]">
+            UTM campaign
+          </Label>
+          <Input
+            id="utm-campaign"
+            className="border-[#e5e7eb] bg-white text-[#1b1f24] placeholder:text-[#6b7280]"
+            value={utmCampaign}
+            onChange={(event) => setUtmCampaign(event.target.value)}
+          />
         </div>
       </div>
-      <Button onClick={() => void create()} disabled={busy || !name.trim()}>
+      <Button
+        onClick={() => void create()}
+        disabled={busy || !name.trim()}
+        className="bg-[#0084ff] text-white hover:bg-[#0076e6] disabled:bg-[#0084ff]/40"
+      >
         {busy ? "Creating…" : "Create link"}
       </Button>
     </div>
