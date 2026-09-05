@@ -124,6 +124,8 @@ export const flowSessions = pgTable("flow_sessions", {
   stepId: text("step_id").notNull(),
   awaitingInput: boolean("awaiting_input").notNull().default(false),
   status: text("status").notNull().default("active"),
+  resumeAt: timestamp("resume_at", { withTimezone: true }),
+  formIndex: integer("form_index"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
