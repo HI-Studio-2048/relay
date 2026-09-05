@@ -128,3 +128,37 @@
     @apply font-sans;
   }
 }
+
+.relay-flow.react-flow {
+  --xy-background-color: transparent;
+  --xy-node-border-default: var(--border);
+  --xy-node-background-color-default: var(--card);
+  --xy-edge-stroke-default: color-mix(in oklch, var(--foreground) 32%, transparent);
+  --xy-edge-stroke-selected-default: var(--primary);
+  --xy-connectionline-stroke-default: var(--primary);
+  --xy-minimap-background-color-default: var(--card);
+  --xy-controls-button-background-color-default: var(--card);
+  --xy-controls-button-background-color-hover-default: var(--muted);
+  --xy-controls-button-color-default: var(--foreground);
+  --xy-controls-button-border-color-default: var(--border);
+  --xy-attribution-background-color-default: transparent;
+}
+
+.relay-flow .react-flow__attribution {
+  background: transparent !important;
+  color: var(--muted-foreground);
+  opacity: 0.7;
+}
+
+.relay-flow .react-flow__controls {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.relay-flow .react-flow__minimap {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}

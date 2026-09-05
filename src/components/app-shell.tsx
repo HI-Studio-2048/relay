@@ -29,6 +29,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { bots, bot, setBotId } = useBot();
   const [open, setOpen] = useState(false);
+  const flowCanvas = /^\/flows\/[^/]+$/.test(pathname);
 
   const nav = (
     <nav className="flex flex-col gap-1">
@@ -56,7 +57,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="flex min-h-full bg-background">
+    <div className={cn("flex bg-background", flowCanvas ? "h-dvh overflow-hidden" : "min-h-full")}>
       <aside className="hidden w-60 shrink-0 border-r border-sidebar-border bg-sidebar p-4 md:flex md:flex-col">
         <div className="mb-6 px-2">
           <p className="font-heading text-lg tracking-tight">Relay</p>
@@ -82,7 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className={cn("flex min-w-0 flex-1 flex-col", flowCanvas && "min-h-0")}>
         <header className="flex items-center justify-between border-b px-4 py-3 md:hidden">
           <div>
             <p className="font-heading text-base">Relay</p>
@@ -93,7 +94,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Button>
         </header>
         {open ? <div className="border-b bg-sidebar p-3 md:hidden">{nav}</div> : null}
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8">{children}</main>
+        <main
+          className={
+            flowCanvas
+              ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+              : "mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8"
+          }
+        >
+          {children}
+        </main>
       </div>
     </div>
   );

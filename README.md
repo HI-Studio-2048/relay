@@ -12,7 +12,7 @@ Origin is the source of truth for this project.
 2. **Contacts** — upsert on `/start` and every inbound message (Telegram user id, username, name).
 3. **Tags + CRM fields** — native name/email/phone plus custom fields (company is seeded).
 4. **Lead capture** — flow steps write answers onto the contact. Visible in inbox/CRM and CSV export.
-5. **Linear flows** — triggers: `/start`, command, exact keyword. Steps: text, inline-button branches, capture, tag, end.
+5. **Flows** — triggers: `/start`, command, exact keyword. Steps: text (optional image/GIF), inline-button branches, capture, tag, end. Admins edit them on a drag-and-drop canvas (React Flow); the engine still runs the same linear `FlowDefinition`. Telegram sends photos via `sendPhoto` and GIFs via `sendAnimation`.
 6. **Broadcasts by tag** — compose audience, then **Confirm** (`confirm: true`) before anything queues. Status is tracked.
 7. **Live inbox** — inbound/outbound thread per contact; human reply from the UI.
 
@@ -55,6 +55,7 @@ Local-only `POST /api/dev/seed` (disabled in production) creates a demo bot, a l
 | `WORKER_MODE` | no | `all` (default), `web`, or `worker` |
 | `TELEGRAM_SENDS_PER_SECOND` | no | Default 20, capped at 25 |
 | `PORT` | Railway | Next.js reads this automatically |
+| `MEDIA_DIR` | no | Flow image/GIF uploads. Default `.data/media` |
 
 Never commit tokens or `.env*`. Tokens are never logged (outbound logs are redacted).
 
@@ -77,7 +78,7 @@ ngrok http 43173
 
 ## Example `/start` lead-capture flow
 
-Connecting a bot seeds this flow (also editable under **Flows**):
+Connecting a bot seeds this flow (also editable under **Flows** → open the flow → **Canvas**):
 
 1. Welcome + buttons: **Yes, let's go** / **Not now**
 2. Capture **name** → **email** → **phone** → custom **company**
@@ -87,6 +88,27 @@ Connecting a bot seeds this flow (also editable under **Flows**):
 Answers write to the contact. Open **Contacts** or **Inbox**, or download **Export CSV**.
 
 Keyword / command flows work the same way: set the trigger, add text + button branches, optional capture steps.
+
+### Visual canvas
+
+Open **Flows**, then click a flow (the seeded **Lead capture** flow appears after you connect a bot or run `POST /api/dev/seed`). The detail page is a ManyChat-style canvas:
+
+1. Drag **Message**, **Image / GIF**, **Buttons**, **Capture**, **Tag**, or **End** from the left palette.
+2. Connect handles. The trigger node’s outgoing edge is `startStepId`.
+3. Select a node to edit copy, buttons, capture field, or tag in the side panel.
+4. **Save** writes the existing `FlowDefinition` (plus optional `canvas` layout). Telegram is unchanged.
+5. **List** is the old form editor if you need raw step ids.
+
+`npm test` includes serialize/deserialize smoke: canvas ↔ definition round-trips the seeded lead-capture flow and the engine still walks `/start`. Media nodes persist `media.url` + `kind` on the text step.
+
+### Images and GIFs
+
+On a **Message**, **Image / GIF**, or **Buttons** node, upload a JPEG/PNG/WebP/GIF or paste an `https://` URL.
+
+- Uploads are stored under `MEDIA_DIR` (default `.data/media`) and served at `/api/media/:id`. Mount a Railway volume there if you want files to survive deploys. No extra API keys.
+- Public HTTPS URLs are stored as-is. Telegram fetches them.
+- Local uploads are sent as multipart (`sendPhoto` / `sendAnimation`) so Telegram does not need a public media URL.
+- Broadcasts stay text-only; the confirm gate is unchanged.
 
 ## Broadcasts (confirm is a hard gate)
 
@@ -99,7 +121,7 @@ Delete bot / flow / tag / field also require `confirm: true`.
 
 ## Railway (one service)
 
-v1 is a single web service: HTTP + webhook + in-process worker.
+V1 is a single web service: HTTP + webhook + in-process worker.
 
 1. Create a Railway project. Add **Postgres** and **Redis**.
 2. Create one service from this repo (or deploy the Dockerfile). Nixpacks: `npm run build` / `npm run start`.
