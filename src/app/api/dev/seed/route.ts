@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { encryptSecret, randomSecret } from "@/lib/crypto";
 import { getDb } from "@/lib/db";
-import { bots, broadcasts, contacts, messages, tags } from "@/lib/db/schema";
+import { bots, broadcasts, contacts, flows, growthLinks, messages, tags } from "@/lib/db/schema";
 import { json, fail } from "@/lib/http";
 import { publicBot } from "@/lib/bots";
 import { persistContact, saveMessage, seedBotDefaults } from "@/lib/store";
@@ -96,6 +96,39 @@ export async function POST() {
           .returning();
         broadcast = created;
       }
+    }
+
+    const existingLinks = await db.select().from(growthLinks).where(eq(growthLinks.botId, bot.id));
+    if (existingLinks.length === 0) {
+      const flowRows = await db.select().from(flows).where(eq(flows.botId, bot.id));
+      const promo = flowRows.find((flow) => flow.triggerType === "start_param" && flow.triggerValue === "promo");
+      await db.insert(growthLinks).values([
+        {
+          id: crypto.randomUUID(),
+          botId: bot.id,
+          name: "Instagram bio",
+          slug: "ig_bio",
+          tagName: "lead",
+          utmSource: "instagram",
+          utmMedium: "bio",
+          utmCampaign: "demo",
+          clickCount: 4,
+          startCount: 1,
+        },
+        {
+          id: crypto.randomUUID(),
+          botId: bot.id,
+          name: "Promo campaign",
+          slug: "promo",
+          tagName: "lead",
+          flowId: promo?.id ?? null,
+          utmSource: "ads",
+          utmMedium: "qr",
+          utmCampaign: "demo",
+          clickCount: 2,
+          startCount: 0,
+        },
+      ]);
     }
 
     const [contact] = await db.select().from(contacts).where(eq(contacts.id, contactId)).limit(1);
