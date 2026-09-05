@@ -27,7 +27,10 @@ export const NODE_TONE: Record<CanvasNodeKind, NodeTone> = {
   media: { hex: MANYCHAT.content, family: "content" },
   buttons: { hex: MANYCHAT.content, family: "content" },
   capture: { hex: MANYCHAT.input, family: "input" },
+  form: { hex: MANYCHAT.input, family: "input" },
   tag: { hex: MANYCHAT.action, family: "action" },
+  delay: { hex: "#4C6EF5", family: "action" },
+  condition: { hex: "#FFB800", family: "action" },
   end: { hex: MANYCHAT.stop, family: "stop" },
 };
 
