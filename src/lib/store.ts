@@ -13,6 +13,7 @@ import {
   messages,
   tags,
 } from "@/lib/db/schema";
+import { isBroadcastable } from "@/lib/broadcast";
 import { EXAMPLE_GROWTH_LINK_FLOW, EXAMPLE_LEAD_CAPTURE_FLOW } from "@/lib/example-flow";
 import type { ContactRecord, FlowDefinition, FlowSessionState } from "@/lib/types";
 import type { FlowRecord } from "@/lib/flow-engine";
@@ -45,6 +46,8 @@ export async function loadContactRecord(contactId: string): Promise<ContactRecor
     phone: row.phone,
     customFields: Object.fromEntries(fieldRows.map((field) => [field.key, field.value])),
     tags: tagRows.map((tag) => tag.name),
+    subscriptions: row.subscriptions ?? [],
+    unsubscribed: row.unsubscribed ?? false,
   };
 }
 
@@ -68,6 +71,8 @@ export async function persistContact(botId: string, record: ContactRecord) {
     lastName: record.lastName,
     email: record.email,
     phone: record.phone,
+    unsubscribed: record.unsubscribed ?? false,
+    subscriptions: record.subscriptions ?? [],
     updatedAt: now(),
   };
   if (existing[0]) {
@@ -288,7 +293,7 @@ export async function contactsWithTag(botId: string, tagId: string) {
     .from(contactTags)
     .innerJoin(contacts, eq(contacts.id, contactTags.contactId))
     .where(and(eq(contactTags.tagId, tagId), eq(contacts.botId, botId)));
-  return rows.map((row) => row.contact);
+  return rows.map((row) => row.contact).filter((contact) => isBroadcastable(contact));
 }
 
 export async function seedBotDefaults(botId: string) {

@@ -108,6 +108,12 @@ export function evaluateCondition(
     const name = (step.tagName ?? "").trim().toLowerCase();
     return name.length > 0 && contact.tags.some((tag) => tag.toLowerCase() === name);
   }
+  if (step.check === "subscription") {
+    const name = (step.tagName ?? "").trim().toLowerCase();
+    if (!name) return false;
+    if (name === "all") return !contact.unsubscribed;
+    return (contact.subscriptions ?? []).some((item) => item.toLowerCase() === name);
+  }
   const field = step.field ?? "email";
   const raw = contactFieldValue(contact, field);
   const op: ConditionOp = step.op ?? "set";
@@ -116,6 +122,29 @@ export function evaluateCondition(
   const actual = raw.trim().toLowerCase();
   if (op === "contains") return expected.length > 0 && actual.includes(expected);
   return expected.length > 0 && actual === expected;
+}
+
+function applySubscribe(
+  contact: ContactRecord,
+  listName: string,
+  action: "subscribe" | "unsubscribe",
+): ContactRecord {
+  const name = listName.trim();
+  const subscriptions = contact.subscriptions ?? [];
+  if (action === "unsubscribe" && (!name || name.toLowerCase() === "all")) {
+    return { ...contact, unsubscribed: true, subscriptions };
+  }
+  if (action === "subscribe") {
+    const tagged = applyTag(contact, name, "add");
+    const lists = subscriptions.some((item) => item.toLowerCase() === name.toLowerCase())
+      ? subscriptions
+      : [...subscriptions, name];
+    return { ...tagged, subscriptions: lists, unsubscribed: false };
+  }
+  return {
+    ...applyTag(contact, name, "remove"),
+    subscriptions: subscriptions.filter((item) => item.toLowerCase() !== name.toLowerCase()),
+  };
 }
 
 function applyTag(contact: ContactRecord, tagName: string, action: "add" | "remove"): ContactRecord {
@@ -200,6 +229,12 @@ export function executeFrom(
       continue;
     }
 
+    if (step.type === "subscribe") {
+      nextContact = applySubscribe(nextContact, step.listName, step.action);
+      current = { ...current, stepId: step.next, awaitingInput: false, resumeAt: null };
+      continue;
+    }
+
     if (step.type === "delay") {
       const wait = Math.max(0, Math.floor(step.seconds || 0));
       if (wait <= 0) {
@@ -243,6 +278,8 @@ function upsertFromEvent(existing: ContactRecord | null, event: InboundEvent): C
       username: event.username ?? existing.username,
       firstName: existing.firstName || event.firstName || null,
       lastName: existing.lastName || event.lastName || null,
+      subscriptions: existing.subscriptions ?? [],
+      unsubscribed: existing.unsubscribed ?? false,
     };
   }
   return {
@@ -255,6 +292,8 @@ function upsertFromEvent(existing: ContactRecord | null, event: InboundEvent): C
     phone: null,
     customFields: {},
     tags: [],
+    subscriptions: [],
+    unsubscribed: false,
   };
 }
 
