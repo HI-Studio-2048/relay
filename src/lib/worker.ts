@@ -3,6 +3,7 @@ import { decryptSecret } from "@/lib/crypto";
 import { getDb } from "@/lib/db";
 import { bots, broadcastRecipients, broadcasts, contacts } from "@/lib/db/schema";
 import { log } from "@/lib/logger";
+import { resumeDueDelays } from "@/lib/flow-resume";
 import { dequeueJob, shouldRunWorker, type Job } from "@/lib/queue";
 import { acquireSendSlot } from "@/lib/rate-limit";
 import { saveMessage } from "@/lib/store";
@@ -112,6 +113,7 @@ export function startWorker() {
   const tick = async () => {
     try {
       await drainJobs();
+      await resumeDueDelays();
     } catch (error) {
       log.error("Worker tick failed", error instanceof Error ? error.message : error);
     } finally {
