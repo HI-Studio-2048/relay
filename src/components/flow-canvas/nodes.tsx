@@ -149,7 +149,7 @@ export function ButtonsNode({ selected, data }: NodeProps<FlowNode<"buttons">>) 
             <div
               key={button.id}
               className="relative flex items-center rounded-md px-2 py-1 pr-3"
-              style={{ background: "#F3F4F6", color: MANYCHAT.ink }}
+              style={{ background: MANYCHAT.wash, color: MANYCHAT.ink }}
             >
               <span className="truncate text-xs">{button.text || "Untitled"}</span>
               {button.url ? (
@@ -264,15 +264,19 @@ export function ConditionNode({ selected, data }: NodeProps<FlowNode<"condition"
       ? data.tagName
         ? `Has #${data.tagName}`
         : "Has a tag"
-      : `${data.field} ${data.op === "eq" ? "=" : data.op === "contains" ? "contains" : "is set"}${
-          data.op !== "set" && data.value ? ` “${data.value}”` : ""
-        }`;
+      : data.check === "subscription"
+        ? !data.tagName.trim() || data.tagName.trim().toLowerCase() === "all"
+          ? "Subscribed (not opted out)"
+          : `Subscribed to “${data.tagName}”`
+        : `${data.field} ${data.op === "eq" ? "=" : data.op === "contains" ? "contains" : "is set"}${
+            data.op !== "set" && data.value ? ` “${data.value}”` : ""
+          }`;
   return (
     <NodeFrame selected={selected} kind="condition" icon={Filter} title="Action">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("condition")} />
       <Preview>{summary}</Preview>
       <div className="relative space-y-1 pt-1">
-        <div className="relative flex items-center rounded-md px-2 py-1 pr-3" style={{ background: "#F3F4F6" }}>
+        <div className="relative flex items-center rounded-md px-2 py-1 pr-3" style={{ background: MANYCHAT.wash }}>
           <span className="text-xs">Yes</span>
           <Handle
             type="source"
@@ -282,7 +286,7 @@ export function ConditionNode({ selected, data }: NodeProps<FlowNode<"condition"
             style={handleStyle("condition")}
           />
         </div>
-        <div className="relative flex items-center rounded-md px-2 py-1 pr-3" style={{ background: "#F3F4F6" }}>
+        <div className="relative flex items-center rounded-md px-2 py-1 pr-3" style={{ background: MANYCHAT.wash }}>
           <span className="text-xs">No</span>
           <Handle
             type="source"
