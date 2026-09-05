@@ -8,67 +8,164 @@ import {
   Workflow,
   Megaphone,
   LayoutDashboard,
-  Cable,
+  Settings,
   Menu,
+  X,
+  Link2,
+  Activity,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useBot } from "@/components/bot-provider";
+import { StatusPill } from "@/components/chrome/status-pill";
+import { CanvasCard, ToneChip, type ToneName } from "@/components/chrome/tone";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const NAV = [
-  { href: "/", label: "Overview", icon: LayoutDashboard },
-  { href: "/inbox", label: "Inbox", icon: Inbox },
-  { href: "/contacts", label: "Contacts", icon: Users },
-  { href: "/flows", label: "Flows", icon: Workflow },
-  { href: "/broadcasts", label: "Broadcasts", icon: Megaphone },
-  { href: "/setup", label: "Bot", icon: Cable },
+const GROUPS: {
+  label: string;
+  items: {
+    href: string;
+    label: string;
+    icon: typeof Inbox;
+    tone: ToneName;
+    count?: "inbox" | "confirm";
+  }[];
+}[] = [
+  {
+    label: "Workspace",
+    items: [
+      { href: "/", label: "Overview", icon: LayoutDashboard, tone: "start" },
+      { href: "/inbox", label: "Inbox", icon: Inbox, tone: "content", count: "inbox" },
+      { href: "/contacts", label: "Contacts", icon: Users, tone: "input" },
+    ],
+  },
+  {
+    label: "Automate",
+    items: [
+      { href: "/flows", label: "Flows", icon: Workflow, tone: "content" },
+      { href: "/broadcasts", label: "Broadcasts", icon: Megaphone, tone: "action", count: "confirm" },
+    ],
+  },
+  {
+    label: "Growth",
+    items: [{ href: "/growth", label: "Links", icon: Link2, tone: "action" }],
+  },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const { bots, bot, setBotId } = useBot();
-  const [open, setOpen] = useState(false);
-  const flowCanvas = /^\/flows\/[^/]+$/.test(pathname);
+function sectionTitle(pathname: string) {
+  if (pathname === "/") return "Overview";
+  if (pathname.startsWith("/inbox")) return "Inbox";
+  if (pathname.startsWith("/contacts")) return "Contacts";
+  if (pathname.startsWith("/flows")) return "Flows";
+  if (pathname.startsWith("/broadcasts")) return "Broadcasts";
+  if (pathname.startsWith("/growth")) return "Growth";
+  if (pathname.startsWith("/setup")) return "Settings";
+  return "Relay";
+}
 
-  const nav = (
-    <nav className="flex flex-col gap-1">
-      {NAV.map((item) => {
-        const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-        const Icon = item.icon;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={() => setOpen(false)}
-            className={cn(
-              "flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors",
-              active
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground",
-            )}
-          >
-            <Icon className="size-4" />
-            {item.label}
-          </Link>
-        );
-      })}
-    </nav>
+function NavCount({ value }: { value: number }) {
+  if (!value) return null;
+  return (
+    <span className="ml-auto min-w-5 rounded-full bg-[#0084ff] px-1.5 text-center text-[10px] font-semibold tabular-nums text-white">
+      {value > 99 ? "99+" : value}
+    </span>
   );
+}
+
+function Brand({ compact = false }: { compact?: boolean }) {
+  return (
+    <Link href="/" className="flex items-center gap-2.5 px-2">
+      <ToneChip tone="start" icon={Activity} className="size-8" />
+      {compact ? null : (
+        <span>
+          <span className="block font-heading text-[15px] leading-none tracking-tight text-[#1b1f24]">Relay</span>
+          <span className="mt-0.5 block text-[11px] text-[#6b7280]">HI Studio · Telegram</span>
+        </span>
+      )}
+    </Link>
+  );
+}
+
+function navItemClass(active: boolean) {
+  return cn(
+    "relay-nav-item flex items-center gap-2.5 rounded-xl px-2 py-1.5 text-[13px] font-medium transition-colors",
+    active ? "bg-[#eef6ff] text-[#1b1f24]" : "text-[#6b7280] hover:bg-[#f4f6f8] hover:text-[#1b1f24]",
+  );
+}
+
+function SidebarNav({
+  onNavigate,
+  inboxCount,
+  confirmCount,
+}: {
+  onNavigate?: () => void;
+  inboxCount: number;
+  confirmCount: number;
+}) {
+  const pathname = usePathname();
+  const counts = { inbox: inboxCount, confirm: confirmCount };
 
   return (
-    <div className={cn("flex bg-background", flowCanvas ? "h-dvh overflow-hidden" : "min-h-full")}>
-      <aside className="hidden w-60 shrink-0 border-r border-sidebar-border bg-sidebar p-4 md:flex md:flex-col">
-        <div className="mb-6 px-2">
-          <p className="font-heading text-lg tracking-tight">Relay</p>
-          <p className="text-xs text-muted-foreground">HI Studio · Telegram</p>
+    <nav className="flex flex-col gap-5">
+      {GROUPS.map((group) => (
+        <div key={group.label} className="space-y-1">
+          <p className="px-3 text-[11px] font-semibold tracking-[0.14em] text-[#8b95a1] uppercase">
+            {group.label}
+          </p>
+          <div className="flex flex-col gap-0.5">
+            {group.items.map((item) => {
+              const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={onNavigate}
+                  data-active={active ? "true" : "false"}
+                  className={navItemClass(active)}
+                >
+                  <ToneChip tone={item.tone} icon={Icon} />
+                  {item.label}
+                  {"count" in item && item.count ? <NavCount value={counts[item.count]} /> : null}
+                </Link>
+              );
+            })}
+          </div>
         </div>
-        {nav}
-        <div className="mt-auto pt-6">
-          {bots.length > 0 ? (
+      ))}
+    </nav>
+  );
+}
+
+function BotDock({ onNavigate }: { onNavigate?: () => void }) {
+  const pathname = usePathname();
+  const { bots, bot, setBotId } = useBot();
+  const settingsActive = pathname.startsWith("/setup");
+
+  return (
+    <div className="space-y-2">
+      <Link
+        href="/setup"
+        onClick={onNavigate}
+        data-active={settingsActive ? "true" : "false"}
+        className={navItemClass(settingsActive)}
+      >
+        <ToneChip tone="stop" icon={Settings} />
+        Settings
+      </Link>
+      {bot ? (
+        <CanvasCard className="p-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="truncate text-[13px] font-medium text-[#1b1f24]">{bot.name}</p>
+            <StatusPill status={bot.status} />
+          </div>
+          <p className="mt-0.5 truncate text-[11px] text-[#6b7280]">
+            {bot.telegramUsername ? `@${bot.telegramUsername}` : "Telegram bot"}
+          </p>
+          {bots.length > 1 ? (
             <select
-              className="w-full rounded-lg border border-input bg-background px-2 py-2 text-xs"
-              value={bot?.id ?? ""}
+              className="mt-2 w-full rounded-lg border border-[#e5e7eb] bg-white px-2 py-1.5 text-[13px]"
+              value={bot.id}
               onChange={(event) => setBotId(event.target.value)}
             >
               {bots.map((item) => (
@@ -77,28 +174,134 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </option>
               ))}
             </select>
-          ) : (
-            <p className="text-xs text-muted-foreground">No bot connected</p>
-          )}
-        </div>
+          ) : null}
+        </CanvasCard>
+      ) : (
+        <p className="px-2 text-[11px] text-[#6b7280]">No bot connected yet.</p>
+      )}
+    </div>
+  );
+}
+
+function Sidebar({
+  onNavigate,
+  inboxCount,
+  confirmCount,
+}: {
+  onNavigate?: () => void;
+  inboxCount: number;
+  confirmCount: number;
+}) {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="mb-6">
+        <Brand />
+      </div>
+      <SidebarNav onNavigate={onNavigate} inboxCount={inboxCount} confirmCount={confirmCount} />
+      <div className="mt-auto pt-6">
+        <BotDock onNavigate={onNavigate} />
+      </div>
+    </div>
+  );
+}
+
+export function AppShell({
+  children,
+  inboxCount = 0,
+  confirmCount = 0,
+}: {
+  children: React.ReactNode;
+  inboxCount?: number;
+  confirmCount?: number;
+}) {
+  const pathname = usePathname();
+  const { bot } = useBot();
+  const [open, setOpen] = useState(false);
+  const flowCanvas = /^\/flows\/[^/]+$/.test(pathname);
+  const title = sectionTitle(pathname);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  return (
+    <div className={cn("flex bg-[#f4f6f8]", flowCanvas ? "h-dvh overflow-hidden" : "min-h-full")}>
+      <aside className="hidden w-64 shrink-0 border-r border-[#e5e7eb] bg-white p-4 md:flex md:flex-col">
+        <Sidebar inboxCount={inboxCount} confirmCount={confirmCount} />
       </aside>
 
       <div className={cn("flex min-w-0 flex-1 flex-col", flowCanvas && "min-h-0")}>
-        <header className="flex items-center justify-between border-b px-4 py-3 md:hidden">
-          <div>
-            <p className="font-heading text-base">Relay</p>
-            <p className="text-xs text-muted-foreground">{bot?.name ?? "No bot"}</p>
+        <header className="flex items-center justify-between border-b border-[#e5e7eb] bg-white px-4 py-3 md:hidden">
+          <div className="flex min-w-0 items-center gap-2">
+            <Brand compact />
+            <span className="truncate font-heading text-sm text-[#1b1f24]">{title}</span>
           </div>
-          <Button variant="outline" size="icon" onClick={() => setOpen((value) => !value)}>
-            <Menu className="size-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            {bot ? <StatusPill status={bot.status} /> : null}
+            <Button
+              variant="outline"
+              size="icon"
+              type="button"
+              aria-expanded={open}
+              aria-label={open ? "Close menu" : "Open menu"}
+              onClick={() => setOpen((value) => !value)}
+            >
+              {open ? <X className="size-4" /> : <Menu className="size-4" />}
+            </Button>
+          </div>
         </header>
-        {open ? <div className="border-b bg-sidebar p-3 md:hidden">{nav}</div> : null}
+
+        {flowCanvas ? null : (
+          <header className="relay-topbar hidden items-center justify-between border-b border-[#e5e7eb] bg-white px-6 py-3 md:flex">
+            <div>
+              <p className="text-[11px] font-semibold tracking-[0.14em] text-[#8b95a1] uppercase">
+                HI Studio · Telegram
+              </p>
+              <p className="font-heading text-[15px] tracking-tight text-[#1b1f24]">{title}</p>
+            </div>
+            {bot ? (
+              <div className="flex items-center gap-2 rounded-full bg-[#f4f6f8] px-2.5 py-1 ring-1 ring-[#e5e7eb]">
+                <span className="max-w-40 truncate text-[12px] text-[#1b1f24]">
+                  {bot.telegramUsername ? `@${bot.telegramUsername}` : bot.name}
+                </span>
+                <StatusPill status={bot.status} />
+              </div>
+            ) : (
+              <Link href="/setup" className="text-[12px] text-[#6b7280] hover:text-[#1b1f24]">
+                Connect a bot
+              </Link>
+            )}
+          </header>
+        )}
+
+        {open ? (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/30"
+              aria-label="Close menu"
+              onClick={() => setOpen(false)}
+            />
+            <div className="relative flex h-full w-72 max-w-[85vw] flex-col bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.10)] ring-1 ring-[#e5e7eb]">
+              <Sidebar
+                onNavigate={() => setOpen(false)}
+                inboxCount={inboxCount}
+                confirmCount={confirmCount}
+              />
+            </div>
+          </div>
+        ) : null}
+
         <main
           className={
             flowCanvas
               ? "flex min-h-0 flex-1 flex-col overflow-hidden"
-              : "mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8"
+              : "relay-chrome-page mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8 md:py-7"
           }
         >
           {children}
