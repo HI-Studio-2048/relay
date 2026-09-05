@@ -124,4 +124,29 @@ ALTER TABLE flow_sessions ADD COLUMN IF NOT EXISTS resume_at timestamptz;
 ALTER TABLE flow_sessions ADD COLUMN IF NOT EXISTS form_index integer;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS unsubscribed boolean NOT NULL DEFAULT false;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS subscriptions jsonb NOT NULL DEFAULT '[]';
+
+CREATE TABLE IF NOT EXISTS growth_links (
+  id text PRIMARY KEY,
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  slug text NOT NULL,
+  tag_name text,
+  flow_id text REFERENCES flows(id) ON DELETE SET NULL,
+  utm_source text,
+  utm_medium text,
+  utm_campaign text,
+  click_count integer NOT NULL DEFAULT 0,
+  start_count integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS growth_links_bot_slug_idx ON growth_links(bot_id, slug);
+
+CREATE TABLE IF NOT EXISTS growth_link_events (
+  id text PRIMARY KEY,
+  link_id text NOT NULL REFERENCES growth_links(id) ON DELETE CASCADE,
+  contact_id text REFERENCES contacts(id) ON DELETE SET NULL,
+  kind text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS growth_link_events_link_idx ON growth_link_events(link_id, created_at);
 `;

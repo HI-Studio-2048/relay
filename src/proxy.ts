@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { adminPassword } from "@/lib/env";
 import { safeEqual, signAdminSession } from "@/lib/crypto";
 
-const PUBLIC_PREFIXES = ["/login", "/api/login", "/api/health", "/api/telegram/webhook"];
+const PUBLIC_PREFIXES = ["/login", "/api/login", "/api/health", "/api/telegram/webhook", "/go"];
 
 export function proxy(request: NextRequest) {
   const password = adminPassword();

@@ -184,10 +184,42 @@ export const broadcastRecipients = pgTable(
   (table) => [uniqueIndex("broadcast_recipients_unique").on(table.broadcastId, table.contactId)],
 );
 
+export const growthLinks = pgTable(
+  "growth_links",
+  {
+    id: text("id").primaryKey(),
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    tagName: text("tag_name"),
+    flowId: text("flow_id").references(() => flows.id, { onDelete: "set null" }),
+    utmSource: text("utm_source"),
+    utmMedium: text("utm_medium"),
+    utmCampaign: text("utm_campaign"),
+    clickCount: integer("click_count").notNull().default(0),
+    startCount: integer("start_count").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("growth_links_bot_slug_idx").on(table.botId, table.slug)],
+);
+
+export const growthLinkEvents = pgTable("growth_link_events", {
+  id: text("id").primaryKey(),
+  linkId: text("link_id")
+    .notNull()
+    .references(() => growthLinks.id, { onDelete: "cascade" }),
+  contactId: text("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+  kind: text("kind").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const botsRelations = relations(bots, ({ many }) => ({
   contacts: many(contacts),
   tags: many(tags),
   flows: many(flows),
+  growthLinks: many(growthLinks),
 }));
 
 export const contactsRelations = relations(contacts, ({ one, many }) => ({
