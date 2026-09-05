@@ -8,6 +8,7 @@ import {
   mediaFromPublicUrl,
   outboundPreview,
   parseStoredMediaUrl,
+  resolveUploadMime,
   saveMediaFile,
   telegramMediaField,
   telegramSendMethod,
@@ -19,6 +20,12 @@ import { TRIGGER_NODE_ID } from "@/lib/flow-canvas";
 import type { ContactRecord } from "@/lib/types";
 
 describe("media classification", () => {
+  it("infers GIF/JPEG mime when the browser sends an empty type", () => {
+    expect(resolveUploadMime("", "loop.gif")).toBe("image/gif");
+    expect(resolveUploadMime("application/octet-stream", "shot.JPG")).toBe("image/jpeg");
+    expect(resolveUploadMime("image/png", "ignored.gif")).toBe("image/png");
+  });
+
   it("sends photos as sendPhoto and GIFs as sendAnimation", () => {
     expect(classifyMedia("image/jpeg", "shot.jpg")).toBe("photo");
     expect(classifyMedia("image/gif", "loop.gif")).toBe("animation");
@@ -76,6 +83,15 @@ describe("media file store", () => {
     const record = await saveMediaFile({ bytes: png, mime: "image/png", filename: "logo.png" });
     expect(record.kind).toBe("photo");
     expect(toFlowMedia(record).url).toBe(`/api/media/${record.id}`);
+  });
+
+  it("saves a GIF when mime is missing and the filename ends in .gif", async () => {
+    dir = await mkdtemp(path.join(tmpdir(), "relay-media-"));
+    process.env.MEDIA_DIR = dir;
+    const gif = new Uint8Array([71, 73, 70, 56, 57, 97]);
+    const record = await saveMediaFile({ bytes: gif, mime: "", filename: "wave.gif" });
+    expect(record.kind).toBe("animation");
+    expect(record.mime).toBe("image/gif");
   });
 });
 

@@ -8,9 +8,20 @@ export const EXAMPLE_LEAD_CAPTURE_FLOW: FlowDefinition = {
       type: "text",
       text: "Hey — this is HI Studio. Want to leave your details so we can follow up?",
       buttons: [
-        { text: "Yes, let's go", next: "ask_name" },
+        { text: "Yes, let's go", next: "intro_media" },
         { text: "Not now", next: "later" },
       ],
+    },
+    {
+      id: "intro_media",
+      type: "text",
+      text: "Great — I'll ask a few details.",
+      media: {
+        url: "https://upload.wikimedia.org/wikipedia/commons/d/d3/Newtons_cradle_animation_book_2.gif",
+        kind: "animation",
+        filename: "intro.gif",
+      },
+      next: "ask_name",
     },
     {
       id: "ask_name",

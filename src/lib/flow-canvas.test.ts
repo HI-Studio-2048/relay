@@ -3,6 +3,7 @@ import { EXAMPLE_LEAD_CAPTURE_FLOW } from "@/lib/example-flow";
 import {
   TRIGGER_NODE_ID,
   buttonHandleId,
+  canvasEdgeLabel,
   canvasToDefinition,
   comparableDefinition,
   createCanvasNode,
@@ -41,8 +42,14 @@ describe("flow canvas serialize/deserialize", () => {
     const later = graph.edges.find(
       (edge) => edge.source === "welcome" && edge.sourceHandle === buttonHandleId(1),
     );
-    expect(yes?.target).toBe("ask_name");
+    expect(yes?.target).toBe("intro_media");
     expect(later?.target).toBe("later");
+
+    const intro = graph.nodes.find((node) => node.id === "intro_media");
+    expect(intro?.type).toBe("media");
+    if (intro?.data.kind === "media") {
+      expect(intro.data.media?.kind).toBe("animation");
+    }
 
     const welcome = graph.nodes.find((node) => node.id === "welcome");
     expect(welcome?.type).toBe("buttons");
@@ -128,6 +135,13 @@ describe("flow canvas serialize/deserialize", () => {
     expect(twice[0]?.target).toBe("c");
   });
 
+  it("labels button edges from the button text", () => {
+    const graph = definitionToCanvas(EXAMPLE_LEAD_CAPTURE_FLOW);
+    const yes = graph.edges.find((edge) => edge.source === "welcome" && edge.sourceHandle === buttonHandleId(0));
+    expect(yes).toBeTruthy();
+    expect(canvasEdgeLabel(graph.nodes, yes!)).toBe("Yes, let's go");
+  });
+
   it("flags a missing trigger connection", () => {
     const graph = definitionToCanvas({ startStepId: "", steps: [] });
     const result = validateCanvas(graph);
@@ -179,7 +193,9 @@ describe("engine compatibility after a canvas round-trip", () => {
     const start = run({ telegramUserId: "1001", username: "daniel", text: "/start" });
     expect(start.replies[0]?.buttons?.map((button) => button.text)).toContain("Yes, let's go");
 
-    run({ telegramUserId: "1001", callbackData: "n:ask_name" });
+    const afterYes = run({ telegramUserId: "1001", callbackData: "n:intro_media" });
+    expect(afterYes.replies[0]?.media?.kind).toBe("animation");
+    expect(afterYes.replies.some((reply) => /name/i.test(reply.text))).toBe(true);
     run({ telegramUserId: "1001", text: "Daniel Philip" });
     run({ telegramUserId: "1001", text: "daniel@histudio.test" });
     run({ telegramUserId: "1001", text: "+15551212" });

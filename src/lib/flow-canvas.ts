@@ -68,6 +68,13 @@ export function edgeId(source: string, sourceHandle: string, target: string): st
   return `e:${source}:${sourceHandle}->${target}`;
 }
 
+export function canvasEdgeLabel(nodes: CanvasNode[], edge: CanvasEdge): string | undefined {
+  const source = nodes.find((node) => node.id === edge.source);
+  if (source?.data.kind !== "buttons") return undefined;
+  const label = source.data.buttons.find((button) => button.id === edge.sourceHandle)?.text.trim();
+  return label || undefined;
+}
+
 function unique(ids: string[]): string[] {
   return [...new Set(ids.filter(Boolean))];
 }

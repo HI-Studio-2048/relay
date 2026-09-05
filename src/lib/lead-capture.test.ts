@@ -74,7 +74,9 @@ describe("lead capture flow", () => {
     expect(start.replies[0]?.text).toMatch(/HI Studio/);
     expect(start.replies[0]?.buttons?.map((b) => b.text)).toContain("Yes, let's go");
 
-    run({ telegramUserId: "1001", callbackData: "n:ask_name" });
+    const afterYes = run({ telegramUserId: "1001", callbackData: "n:intro_media" });
+    expect(afterYes.replies[0]?.media?.kind).toBe("animation");
+    expect(afterYes.replies.some((reply) => /name/i.test(reply.text))).toBe(true);
     run({ telegramUserId: "1001", text: "Daniel Philip" });
     run({ telegramUserId: "1001", text: "daniel@histudio.test" });
     run({ telegramUserId: "1001", text: "+15551212" });

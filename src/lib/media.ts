@@ -20,6 +20,22 @@ const ALLOWED: Record<string, { kind: FlowMediaKind; ext: string; max: number }>
   "image/gif": { kind: "animation", ext: "gif", max: GIF_MAX },
 };
 
+const EXT_MIME: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+};
+
+/** Browsers sometimes send an empty or octet-stream type; fall back to the filename. */
+export function resolveUploadMime(mime: string, filename: string): string {
+  const normalized = mime.toLowerCase().split(";")[0]?.trim() ?? "";
+  if (ALLOWED[normalized]) return normalized === "image/jpg" ? "image/jpeg" : normalized;
+  const ext = filename.toLowerCase().split(".").pop() ?? "";
+  return EXT_MIME[ext] ?? normalized;
+}
+
 export type StoredMedia = {
   id: string;
   mime: string;
@@ -93,7 +109,8 @@ export async function saveMediaFile(input: {
   mime: string;
   filename: string;
 }): Promise<StoredMedia> {
-  const spec = ALLOWED[input.mime];
+  const mime = resolveUploadMime(input.mime, input.filename);
+  const spec = ALLOWED[mime];
   if (!spec) {
     throw new MediaError("Upload a JPEG, PNG, WebP, or GIF");
   }
@@ -107,7 +124,7 @@ export async function saveMediaFile(input: {
   const id = crypto.randomUUID().replace(/-/g, "");
   const record: StoredMedia = {
     id,
-    mime: input.mime === "image/jpg" ? "image/jpeg" : input.mime,
+    mime,
     filename: sanitizeFilename(input.filename, spec.ext),
     kind: spec.kind,
     size: input.bytes.byteLength,
