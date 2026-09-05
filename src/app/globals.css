@@ -46,12 +46,23 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
-}
-
-html,
-html.dark,
-.dark {
-  color-scheme: light;
+  --color-relay-start: var(--relay-start);
+  --color-relay-content: var(--relay-content);
+  --color-relay-input: var(--relay-input);
+  --color-relay-action: var(--relay-action);
+  --color-relay-stop: var(--relay-stop);
+  --color-relay-canvas: var(--relay-canvas);
+  --color-relay-card: var(--relay-card);
+  --color-relay-ink: var(--relay-ink);
+  --color-relay-muted: var(--relay-muted);
+  --color-relay-line: var(--relay-line);
+  --color-relay-line-selected: var(--relay-line-selected);
+  --color-relay-card-border: var(--relay-card-border);
+  --color-relay-wash: var(--relay-wash);
+  --color-relay-set-field: var(--relay-set-field);
+  --color-relay-subscribe: var(--relay-subscribe);
+  --color-relay-delay: var(--relay-delay);
+  --color-relay-condition: var(--relay-condition);
 }
 
 :root {
@@ -87,6 +98,26 @@ html.dark,
   --sidebar-accent-foreground: #1b1f24;
   --sidebar-border: #e5e7eb;
   --sidebar-ring: #0084ff;
+  /* Shared with src/lib/theme.ts — UI agent: use these, not flow-canvas internals. */
+  --relay-start: #00c853;
+  --relay-content: #0084ff;
+  --relay-input: #00c2cb;
+  --relay-action: #7b61ff;
+  --relay-stop: #8b95a1;
+  --relay-canvas: #f4f6f8;
+  --relay-card: #ffffff;
+  --relay-ink: #1b1f24;
+  --relay-muted: #6b7280;
+  --relay-line: #c5cdd6;
+  --relay-line-selected: #0084ff;
+  --relay-card-border: #e5e7eb;
+  --relay-wash: #eef1f4;
+  --relay-set-field: #e64980;
+  --relay-subscribe: #12b886;
+  --relay-delay: #4c6ef5;
+  --relay-condition: #ffb800;
+  --relay-shadow: 0 1px 3px rgba(16, 24, 40, 0.1);
+  --relay-radius: 1rem;
 }
 
 /* One visual system: canvas / Flow AI light. No copper dark admin theme. */
@@ -123,6 +154,25 @@ html.dark,
   --sidebar-accent-foreground: #1b1f24;
   --sidebar-border: #e5e7eb;
   --sidebar-ring: #0084ff;
+  --relay-start: #00c853;
+  --relay-content: #0084ff;
+  --relay-input: #00c2cb;
+  --relay-action: #7b61ff;
+  --relay-stop: #8b95a1;
+  --relay-canvas: #f4f6f8;
+  --relay-card: #ffffff;
+  --relay-ink: #1b1f24;
+  --relay-muted: #6b7280;
+  --relay-line: #c5cdd6;
+  --relay-line-selected: #0084ff;
+  --relay-card-border: #e5e7eb;
+  --relay-wash: #eef1f4;
+  --relay-set-field: #e64980;
+  --relay-subscribe: #12b886;
+  --relay-delay: #4c6ef5;
+  --relay-condition: #ffb800;
+  --relay-shadow: 0 1px 3px rgba(16, 24, 40, 0.1);
+  --relay-radius: 1rem;
 }
 
 @layer base {
@@ -139,11 +189,11 @@ html.dark,
 
 /* Console chrome only. Do not restyle the canvas (.relay-flow). */
 .relay-chrome-page {
-  background: #f4f6f8;
+  background: var(--relay-canvas);
 }
 
 .relay-topbar {
-  background: #ffffff;
+  background: var(--relay-card);
 }
 
 .relay-nav-item {
@@ -162,18 +212,18 @@ html.dark,
 }
 
 .relay-flow.react-flow {
-  background: #f4f6f8;
-  --xy-background-color: #f4f6f8;
-  --xy-node-border-default: #e5e7eb;
-  --xy-node-background-color-default: #ffffff;
-  --xy-edge-stroke-default: #c5cdd6;
-  --xy-edge-stroke-selected-default: #0084ff;
-  --xy-connectionline-stroke-default: #0084ff;
-  --xy-minimap-background-color-default: #f4f6f8;
-  --xy-controls-button-background-color-default: #ffffff;
-  --xy-controls-button-background-color-hover-default: #eef1f4;
-  --xy-controls-button-color-default: #1b1f24;
-  --xy-controls-button-border-color-default: #e5e7eb;
+  background: var(--relay-canvas);
+  --xy-background-color: var(--relay-canvas);
+  --xy-node-border-default: var(--relay-card-border);
+  --xy-node-background-color-default: var(--relay-card);
+  --xy-edge-stroke-default: var(--relay-line);
+  --xy-edge-stroke-selected-default: var(--relay-line-selected);
+  --xy-connectionline-stroke-default: var(--relay-content);
+  --xy-minimap-background-color-default: var(--relay-canvas);
+  --xy-controls-button-background-color-default: var(--relay-card);
+  --xy-controls-button-background-color-hover-default: var(--relay-wash);
+  --xy-controls-button-color-default: var(--relay-ink);
+  --xy-controls-button-border-color-default: var(--relay-card-border);
   --xy-attribution-background-color-default: transparent;
 }
 
@@ -186,13 +236,13 @@ html.dark,
 }
 
 .relay-flow .react-flow__edge-text {
-  fill: #1b1f24;
+  fill: var(--relay-ink);
   font-size: 10px;
   font-weight: 600;
 }
 
 .relay-flow .react-flow__edge-textbg {
-  fill: #ffffff;
+  fill: var(--relay-card);
 }
 
 .relay-flow .react-flow__controls {
