@@ -21,6 +21,7 @@ export type CanvasNodeKind =
   | "capture"
   | "form"
   | "tag"
+  | "set_field"
   | "subscribe"
   | "delay"
   | "condition"
@@ -40,6 +41,7 @@ export type CanvasNodeData =
   | { kind: "capture"; field: CaptureField; prompt: string }
   | { kind: "form"; intro: string; fields: FormField[] }
   | { kind: "tag"; tagName: string; action: TagAction }
+  | { kind: "set_field"; field: CaptureField; value: string }
   | { kind: "subscribe"; listName: string; action: SubscribeAction }
   | { kind: "delay"; seconds: number }
   | {
@@ -216,6 +218,14 @@ function nodeFromStep(step: FlowStep, position: { x: number; y: number }): Canva
       type: "tag",
       position,
       data: { kind: "tag", tagName: step.tagName, action: step.action === "remove" ? "remove" : "add" },
+    };
+  }
+  if (step.type === "set_field") {
+    return {
+      id: step.id,
+      type: "set_field",
+      position,
+      data: { kind: "set_field", field: step.field, value: step.value },
     };
   }
   if (step.type === "subscribe") {
@@ -424,6 +434,17 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
       continue;
     }
 
+    if (node.data.kind === "set_field") {
+      steps.push({
+        id: node.id,
+        type: "set_field",
+        field: node.data.field,
+        value: node.data.value,
+        next: nextFromHandle(graph.edges, node.id, "next") ?? "",
+      });
+      continue;
+    }
+
     if (node.data.kind === "subscribe") {
       steps.push({
         id: node.id,
@@ -529,6 +550,15 @@ export function engineDefinition(definition: FlowDefinition): FlowDefinition {
           next: step.next,
         };
       }
+      if (step.type === "set_field") {
+        return {
+          id: step.id,
+          type: "set_field",
+          field: step.field,
+          value: step.value,
+          next: step.next,
+        };
+      }
       if (step.type === "subscribe") {
         return {
           id: step.id,
@@ -609,6 +639,13 @@ export function createCanvasNode(
       };
     case "tag":
       return { id, type: "tag", position, data: { kind: "tag", tagName: "lead", action: "add" } };
+    case "set_field":
+      return {
+        id,
+        type: "set_field",
+        position,
+        data: { kind: "set_field", field: "custom:source", value: "flow" },
+      };
     case "subscribe":
       return {
         id,
@@ -709,6 +746,13 @@ export function validateCanvas(graph: CanvasGraph): CanvasValidation {
       if (!node.data.tagName.trim()) errors.push("A tag step is missing a tag name.");
       const dest = nextFromHandle(graph.edges, node.id, "next");
       if (!dest) warnings.push("A tag step has no next step.");
+    }
+    if (node.data.kind === "set_field") {
+      if (node.data.field.startsWith("custom:") && !node.data.field.slice("custom:".length).trim()) {
+        errors.push("A set-field step is missing a custom field key.");
+      }
+      const dest = nextFromHandle(graph.edges, node.id, "next");
+      if (!dest) warnings.push("A set-field step has no next step.");
     }
     if (node.data.kind === "subscribe") {
       if (node.data.action === "subscribe" && !node.data.listName.trim()) {

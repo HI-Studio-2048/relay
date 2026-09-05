@@ -29,6 +29,7 @@ export const NODE_TONE: Record<CanvasNodeKind, NodeTone> = {
   capture: { hex: MANYCHAT.input, family: "input" },
   form: { hex: MANYCHAT.input, family: "input" },
   tag: { hex: MANYCHAT.action, family: "action" },
+  set_field: { hex: "#E64980", family: "action" },
   subscribe: { hex: "#12B886", family: "action" },
   delay: { hex: "#4C6EF5", family: "action" },
   condition: { hex: "#FFB800", family: "action" },
