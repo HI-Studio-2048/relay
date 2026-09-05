@@ -3,6 +3,25 @@ import type { ContactRecord } from "@/lib/types";
 
 export const SLUG_PATTERN = /^[A-Za-z0-9_]{1,64}$/;
 
+/** Presented growth link row used by Growth admin + flow Share chrome. */
+export type GrowthLinkView = {
+  id: string;
+  name: string;
+  slug: string;
+  tagName: string | null;
+  flowId: string | null;
+  flowName?: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  clickCount: number;
+  startCount: number;
+  telegramUrl: string | null;
+  shortUrl: string;
+  qrUrl: string;
+  createdAt?: string | Date;
+};
+
 export function parseStartPayload(text: string | null | undefined): string | null {
   if (!text) return null;
   const trimmed = text.trim();
