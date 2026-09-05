@@ -3,6 +3,14 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
 import { processInboundEvent } from "@/lib/flow-engine";
+import {
+  applyGrowthAttribution,
+  attributedContact,
+  findGrowthLink,
+  parseStartPayload,
+  preferLinkedFlow,
+  recordGrowthStart,
+} from "@/lib/growth-links";
 import { log } from "@/lib/logger";
 import { acquireSendSlot } from "@/lib/rate-limit";
 import {
@@ -46,9 +54,26 @@ export async function processTelegramUpdate(botId: string, update: TelegramUpdat
 
   const existing = await findContactByTelegram(botId, telegramUserId);
   const session = existing ? await loadActiveSession(existing.id) : null;
-  const flows = await loadActiveFlows(botId);
+  const startParam = parseStartPayload(text);
+  const growth = startParam ? await findGrowthLink(botId, startParam) : null;
+  let flows = await loadActiveFlows(botId);
+  const prepared = growth
+    ? attributedContact(
+        existing,
+        {
+          telegramUserId,
+          username: from.username ?? null,
+          firstName: from.first_name ?? null,
+          lastName: from.last_name ?? null,
+        },
+        growth,
+      )
+    : existing;
+  if (growth?.flowId && !session?.awaitingInput) {
+    flows = preferLinkedFlow(flows, growth.flowId, growth.slug);
+  }
   const result = processInboundEvent({
-    contact: existing,
+    contact: prepared,
     session,
     flows,
     event: {
@@ -63,13 +88,19 @@ export async function processTelegramUpdate(botId: string, update: TelegramUpdat
     },
   });
 
-  await persistContact(botId, result.contact);
-  await persistSession(result.contact.id, result.session);
+  let contact = result.contact;
+  if (growth) {
+    contact = applyGrowthAttribution(contact, growth);
+    await recordGrowthStart(growth.id, contact.id);
+  }
+
+  await persistContact(botId, contact);
+  await persistSession(contact.id, result.session);
 
   if (result.inboundSaved && (text || callbackData)) {
     await saveMessage({
       botId,
-      contactId: result.contact.id,
+      contactId: contact.id,
       direction: "inbound",
       source: "user",
       body: text ?? `[button] ${callbackData}`,
@@ -82,7 +113,7 @@ export async function processTelegramUpdate(botId: string, update: TelegramUpdat
     const sent = await sendFlowReply(token, telegramUserId, reply);
     await saveMessage({
       botId,
-      contactId: result.contact.id,
+      contactId: contact.id,
       direction: "outbound",
       source: reply.source === "flow" ? "flow" : "agent",
       body: outboundPreview(reply.text, reply.media),
