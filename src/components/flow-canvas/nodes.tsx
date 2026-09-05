@@ -10,6 +10,7 @@ import {
   Hash,
   ImageIcon,
   MessageSquare,
+  PenLine,
   Square,
   Timer,
   UserRound,
@@ -217,6 +218,20 @@ export function TagNode({ selected, data }: NodeProps<FlowNode<"tag">>) {
   );
 }
 
+export function SetFieldNode({ selected, data }: NodeProps<FlowNode<"set_field">>) {
+  const fieldLabel = data.field.startsWith("custom:")
+    ? data.field.slice("custom:".length) || "custom"
+    : data.field;
+  const preview = data.value.trim() ? `${fieldLabel} = ${data.value}` : `Clear ${fieldLabel}`;
+  return (
+    <NodeFrame selected={selected} kind="set_field" icon={PenLine} title="Action">
+      <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("set_field")} />
+      <Preview>{preview}</Preview>
+      <Handle type="source" position={Position.Right} id="next" className={handleClass()} style={handleStyle("set_field")} />
+    </NodeFrame>
+  );
+}
+
 export function SubscribeNode({ selected, data }: NodeProps<FlowNode<"subscribe">>) {
   const action = data.action === "unsubscribe" ? "Unsubscribe" : "Subscribe";
   const list = data.listName.trim();
@@ -299,6 +314,7 @@ export const flowNodeTypes = {
   capture: CaptureNode,
   form: FormNode,
   tag: TagNode,
+  set_field: SetFieldNode,
   subscribe: SubscribeNode,
   delay: DelayNode,
   condition: ConditionNode,
