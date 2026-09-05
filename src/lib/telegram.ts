@@ -80,10 +80,16 @@ export async function deleteWebhook(token: string) {
   return call<boolean>(token, "deleteWebhook", { drop_pending_updates: false });
 }
 
-function replyMarkup(buttons?: { text: string; data: string }[]) {
+function replyMarkup(buttons?: { text: string; data?: string; url?: string }[]) {
   if (!buttons?.length) return undefined;
   return {
-    inline_keyboard: [buttons.map((button) => ({ text: button.text, callback_data: button.data }))],
+    inline_keyboard: [
+      buttons.map((button) =>
+        button.url
+          ? { text: button.text, url: button.url }
+          : { text: button.text, callback_data: button.data ?? "n:" },
+      ),
+    ],
   };
 }
 
@@ -91,7 +97,7 @@ export async function sendMessage(
   token: string,
   chatId: string,
   text: string,
-  buttons?: { text: string; data: string }[],
+  buttons?: { text: string; data?: string; url?: string }[],
 ) {
   return call<{ message_id: number }>(token, "sendMessage", {
     chat_id: chatId,
@@ -105,7 +111,7 @@ export async function sendMedia(
   chatId: string,
   media: FlowMedia,
   caption?: string,
-  buttons?: { text: string; data: string }[],
+  buttons?: { text: string; data?: string; url?: string }[],
 ) {
   const method = telegramSendMethod(media);
   const field = telegramMediaField(media);
