@@ -7,11 +7,33 @@ export type FlowButton = {
   next: string;
 };
 
+/** Telegram sendPhoto vs sendAnimation. Stored on text steps; the engine ignores unknown extra fields on older flows. */
+export type FlowMediaKind = "photo" | "animation";
+
+export type FlowMedia = {
+  url: string;
+  kind: FlowMediaKind;
+  mime?: string;
+  filename?: string;
+  id?: string;
+};
+
+export type FlowCanvasPosition = {
+  x: number;
+  y: number;
+};
+
+/** Optional editor layout. The Telegram engine ignores this field. */
+export type FlowCanvasLayout = {
+  nodes: Record<string, FlowCanvasPosition>;
+};
+
 export type FlowStep =
   | {
       id: string;
       type: "text";
       text: string;
+      media?: FlowMedia;
       buttons?: FlowButton[];
       next?: string;
     }
@@ -37,6 +59,17 @@ export type FlowStep =
 export type FlowDefinition = {
   startStepId: string;
   steps: FlowStep[];
+  canvas?: FlowCanvasLayout;
+};
+
+export type FlowEditorRecord = {
+  id: string;
+  botId?: string;
+  name: string;
+  triggerType: TriggerType;
+  triggerValue: string | null;
+  isActive: boolean;
+  definition: FlowDefinition;
 };
 
 export type ContactRecord = {
@@ -73,6 +106,7 @@ export type InboundEvent = {
 
 export type OutboundReply = {
   text: string;
+  media?: FlowMedia;
   buttons?: { text: string; data: string }[];
   source: "flow" | "agent" | "broadcast";
 };

@@ -1,4 +1,5 @@
 import { BroadcastConfirmError } from "@/lib/broadcast";
+import { MediaError } from "@/lib/media";
 import { TelegramApiError } from "@/lib/telegram";
 import { redactSecrets } from "@/lib/crypto";
 
@@ -12,6 +13,9 @@ export function fail(error: unknown, fallback = "Request failed") {
   }
   if (error instanceof TelegramApiError) {
     return json({ error: redactSecrets(error.message) }, 502);
+  }
+  if (error instanceof MediaError) {
+    return json({ error: error.message }, 400);
   }
   const message = error instanceof Error ? redactSecrets(error.message) : fallback;
   return json({ error: message }, 400);
