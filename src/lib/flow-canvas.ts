@@ -7,6 +7,7 @@ import type {
   FlowMedia,
   FlowStep,
   FormField,
+  SubscribeAction,
   TagAction,
 } from "@/lib/types";
 
@@ -20,6 +21,7 @@ export type CanvasNodeKind =
   | "capture"
   | "form"
   | "tag"
+  | "subscribe"
   | "delay"
   | "condition"
   | "end";
@@ -38,6 +40,7 @@ export type CanvasNodeData =
   | { kind: "capture"; field: CaptureField; prompt: string }
   | { kind: "form"; intro: string; fields: FormField[] }
   | { kind: "tag"; tagName: string; action: TagAction }
+  | { kind: "subscribe"; listName: string; action: SubscribeAction }
   | { kind: "delay"; seconds: number }
   | {
       kind: "condition";
@@ -213,6 +216,18 @@ function nodeFromStep(step: FlowStep, position: { x: number; y: number }): Canva
       type: "tag",
       position,
       data: { kind: "tag", tagName: step.tagName, action: step.action === "remove" ? "remove" : "add" },
+    };
+  }
+  if (step.type === "subscribe") {
+    return {
+      id: step.id,
+      type: "subscribe",
+      position,
+      data: {
+        kind: "subscribe",
+        listName: step.listName,
+        action: step.action === "unsubscribe" ? "unsubscribe" : "subscribe",
+      },
     };
   }
   if (step.type === "delay") {
@@ -409,6 +424,17 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
       continue;
     }
 
+    if (node.data.kind === "subscribe") {
+      steps.push({
+        id: node.id,
+        type: "subscribe",
+        listName: node.data.listName,
+        action: node.data.action,
+        next: nextFromHandle(graph.edges, node.id, "next") ?? "",
+      });
+      continue;
+    }
+
     if (node.data.kind === "delay") {
       steps.push({
         id: node.id,
@@ -424,7 +450,7 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
         id: node.id,
         type: "condition",
         check: node.data.check,
-        ...(node.data.check === "tag" ? { tagName: node.data.tagName } : {}),
+        ...(node.data.check === "tag" || node.data.check === "subscription" ? { tagName: node.data.tagName } : {}),
         ...(node.data.check === "field"
           ? {
               field: node.data.field,
@@ -503,6 +529,15 @@ export function engineDefinition(definition: FlowDefinition): FlowDefinition {
           next: step.next,
         };
       }
+      if (step.type === "subscribe") {
+        return {
+          id: step.id,
+          type: "subscribe",
+          listName: step.listName,
+          action: step.action === "unsubscribe" ? "unsubscribe" : "subscribe",
+          next: step.next,
+        };
+      }
       if (step.type === "delay") {
         return { id: step.id, type: "delay", seconds: step.seconds, next: step.next };
       }
@@ -511,7 +546,9 @@ export function engineDefinition(definition: FlowDefinition): FlowDefinition {
           id: step.id,
           type: "condition",
           check: step.check,
-          ...(step.check === "tag" && step.tagName ? { tagName: step.tagName } : {}),
+          ...((step.check === "tag" || step.check === "subscription") && step.tagName
+            ? { tagName: step.tagName }
+            : {}),
           ...(step.check === "field" && step.field ? { field: step.field } : {}),
           ...(step.check === "field" && step.op ? { op: step.op } : {}),
           ...(step.check === "field" && step.op !== "set" && step.value ? { value: step.value } : {}),
@@ -572,6 +609,13 @@ export function createCanvasNode(
       };
     case "tag":
       return { id, type: "tag", position, data: { kind: "tag", tagName: "lead", action: "add" } };
+    case "subscribe":
+      return {
+        id,
+        type: "subscribe",
+        position,
+        data: { kind: "subscribe", listName: "newsletter", action: "subscribe" },
+      };
     case "delay":
       return { id, type: "delay", position, data: { kind: "delay", seconds: 300 } };
     case "condition":
@@ -666,12 +710,17 @@ export function validateCanvas(graph: CanvasGraph): CanvasValidation {
       const dest = nextFromHandle(graph.edges, node.id, "next");
       if (!dest) warnings.push("A tag step has no next step.");
     }
+    if (node.data.kind === "subscribe") {
+      if (node.data.action === "subscribe" && !node.data.listName.trim()) {
+        errors.push("A subscribe step is missing a list name.");
+      }
+    }
     if (node.data.kind === "form" && node.data.fields.length === 0) {
       warnings.push("A lead form has no fields.");
     }
     if (node.data.kind === "condition") {
-      if (node.data.check === "tag" && !node.data.tagName.trim()) {
-        errors.push("A condition is missing a tag name.");
+      if ((node.data.check === "tag" || node.data.check === "subscription") && !node.data.tagName.trim()) {
+        errors.push("A condition is missing a tag or list name.");
       }
       if (!nextFromHandle(graph.edges, node.id, "yes") || !nextFromHandle(graph.edges, node.id, "no")) {
         warnings.push("A condition is missing a Yes or No branch.");
