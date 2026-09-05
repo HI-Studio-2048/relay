@@ -157,17 +157,18 @@
 }
 
 .relay-flow.react-flow {
-  --xy-background-color: transparent;
-  --xy-node-border-default: var(--border);
-  --xy-node-background-color-default: var(--card);
-  --xy-edge-stroke-default: color-mix(in oklch, var(--foreground) 55%, transparent);
-  --xy-edge-stroke-selected-default: var(--primary);
-  --xy-connectionline-stroke-default: var(--primary);
-  --xy-minimap-background-color-default: var(--card);
-  --xy-controls-button-background-color-default: var(--card);
-  --xy-controls-button-background-color-hover-default: var(--muted);
-  --xy-controls-button-color-default: var(--foreground);
-  --xy-controls-button-border-color-default: var(--border);
+  background: #f4f6f8;
+  --xy-background-color: #f4f6f8;
+  --xy-node-border-default: #e5e7eb;
+  --xy-node-background-color-default: #ffffff;
+  --xy-edge-stroke-default: #c5cdd6;
+  --xy-edge-stroke-selected-default: #0084ff;
+  --xy-connectionline-stroke-default: #0084ff;
+  --xy-minimap-background-color-default: #f4f6f8;
+  --xy-controls-button-background-color-default: #ffffff;
+  --xy-controls-button-background-color-hover-default: #eef1f4;
+  --xy-controls-button-color-default: #1b1f24;
+  --xy-controls-button-border-color-default: #e5e7eb;
   --xy-attribution-background-color-default: transparent;
 }
 
@@ -180,13 +181,13 @@
 }
 
 .relay-flow .react-flow__edge-text {
-  fill: var(--foreground);
+  fill: #1b1f24;
   font-size: 10px;
   font-weight: 600;
 }
 
 .relay-flow .react-flow__edge-textbg {
-  fill: var(--card);
+  fill: #ffffff;
 }
 
 .relay-flow .react-flow__controls {

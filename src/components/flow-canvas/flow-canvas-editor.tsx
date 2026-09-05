@@ -28,7 +28,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { isImageFile, uploadMediaFile } from "@/components/flow-canvas/media-picker";
-import { nodeHex } from "@/components/flow-canvas/node-colors";
+import { MANYCHAT, nodeHex } from "@/components/flow-canvas/node-colors";
 import { NodeInspector, type FlowMeta, type InspectorField } from "@/components/flow-canvas/node-inspector";
 import { NodePalette } from "@/components/flow-canvas/node-palette";
 import { flowNodeTypes } from "@/components/flow-canvas/nodes";
@@ -58,12 +58,12 @@ type RfNode = Node<CanvasNodeData, CanvasNodeKind>;
 
 const defaultEdgeOptions: Partial<Edge> = {
   type: "smoothstep",
-  style: { strokeWidth: 1.75 },
+  style: { strokeWidth: 1.75, stroke: MANYCHAT.line },
   markerEnd: {
     type: MarkerType.ArrowClosed,
     width: 16,
     height: 16,
-    color: "var(--xy-edge-stroke-default)",
+    color: MANYCHAT.line,
   },
 };
 
@@ -293,12 +293,13 @@ function CanvasStage({
           proOptions={{ hideAttribution: true }}
           className="relay-flow"
         >
-          <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--border)" />
+          <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="#D0D5DD" />
           <Controls showInteractive={false} />
           <MiniMap
             pannable
             zoomable
-            className="!bg-card !shadow-none"
+            className="!shadow-none"
+            style={{ background: MANYCHAT.canvas }}
             nodeColor={(node) => nodeHex(node.type)}
           />
         </ReactFlow>
