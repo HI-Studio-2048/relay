@@ -96,6 +96,7 @@ function executeFrom(
     if (step.type === "text") {
       replies.push({
         text: step.text,
+        media: step.media,
         buttons: step.buttons?.map((button) => ({
           text: button.text,
           data: `n:${button.next}`,
@@ -165,6 +166,7 @@ export function processInboundEvent(input: {
   event: InboundEvent;
 }): EngineResult {
   let contact = upsertFromEvent(input.contact, input.event);
+  const replies: OutboundReply[] = [];
   const inboundSaved = Boolean(input.event.text || input.event.callbackData);
 
   const flowById = new Map(input.flows.map((flow) => [flow.id, flow]));
@@ -228,5 +230,5 @@ export function processInboundEvent(input: {
     };
   }
 
-  return { contact, session: input.session, replies: [], inboundSaved };
+  return { contact, session: input.session, replies, inboundSaved };
 }

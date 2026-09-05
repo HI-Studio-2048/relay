@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { api } from "@/lib/client";
 
 export function CreateFlowForm({ botId }: { botId: string }) {
   const [name, setName] = useState("");
+  const router = useRouter();
 
   const create = async () => {
     if (!name.trim()) return;
@@ -21,7 +23,7 @@ export function CreateFlowForm({ botId }: { botId: string }) {
           triggerValue: name.toLowerCase(),
         }),
       });
-      window.location.href = `/flows/${data.flow.id}`;
+      router.push(`/flows/${data.flow.id}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not create flow");
     }

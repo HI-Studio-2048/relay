@@ -22,8 +22,9 @@ export default async function FlowsPage() {
       <div>
         <h1 className="font-heading text-3xl tracking-tight">Flows</h1>
         <p className="text-sm text-muted-foreground">
-          Triggers: /start, a command, or an exact keyword. Steps can send text, ask for CRM
-          fields, branch with inline buttons, or apply a tag.
+          Triggers: /start, a command, or an exact keyword. Open a flow to edit it on the
+          canvas — drag nodes, connect branches, then save. Telegram still runs the same
+          linear definition.
         </p>
       </div>
       <CreateFlowForm botId={bot.id} />
