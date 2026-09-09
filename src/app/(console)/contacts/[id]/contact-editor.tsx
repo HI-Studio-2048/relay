@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/client";
 import { displayName } from "@/lib/lead-capture";
 import type { ContactRecord } from "@/lib/types";
@@ -37,6 +38,7 @@ export function ContactEditor({
   });
   const [custom, setCustom] = useState(initialContact.customFields);
   const [newField, setNewField] = useState({ key: "", label: "" });
+  const [notes, setNotes] = useState(initialContact.notes ?? "");
 
   const load = async () => {
     const data = await api<{ contact: ContactRecord }>(`/api/contacts/${contact.id}`);
@@ -48,6 +50,7 @@ export function ContactEditor({
       phone: data.contact.phone ?? "",
     });
     setCustom(data.contact.customFields);
+    setNotes(data.contact.notes ?? "");
     const [fieldData, tagData] = await Promise.all([
       api<{ fields: Field[] }>(`/api/fields?botId=${botId}`),
       api<{ tags: Tag[] }>(`/api/tags?botId=${botId}`),
@@ -60,7 +63,7 @@ export function ContactEditor({
     try {
       await api(`/api/contacts/${contact.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ ...form, customFields: custom }),
+        body: JSON.stringify({ ...form, customFields: custom, notes }),
       });
       await load();
       toast.success("Contact saved");
@@ -143,6 +146,15 @@ export function ContactEditor({
               />
             </div>
           ))}
+          <div className="space-y-1 sm:col-span-2">
+            <Label>Notes</Label>
+            <Textarea
+              rows={3}
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              placeholder="Internal note"
+            />
+          </div>
           <div className="sm:col-span-2">
             <Button onClick={() => void save()}>Save contact</Button>
           </div>

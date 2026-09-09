@@ -14,6 +14,8 @@ import {
   tags,
 } from "@/lib/db/schema";
 import { isBroadcastable } from "@/lib/broadcast";
+import { fireContactRules } from "@/lib/rules";
+import { syncContactSequences } from "@/lib/sequences";
 import { EXAMPLE_GROWTH_LINK_FLOW, EXAMPLE_LEAD_CAPTURE_FLOW } from "@/lib/example-flow";
 import type { ContactRecord, FlowDefinition, FlowSessionState } from "@/lib/types";
 import type { FlowRecord } from "@/lib/flow-engine";
@@ -48,6 +50,9 @@ export async function loadContactRecord(contactId: string): Promise<ContactRecor
     tags: tagRows.map((tag) => tag.name),
     subscriptions: row.subscriptions ?? [],
     unsubscribed: row.unsubscribed ?? false,
+    welcomed: row.welcomed ?? false,
+    notes: row.notes ?? "",
+    inboxStatus: row.inboxStatus === "closed" ? "closed" : "open",
   };
 }
 
@@ -62,9 +67,14 @@ export async function findContactByTelegram(botId: string, telegramUserId: strin
   return loadContactRecord(row.id);
 }
 
-export async function persistContact(botId: string, record: ContactRecord) {
+export async function persistContact(
+  botId: string,
+  record: ContactRecord,
+  options: { skipRules?: boolean } = {},
+) {
   const db = await getDb();
   const existing = await db.select().from(contacts).where(eq(contacts.id, record.id)).limit(1);
+  const previous = existing[0] && !options.skipRules ? await loadContactRecord(record.id) : null;
   const values = {
     username: record.username,
     firstName: record.firstName,
@@ -73,6 +83,9 @@ export async function persistContact(botId: string, record: ContactRecord) {
     phone: record.phone,
     unsubscribed: record.unsubscribed ?? false,
     subscriptions: record.subscriptions ?? [],
+    welcomed: record.welcomed ?? false,
+    notes: record.notes ?? "",
+    inboxStatus: record.inboxStatus === "closed" ? "closed" : "open",
     updatedAt: now(),
   };
   if (existing[0]) {
@@ -149,6 +162,9 @@ export async function persistContact(botId: string, record: ContactRecord) {
       .values({ contactId: record.id, tagId: tag.id })
       .onConflictDoNothing();
   }
+
+  await syncContactSequences(botId, record, existing[0]?.subscriptions ?? []);
+  if (!options.skipRules) await fireContactRules(botId, previous, record);
 }
 
 export async function loadActiveSession(contactId: string): Promise<FlowSessionState | null> {
@@ -156,7 +172,12 @@ export async function loadActiveSession(contactId: string): Promise<FlowSessionS
   const [row] = await db
     .select()
     .from(flowSessions)
-    .where(and(eq(flowSessions.contactId, contactId), eq(flowSessions.status, "active")))
+    .where(
+      and(
+        eq(flowSessions.contactId, contactId),
+        or(eq(flowSessions.status, "active"), eq(flowSessions.status, "paused")),
+      ),
+    )
     .limit(1);
   if (!row) return null;
   return {
@@ -165,10 +186,38 @@ export async function loadActiveSession(contactId: string): Promise<FlowSessionS
     flowId: row.flowId,
     stepId: row.stepId,
     awaitingInput: row.awaitingInput,
-    status: row.status === "completed" ? "completed" : "active",
+    status: row.status === "paused" ? "paused" : row.status === "completed" ? "completed" : "active",
     formIndex: row.formIndex ?? undefined,
     resumeAt: row.resumeAt ? row.resumeAt.toISOString() : null,
   };
+}
+
+export async function pauseContactAutomation(contactId: string) {
+  const session = await loadActiveSession(contactId);
+  if (!session || session.status === "paused") return;
+  await persistSession(contactId, {
+    ...session,
+    status: "paused",
+    awaitingInput: false,
+    resumeAt: null,
+  });
+}
+
+/** Live Chat "Resume automation": un-pause the session and re-arm any question it was waiting on. */
+export async function resumeContactAutomation(contactId: string) {
+  const session = await loadActiveSession(contactId);
+  if (!session || session.status !== "paused") return null;
+  const db = await getDb();
+  const [row] = await db.select().from(flows).where(eq(flows.id, session.flowId)).limit(1);
+  const definition = row?.definition as FlowDefinition | undefined;
+  const step = definition?.steps.find((item) => item.id === session.stepId);
+  const awaitingInput =
+    step?.type === "capture" ||
+    step?.type === "form" ||
+    (step?.type === "text" && (step.quickReplies ?? []).length > 0);
+  const next: FlowSessionState = { ...session, status: "active", awaitingInput, resumeAt: null };
+  await persistSession(contactId, next);
+  return next;
 }
 
 export async function persistSession(contactId: string, session: FlowSessionState | null) {
@@ -206,6 +255,7 @@ export async function loadActiveFlows(botId: string): Promise<FlowRecord[]> {
     triggerType: row.triggerType as FlowRecord["triggerType"],
     triggerValue: row.triggerValue,
     isActive: row.isActive,
+    priority: row.priority ?? 0,
     definition: row.definition as FlowDefinition,
   }));
 }
@@ -301,6 +351,14 @@ export async function contactsWithTag(botId: string, tagId: string) {
     .innerJoin(contacts, eq(contacts.id, contactTags.contactId))
     .where(and(eq(contactTags.tagId, tagId), eq(contacts.botId, botId)));
   return rows.map((row) => row.contact).filter((contact) => isBroadcastable(contact));
+}
+
+/** Broadcast audience: one tag, or everyone who has not unsubscribed when tagId is null. */
+export async function broadcastAudience(botId: string, tagId: string | null | undefined) {
+  if (tagId) return contactsWithTag(botId, tagId);
+  const db = await getDb();
+  const rows = await db.select().from(contacts).where(eq(contacts.botId, botId));
+  return rows.filter((contact) => isBroadcastable(contact));
 }
 
 export async function seedBotDefaults(botId: string) {

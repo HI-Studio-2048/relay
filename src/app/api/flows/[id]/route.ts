@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { syncBotCommands } from "@/lib/bot-commands";
 import { assertConfirm } from "@/lib/broadcast";
 import { getDb } from "@/lib/db";
 import { flows } from "@/lib/db/schema";
@@ -25,6 +26,7 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
       triggerType?: string;
       triggerValue?: string | null;
       isActive?: boolean;
+      priority?: number;
       definition?: FlowDefinition;
     }>(request);
     const db = await getDb();
@@ -35,12 +37,16 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
         ...(body.triggerType ? { triggerType: body.triggerType } : {}),
         ...(body.triggerValue !== undefined ? { triggerValue: body.triggerValue } : {}),
         ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+        ...(body.priority !== undefined ? { priority: body.priority } : {}),
         ...(body.definition ? { definition: body.definition } : {}),
         updatedAt: new Date(),
       })
       .where(eq(flows.id, id))
       .returning();
     if (!flow) return json({ error: "Flow not found" }, 404);
+    if (body.triggerType !== undefined || body.triggerValue !== undefined || body.isActive !== undefined || body.name) {
+      await syncBotCommands(flow.botId);
+    }
     return json({ flow });
   } catch (error) {
     return fail(error);
@@ -53,7 +59,8 @@ export async function DELETE(request: Request, context: RouteParams<{ id: string
     const body = await readJson<{ confirm?: unknown }>(request);
     assertConfirm(body.confirm, "Delete flow");
     const db = await getDb();
-    await db.delete(flows).where(eq(flows.id, id));
+    const [removed] = await db.delete(flows).where(eq(flows.id, id)).returning();
+    if (removed?.triggerType === "command") await syncBotCommands(removed.botId);
     return json({ ok: true });
   } catch (error) {
     return fail(error);

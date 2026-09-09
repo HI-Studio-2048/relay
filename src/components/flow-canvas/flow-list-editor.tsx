@@ -1,12 +1,15 @@
 "use client";
 
 import { MediaPicker } from "@/components/flow-canvas/media-picker";
+import { SplitTrafficEditor } from "@/components/flow-canvas/split-traffic-editor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { FlowEditorRecord, FlowStep, TriggerType } from "@/lib/types";
+import type { FlowEditorRecord, FlowStep, HttpMethod, TriggerType } from "@/lib/types";
+import { TRIGGER_OPTIONS } from "@/lib/types";
+import type { InspectorFlowOption } from "@/components/flow-canvas/node-inspector";
 
 function emptyStep(type: FlowStep["type"]): FlowStep {
   const id = crypto.randomUUID().slice(0, 8);
@@ -27,9 +30,23 @@ function emptyStep(type: FlowStep["type"]): FlowStep {
   if (type === "set_field") return { id, type, field: "custom:source", value: "flow", next: "" };
   if (type === "subscribe") return { id, type, listName: "newsletter", action: "subscribe", next: "" };
   if (type === "delay") return { id, type, seconds: 300, next: "" };
+  if (type === "randomizer") {
+    return {
+      id,
+      type,
+      sticky: true,
+      paths: [
+        { id: "path-a", percent: 50, next: "" },
+        { id: "path-b", percent: 50, next: "" },
+      ],
+    };
+  }
   if (type === "condition") {
     return { id, type, check: "tag", tagName: "lead", nextTrue: "", nextFalse: "" };
   }
+  if (type === "start_flow") return { id, type, flowId: "", next: "" };
+  if (type === "http") return { id, type, url: "https://", method: "POST", body: "", next: "" };
+  if (type === "notify") return { id, type, text: "New lead: {{name}} {{email}}", next: "" };
   if (type === "end") return { id, type, text: "Done." };
   return { id, type: "text", text: "Hello.", buttons: [], next: "" };
 }
@@ -55,17 +72,39 @@ function parseButtons(value: string) {
     });
 }
 
+function formatQuickReplies(step: Extract<FlowStep, { type: "text" }>) {
+  return (step.quickReplies ?? []).map((reply) => `${reply.text} > ${reply.next ?? ""}`).join(", ");
+}
+
+function parseQuickReplies(value: string) {
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const [text, next] = part.split(">").map((item) => item.trim());
+      return { text: text || "Reply", next: next || "" };
+    });
+}
+
 function triggerMatchPlaceholder(type: TriggerType) {
   if (type === "command") return "/help";
   if (type === "start_param") return "promo";
+  if (type === "keyword_contains") return "price";
   return "pricing";
+}
+
+function triggerNeedsValue(type: TriggerType) {
+  return type !== "start" && type !== "default";
 }
 
 export function FlowListEditor({
   flow,
+  otherFlows = [],
   onChange,
 }: {
   flow: FlowEditorRecord;
+  otherFlows?: InspectorFlowOption[];
   onChange: (flow: FlowEditorRecord) => void;
 }) {
   const definition = flow.definition;
@@ -95,13 +134,14 @@ export function FlowListEditor({
               value={flow.triggerType}
               onChange={(event) => onChange({ ...flow, triggerType: event.target.value as TriggerType })}
             >
-              <option value="start">/start</option>
-              <option value="start_param">Growth link</option>
-              <option value="command">Command</option>
-              <option value="keyword">Exact keyword</option>
+              {TRIGGER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
-          {flow.triggerType !== "start" ? (
+          {triggerNeedsValue(flow.triggerType) ? (
             <div className="space-y-1">
               <Label>{flow.triggerType === "start_param" ? "Start payload" : "Match"}</Label>
               <Input
@@ -185,6 +225,17 @@ export function FlowListEditor({
                       buttons: parseButtons(event.target.value),
                     })
                   }
+                />
+                <Input
+                  placeholder='Quick replies: "Yes > nextId, No > otherId"'
+                  value={formatQuickReplies(step)}
+                  onChange={(event) => {
+                    const quickReplies = parseQuickReplies(event.target.value);
+                    const next = { ...step };
+                    if (quickReplies.length > 0) next.quickReplies = quickReplies;
+                    else delete next.quickReplies;
+                    updateStep(index, next);
+                  }}
                 />
               </>
             ) : null}
@@ -336,6 +387,23 @@ export function FlowListEditor({
                 />
               </>
             ) : null}
+            {step.type === "randomizer" ? (
+              <div className="space-y-2 sm:col-span-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={!step.sticky}
+                    onChange={(event) => updateStep(index, { ...step, sticky: !event.target.checked })}
+                  />
+                  Random path every time
+                </label>
+                <SplitTrafficEditor
+                  paths={step.paths}
+                  showNext
+                  onChange={(paths) => updateStep(index, { ...step, paths })}
+                />
+              </div>
+            ) : null}
             {step.type === "condition" ? (
               <>
                 <select
@@ -407,6 +475,69 @@ export function FlowListEditor({
                 />
               </>
             ) : null}
+            {step.type === "start_flow" ? (
+              <>
+                <select
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                  value={step.flowId}
+                  onChange={(event) => updateStep(index, { ...step, flowId: event.target.value })}
+                >
+                  <option value="">Choose a flow</option>
+                  {otherFlows.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+                <Input
+                  placeholder="Fallback next step id"
+                  value={step.next ?? ""}
+                  onChange={(event) => updateStep(index, { ...step, next: event.target.value })}
+                />
+              </>
+            ) : null}
+            {step.type === "http" ? (
+              <>
+                <select
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                  value={step.method === "GET" ? "GET" : "POST"}
+                  onChange={(event) =>
+                    updateStep(index, { ...step, method: event.target.value as HttpMethod })
+                  }
+                >
+                  <option value="POST">POST</option>
+                  <option value="GET">GET</option>
+                </select>
+                <Input
+                  placeholder="https://..."
+                  value={step.url}
+                  onChange={(event) => updateStep(index, { ...step, url: event.target.value })}
+                />
+                <Textarea
+                  placeholder='{"email":"{{email}}"}'
+                  value={step.body ?? ""}
+                  onChange={(event) => updateStep(index, { ...step, body: event.target.value })}
+                />
+                <Input
+                  placeholder="Next step id"
+                  value={step.next}
+                  onChange={(event) => updateStep(index, { ...step, next: event.target.value })}
+                />
+              </>
+            ) : null}
+            {step.type === "notify" ? (
+              <>
+                <Textarea
+                  value={step.text}
+                  onChange={(event) => updateStep(index, { ...step, text: event.target.value })}
+                />
+                <Input
+                  placeholder="Next step id"
+                  value={step.next}
+                  onChange={(event) => updateStep(index, { ...step, next: event.target.value })}
+                />
+              </>
+            ) : null}
             {step.type === "end" ? (
               <Textarea
                 value={step.text ?? ""}
@@ -418,7 +549,23 @@ export function FlowListEditor({
       ))}
 
       <div className="flex flex-wrap gap-2">
-        {(["text", "capture", "form", "tag", "set_field", "subscribe", "condition", "delay", "end"] as const).map((type) => (
+        {(
+          [
+            "text",
+            "capture",
+            "form",
+            "tag",
+            "set_field",
+            "subscribe",
+            "condition",
+            "delay",
+            "randomizer",
+            "start_flow",
+            "http",
+            "notify",
+            "end",
+          ] as const
+        ).map((type) => (
           <Button
             key={type}
             variant="outline"

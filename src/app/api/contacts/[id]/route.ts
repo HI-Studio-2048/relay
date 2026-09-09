@@ -28,6 +28,8 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
       email?: string | null;
       phone?: string | null;
       customFields?: Record<string, string>;
+      notes?: string;
+      inboxStatus?: "open" | "closed";
     }>(request);
     const next = {
       ...contact,
@@ -36,6 +38,8 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
       email: body.email !== undefined ? body.email : contact.email,
       phone: body.phone !== undefined ? body.phone : contact.phone,
       customFields: { ...contact.customFields, ...body.customFields },
+      notes: body.notes !== undefined ? body.notes : contact.notes,
+      inboxStatus: body.inboxStatus !== undefined ? body.inboxStatus : contact.inboxStatus,
     };
     await persistContact(row!.botId, next);
     return json({ contact: await loadContactRecord(id) });

@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { listBots } from "@/lib/bots";
+import { currentBot } from "@/lib/current-bot";
 import { getDb } from "@/lib/db";
 import { tags } from "@/lib/db/schema";
 import { searchContacts } from "@/lib/store";
@@ -8,8 +8,7 @@ import { ContactsClient } from "./contacts-client";
 export const dynamic = "force-dynamic";
 
 export default async function ContactsPage() {
-  const bots = await listBots();
-  const bot = bots[0];
+  const bot = await currentBot();
   if (!bot) {
     return <ContactsClient initialBotId={null} initialContacts={[]} initialTags={[]} />;
   }

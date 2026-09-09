@@ -6,8 +6,35 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { nextButtonHandleId, TRIGGER_NODE_ID, type CanvasButton, type CanvasNodeData } from "@/lib/flow-canvas";
-import type { CaptureField, ConditionOp, FormField, SubscribeAction, TagAction, TriggerType } from "@/lib/types";
+import { SplitTrafficEditor } from "@/components/flow-canvas/split-traffic-editor";
+import {
+  MAX_MESSAGE_BLOCKS,
+  MAX_QUICK_REPLIES,
+  MAX_TYPING_DELAY_SECONDS,
+  blockLabel,
+  isMediaBlock,
+  messageNodeButtons,
+  newBlockId,
+  nextButtonHandleId,
+  nextQuickReplyHandleId,
+  TRIGGER_NODE_ID,
+  type CanvasButton,
+  type CanvasNodeData,
+  type MessageBlock,
+  type SendMessageData,
+} from "@/lib/flow-canvas";
+import type {
+  CaptureField,
+  ConditionOp,
+  FormField,
+  HttpMethod,
+  SubscribeAction,
+  TagAction,
+  TriggerType,
+} from "@/lib/types";
+import { TRIGGER_OPTIONS } from "@/lib/types";
+
+export type InspectorFlowOption = { id: string; name: string };
 
 export type InspectorField = { key: string; label: string };
 
@@ -27,7 +54,15 @@ function parseCaptureSelect(value: string, customKey: string): CaptureField {
 function triggerMatchPlaceholder(type: TriggerType) {
   if (type === "command") return "/help";
   if (type === "start_param") return "promo";
-  return "pricing";
+  if (type === "keyword_contains") return "price, cost";
+  if (type === "keyword_word") return "like";
+  if (type === "keyword_starts_with") return "can you";
+  if (type === "keyword_not_contains") return "refund";
+  return "hello, hi";
+}
+
+function triggerNeedsValue(type: TriggerType) {
+  return type !== "start" && type !== "default";
 }
 
 export function NodeInspector({
@@ -36,6 +71,7 @@ export function NodeInspector({
   meta,
   customFields,
   tagNames,
+  otherFlows,
   onMetaChange,
   onDataChange,
   onDelete,
@@ -45,6 +81,7 @@ export function NodeInspector({
   meta: FlowMeta;
   customFields: InspectorField[];
   tagNames: string[];
+  otherFlows: InspectorFlowOption[];
   onMetaChange: (patch: Partial<FlowMeta>) => void;
   onDataChange: (id: string, data: CanvasNodeData) => void;
   onDelete: (id: string) => void;
@@ -69,7 +106,7 @@ export function NodeInspector({
         <div>
           <p className="flex items-center gap-2 text-sm font-medium capitalize">
             <span className="size-2.5 rounded-full" style={{ background: NODE_TONE[data.kind].hex }} />
-            {data.kind}
+            {data.kind === "send_message" ? "Send Message" : data.kind.replace(/_/g, " ")}
           </p>
           <p className="text-[11px] text-muted-foreground">{isTrigger ? "Flow start" : selectedId}</p>
         </div>
@@ -93,13 +130,14 @@ export function NodeInspector({
               value={meta.triggerType}
               onChange={(event) => onMetaChange({ triggerType: event.target.value as TriggerType })}
             >
-              <option value="start">/start</option>
-              <option value="start_param">Growth link</option>
-              <option value="command">Command</option>
-              <option value="keyword">Exact keyword</option>
+              {TRIGGER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
-          {meta.triggerType !== "start" ? (
+          {triggerNeedsValue(meta.triggerType) ? (
             <div className="space-y-1">
               <Label>{meta.triggerType === "start_param" ? "Start payload" : "Match"}</Label>
               <Input
@@ -108,6 +146,21 @@ export function NodeInspector({
                 placeholder={triggerMatchPlaceholder(meta.triggerType)}
               />
             </div>
+          ) : null}
+          {meta.triggerType === "start" ? (
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              ManyChat Welcome Message: fires on the first /start only. Later /start is ignored. Growth-link payloads still run.
+            </p>
+          ) : null}
+          {meta.triggerType === "default" ? (
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              Runs when a message does not match /start, a command, or a keyword.
+            </p>
+          ) : null}
+          {meta.triggerType.startsWith("keyword") ? (
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              Comma-separate up to 10 keywords. Priority is the Keywords tab list order.
+            </p>
           ) : null}
           {meta.triggerType === "start_param" ? (
             <p className="text-[11px] leading-snug text-muted-foreground">
@@ -124,6 +177,10 @@ export function NodeInspector({
             Active
           </label>
         </div>
+      ) : null}
+
+      {data.kind === "send_message" ? (
+        <SendMessageEditor data={data} onChange={(next) => onDataChange(selectedId, next)} />
       ) : null}
 
       {data.kind === "message" || data.kind === "media" ? (
@@ -245,6 +302,10 @@ export function NodeInspector({
         <DelayEditor data={data} onChange={(next) => onDataChange(selectedId, next)} />
       ) : null}
 
+      {data.kind === "randomizer" ? (
+        <RandomizerEditor data={data} onChange={(next) => onDataChange(selectedId, next)} />
+      ) : null}
+
       {data.kind === "condition" ? (
         <ConditionEditor
           data={data}
@@ -252,6 +313,82 @@ export function NodeInspector({
           tagNames={tagNames}
           onChange={(next) => onDataChange(selectedId, next)}
         />
+      ) : null}
+
+      {data.kind === "start_flow" ? (
+        <div className="space-y-1">
+          <Label>Flow to start</Label>
+          <select
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            value={data.flowId}
+            onChange={(event) => onDataChange(selectedId, { ...data, flowId: event.target.value })}
+          >
+            <option value="">Choose a flow</option>
+            {otherFlows.map((flow) => (
+              <option key={flow.id} value={flow.id}>
+                {flow.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] text-muted-foreground">
+            Jumps into that flow immediately. Connect Next only as a fallback if the target is missing.
+          </p>
+        </div>
+      ) : null}
+
+      {data.kind === "http" ? (
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label>Method</Label>
+            <select
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              value={data.method}
+              onChange={(event) =>
+                onDataChange(selectedId, { ...data, method: event.target.value as HttpMethod })
+              }
+            >
+              <option value="POST">POST</option>
+              <option value="GET">GET</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label>HTTPS URL</Label>
+            <Input
+              value={data.url}
+              onChange={(event) => onDataChange(selectedId, { ...data, url: event.target.value })}
+              placeholder="https://hooks.zapier.com/..."
+            />
+          </div>
+          {data.method === "POST" ? (
+            <div className="space-y-1">
+              <Label>JSON body</Label>
+              <Textarea
+                rows={5}
+                value={data.body}
+                onChange={(event) => onDataChange(selectedId, { ...data, body: event.target.value })}
+                placeholder='{"email":"{{email}}","name":"{{name}}"}'
+              />
+            </div>
+          ) : null}
+          <p className="text-[11px] text-muted-foreground">
+            Templates: {"{{name}}"} {"{{email}}"} {"{{phone}}"} {"{{telegram_id}}"} {"{{field:company}}"}
+          </p>
+        </div>
+      ) : null}
+
+      {data.kind === "notify" ? (
+        <div className="space-y-1">
+          <Label>Admin message</Label>
+          <Textarea
+            rows={5}
+            value={data.text}
+            onChange={(event) => onDataChange(selectedId, { ...data, text: event.target.value })}
+            placeholder="New lead: {{name}} {{email}}"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Written to the inbox. Also sent to ADMIN_TELEGRAM_CHAT_ID when that env var is set.
+          </p>
+        </div>
       ) : null}
 
       {data.kind === "end" ? (
@@ -266,6 +403,285 @@ export function NodeInspector({
         </div>
       ) : null}
     </aside>
+  );
+}
+
+function ButtonListEditor({
+  buttons,
+  allButtons,
+  onChange,
+}: {
+  buttons: CanvasButton[];
+  /** Every button on the node, so new handle ids stay unique across blocks. */
+  allButtons: CanvasButton[];
+  onChange: (buttons: CanvasButton[]) => void;
+}) {
+  const updateButton = (index: number, patch: Partial<CanvasButton>) => {
+    onChange(
+      buttons.map((button, i) => {
+        if (i !== index) return button;
+        const next = { ...button, ...patch };
+        if (patch.url !== undefined) {
+          const url = patch.url.trim();
+          if (url) next.url = url;
+          else delete next.url;
+        }
+        return next;
+      }),
+    );
+  };
+
+  return (
+    <div className="space-y-1.5">
+      {buttons.map((button, index) => (
+        <div key={button.id} className="space-y-1 rounded-md border border-border bg-background p-2">
+          <div className="flex gap-2">
+            <Input
+              value={button.text}
+              onChange={(event) => updateButton(index, { text: event.target.value })}
+              placeholder="Button label"
+            />
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Remove button"
+              onClick={() => onChange(buttons.filter((_, i) => i !== index))}
+            >
+              ×
+            </Button>
+          </div>
+          <Input
+            value={button.url ?? ""}
+            onChange={(event) => updateButton(index, { url: event.target.value })}
+            placeholder="Go to step (connect on canvas) or https:// URL"
+          />
+        </div>
+      ))}
+      <Button
+        type="button"
+        size="xs"
+        variant="outline"
+        onClick={() => onChange([...buttons, { id: nextButtonHandleId(allButtons), text: "Continue" }])}
+      >
+        + Button
+      </Button>
+    </div>
+  );
+}
+
+const FORMATTING_HINT = "Formatting: **bold**, __italic__, ~~strike~~, `code`, [link](https://…). Variables: {{name}}, {{email}}, {{field:key}}.";
+
+function pickerKind(type: MessageBlock["type"]) {
+  if (type === "video") return "video" as const;
+  if (type === "audio") return "audio" as const;
+  if (type === "file") return "document" as const;
+  return "photo" as const;
+}
+
+function SendMessageEditor({
+  data,
+  onChange,
+}: {
+  data: SendMessageData;
+  onChange: (data: SendMessageData) => void;
+}) {
+  const allButtons = messageNodeButtons(data);
+
+  const updateBlock = (index: number, block: MessageBlock) => {
+    onChange({ ...data, blocks: data.blocks.map((item, i) => (i === index ? block : item)) });
+  };
+
+  const moveBlock = (index: number, delta: number) => {
+    const target = index + delta;
+    if (target < 0 || target >= data.blocks.length) return;
+    const blocks = data.blocks.slice();
+    const [moved] = blocks.splice(index, 1);
+    blocks.splice(target, 0, moved!);
+    onChange({ ...data, blocks });
+  };
+
+  const addBlock = (type: MessageBlock["type"]) => {
+    if (data.blocks.length >= MAX_MESSAGE_BLOCKS) return;
+    const id = newBlockId();
+    const block: MessageBlock =
+      type === "text"
+        ? { id, type: "text", text: "", buttons: [] }
+        : type === "delay"
+          ? { id, type: "delay", seconds: 2 }
+          : { id, type, text: "", buttons: [] };
+    onChange({ ...data, blocks: [...data.blocks, block] });
+  };
+
+  const updateQuickReply = (index: number, text: string) => {
+    onChange({
+      ...data,
+      quickReplies: data.quickReplies.map((reply, i) => (i === index ? { ...reply, text } : reply)),
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        ManyChat-style message: stack text, image, and typing-delay blocks. Every block is sent in order; buttons and
+        quick replies each get their own connector on the canvas.
+      </p>
+
+      <div className="space-y-2">
+        {data.blocks.map((block, index) => (
+          <div key={block.id} className="space-y-2 rounded-lg border border-border p-2.5">
+            <div className="flex items-center justify-between gap-1">
+              <p className="text-xs font-medium">{blockLabel(block.type)}</p>
+              <div className="flex items-center gap-0.5">
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label="Move block up"
+                  disabled={index === 0}
+                  onClick={() => moveBlock(index, -1)}
+                >
+                  ↑
+                </Button>
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label="Move block down"
+                  disabled={index === data.blocks.length - 1}
+                  onClick={() => moveBlock(index, 1)}
+                >
+                  ↓
+                </Button>
+                <Button
+                  type="button"
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label="Remove block"
+                  onClick={() => onChange({ ...data, blocks: data.blocks.filter((_, i) => i !== index) })}
+                >
+                  ×
+                </Button>
+              </div>
+            </div>
+
+            {block.type === "delay" ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={0}
+                  max={MAX_TYPING_DELAY_SECONDS}
+                  className="w-24"
+                  value={block.seconds}
+                  onChange={(event) =>
+                    updateBlock(index, {
+                      ...block,
+                      seconds: Math.max(
+                        0,
+                        Math.min(MAX_TYPING_DELAY_SECONDS, Number.parseInt(event.target.value, 10) || 0),
+                      ),
+                    })
+                  }
+                />
+                <span className="text-xs text-muted-foreground">seconds before the next block</span>
+              </div>
+            ) : (
+              <>
+                {isMediaBlock(block) ? (
+                  <MediaPicker
+                    kind={pickerKind(block.type)}
+                    value={block.media}
+                    onChange={(media) => updateBlock(index, { ...block, media })}
+                  />
+                ) : null}
+                <Textarea
+                  rows={isMediaBlock(block) ? 3 : 5}
+                  placeholder={isMediaBlock(block) ? "Caption (optional)" : "Message text — {{name}} works here"}
+                  value={block.text}
+                  onChange={(event) => updateBlock(index, { ...block, text: event.target.value })}
+                />
+                <p className="text-[11px] leading-snug text-muted-foreground">{FORMATTING_HINT}</p>
+                <div className="space-y-1">
+                  <Label className="text-[11px]">Buttons</Label>
+                  <ButtonListEditor
+                    buttons={block.buttons}
+                    allButtons={allButtons}
+                    onChange={(buttons) => updateBlock(index, { ...block, buttons })}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {data.blocks.length < MAX_MESSAGE_BLOCKS ? (
+        <div className="flex flex-wrap gap-1.5">
+          <Button type="button" size="sm" variant="outline" onClick={() => addBlock("text")}>
+            + Text
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => addBlock("image")}>
+            + Image
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => addBlock("video")}>
+            + Video
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => addBlock("audio")}>
+            + Audio
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => addBlock("file")}>
+            + File
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => addBlock("delay")}>
+            + Delay
+          </Button>
+        </div>
+      ) : null}
+
+      <div className="space-y-1.5 border-t pt-3">
+        <Label>Quick replies</Label>
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          Shown as a Telegram reply keyboard under the input. The flow waits for a tap; connect each reply to its next
+          step.
+        </p>
+        {data.quickReplies.map((reply, index) => (
+          <div key={reply.id} className="flex gap-2">
+            <Input
+              value={reply.text}
+              placeholder="Quick reply label"
+              onChange={(event) => updateQuickReply(index, event.target.value)}
+            />
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Remove quick reply"
+              onClick={() => onChange({ ...data, quickReplies: data.quickReplies.filter((_, i) => i !== index) })}
+            >
+              ×
+            </Button>
+          </div>
+        ))}
+        {data.quickReplies.length < MAX_QUICK_REPLIES ? (
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            onClick={() =>
+              onChange({
+                ...data,
+                quickReplies: [
+                  ...data.quickReplies,
+                  { id: nextQuickReplyHandleId(data.quickReplies), text: "" },
+                ],
+              })
+            }
+          >
+            + Quick reply
+          </Button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -427,6 +843,24 @@ function CaptureEditor({
           onChange={(event) => onChange({ ...data, prompt: event.target.value })}
         />
       </div>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={Boolean(data.skippable)}
+          onChange={(event) => {
+            const next = { ...data };
+            if (event.target.checked) next.skippable = true;
+            else delete next.skippable;
+            onChange(next);
+          }}
+        />
+        Show a Skip button
+      </label>
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        {data.field === "phone"
+          ? "Phone questions add a Telegram “Share my phone number” button, so the contact taps instead of typing."
+          : "Like ManyChat, Skip lets the contact continue without answering."}
+      </p>
     </div>
   );
 }
@@ -506,25 +940,51 @@ function DelayEditor({
   data: Extract<CanvasNodeData, { kind: "delay" }>;
   onChange: (data: Extract<CanvasNodeData, { kind: "delay" }>) => void;
 }) {
+  const unit = data.unit ?? "seconds";
+  const factor = unit === "days" ? 86400 : unit === "hours" ? 3600 : unit === "minutes" ? 60 : 1;
+  const amount = Math.round((data.seconds || 0) / factor) || 0;
   const presets = [
     { label: "Now", seconds: 0 },
-    { label: "30s", seconds: 30 },
     { label: "5m", seconds: 300 },
     { label: "1h", seconds: 3600 },
+    { label: "1d", seconds: 86400 },
   ];
 
   return (
     <div className="space-y-3">
-      <div className="space-y-1">
-        <Label>Wait (seconds)</Label>
-        <Input
-          type="number"
-          min={0}
-          value={data.seconds}
-          onChange={(event) =>
-            onChange({ ...data, seconds: Math.max(0, Number.parseInt(event.target.value, 10) || 0) })
-          }
-        />
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label>Wait</Label>
+          <Input
+            type="number"
+            min={0}
+            value={amount}
+            onChange={(event) =>
+              onChange({
+                ...data,
+                unit,
+                seconds: Math.max(0, Number.parseInt(event.target.value, 10) || 0) * factor,
+              })
+            }
+          />
+        </div>
+        <div className="space-y-1">
+          <Label>Unit</Label>
+          <select
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            value={unit}
+            onChange={(event) => {
+              const next = event.target.value as NonNullable<typeof data.unit>;
+              const nextFactor = next === "days" ? 86400 : next === "hours" ? 3600 : next === "minutes" ? 60 : 1;
+              onChange({ ...data, unit: next, seconds: amount * nextFactor });
+            }}
+          >
+            <option value="seconds">Seconds</option>
+            <option value="minutes">Minutes</option>
+            <option value="hours">Hours</option>
+            <option value="days">Days</option>
+          </select>
+        </div>
       </div>
       <div className="flex flex-wrap gap-1.5">
         {presets.map((preset) => (
@@ -533,14 +993,64 @@ function DelayEditor({
             type="button"
             size="xs"
             variant={data.seconds === preset.seconds ? "default" : "outline"}
-            onClick={() => onChange({ ...data, seconds: preset.seconds })}
+            onClick={() => onChange({ ...data, seconds: preset.seconds, unit: "seconds" })}
           >
             {preset.label}
           </Button>
         ))}
       </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label>Send after</Label>
+          <Input
+            type="time"
+            value={data.sendAfter ?? ""}
+            onChange={(event) => onChange({ ...data, sendAfter: event.target.value || undefined })}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label>Send before</Label>
+          <Input
+            type="time"
+            value={data.sendBefore ?? ""}
+            onChange={(event) => onChange({ ...data, sendBefore: event.target.value || undefined })}
+          />
+        </div>
+      </div>
       <p className="text-[11px] text-muted-foreground">
-        Zero continues immediately. Longer waits resume on the next worker tick after the time is up.
+        ManyChat Smart Delay: minutes/hours/days, plus an optional continue-between window.
+      </p>
+    </div>
+  );
+}
+
+function RandomizerEditor({
+  data,
+  onChange,
+}: {
+  data: Extract<CanvasNodeData, { kind: "randomizer" }>;
+  onChange: (data: Extract<CanvasNodeData, { kind: "randomizer" }>) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        ManyChat A/B split: send X% of contacts down one path and the rest down another. Drag a slider or type a
+        percent — the other paths rebalance to 100%.
+      </p>
+      <SplitTrafficEditor
+        paths={data.paths}
+        onChange={(paths) => onChange({ ...data, paths })}
+      />
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={!data.sticky}
+          onChange={(event) => onChange({ ...data, sticky: !event.target.checked })}
+        />
+        Random path every time
+      </label>
+      <p className="text-[11px] text-muted-foreground">
+        Leave unchecked so a contact stays on the same variant if they hit this split again.
       </p>
     </div>
   );

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { flows } from "@/lib/db/schema";
 import { EXAMPLE_LEAD_CAPTURE_FLOW } from "@/lib/example-flow";
+import { syncBotCommands } from "@/lib/bot-commands";
 import { json, fail, readJson } from "@/lib/http";
 import type { FlowDefinition } from "@/lib/types";
 
@@ -23,6 +24,7 @@ export async function POST(request: Request) {
       name?: string;
       triggerType?: string;
       triggerValue?: string;
+      priority?: number;
       definition?: FlowDefinition;
     }>(request);
     if (!body.botId || !body.name?.trim()) return json({ error: "botId and name are required" }, 400);
@@ -36,12 +38,14 @@ export async function POST(request: Request) {
         triggerType: body.triggerType ?? "keyword",
         triggerValue: body.triggerValue ?? null,
         isActive: true,
+        priority: body.priority ?? 0,
         definition: body.definition ?? {
           startStepId: "start",
           steps: [{ id: "start", type: "end", text: "Thanks — we got your message." }],
         },
       })
       .returning();
+    if (flow?.triggerType === "command") await syncBotCommands(body.botId);
     return json({ flow });
   } catch (error) {
     return fail(error);

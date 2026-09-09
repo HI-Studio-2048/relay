@@ -1,0 +1,72 @@
+import { Repeat } from "lucide-react";
+import { ConnectPrompt } from "@/components/chrome/connect-prompt";
+import { EmptyState } from "@/components/chrome/empty-state";
+import { PageHeader } from "@/components/chrome/page-header";
+import { CanvasCard, MANYCHAT } from "@/components/chrome/tone";
+import { currentBot } from "@/lib/current-bot";
+import { listSequences } from "@/lib/sequences";
+import { CreateSequenceForm } from "./create-sequence-form";
+
+export const dynamic = "force-dynamic";
+
+export default async function SequencesPage() {
+  const bot = await currentBot();
+  if (!bot) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          eyebrow="Automate"
+          icon={Repeat}
+          tone="action"
+          title="Sequences"
+          description="ManyChat-style drips. Subscribe a contact to a list with the same name as the sequence."
+        />
+        <ConnectPrompt title="Connect a bot before creating sequences" />
+      </div>
+    );
+  }
+
+  const rows = await listSequences(bot.id);
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Automate"
+        icon={Repeat}
+        tone="action"
+        title="Sequences"
+        description="A named drip of delayed messages. A Subscribe step whose list name matches the sequence enrolls the contact. Stop / Unsubscribe opts them out of all sequences."
+      />
+      <CanvasCard className="p-4">
+        <CreateSequenceForm botId={bot.id} />
+      </CanvasCard>
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={Repeat}
+          hex={MANYCHAT.action}
+          title="No sequences yet"
+          description="Create a welcome drip. Then add a Subscribe step named the same as the sequence, or a Rule that enrolls when a tag is applied."
+        />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {rows.map((sequence) => (
+            <CanvasCard key={sequence.id} className="p-4">
+              <p className="font-medium">{sequence.name}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {sequence.steps.length} message{sequence.steps.length === 1 ? "" : "s"} · subscribe list “
+                {sequence.name}”
+              </p>
+              <ol className="mt-3 space-y-1 text-sm">
+                {sequence.steps.map((step, index) => (
+                  <li key={step.id}>
+                    {index + 1}. wait {step.delaySeconds}s — {step.body}
+                  </li>
+                ))}
+              </ol>
+            </CanvasCard>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

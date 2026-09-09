@@ -10,12 +10,22 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+/**
+ * A connected channel account. Historically a Telegram bot; `channel` now selects the adapter.
+ * `telegramUsername` doubles as the account handle (page name, IG username, WhatsApp display number)
+ * and `tokenEncrypted` holds the Meta access token for non-Telegram channels.
+ */
 export const bots = pgTable("bots", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  channel: text("channel").notNull().default("telegram"),
   telegramUsername: text("telegram_username"),
   telegramBotId: text("telegram_bot_id"),
+  /** Page id, Instagram account id, or WhatsApp phone number id. */
+  externalAccountId: text("external_account_id"),
   tokenEncrypted: text("token_encrypted").notNull(),
+  /** Meta app secret for webhook signature checks. */
+  appSecretEncrypted: text("app_secret_encrypted"),
   webhookSecret: text("webhook_secret").notNull(),
   webhookUrl: text("webhook_url"),
   status: text("status").notNull().default("disconnected"),
@@ -41,6 +51,9 @@ export const contacts = pgTable(
     phone: text("phone"),
     unsubscribed: boolean("unsubscribed").notNull().default(false),
     subscriptions: jsonb("subscriptions").$type<string[]>().notNull().default([]),
+    welcomed: boolean("welcomed").notNull().default(false),
+    notes: text("notes").notNull().default(""),
+    inboxStatus: text("inbox_status").notNull().default("open"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -110,6 +123,7 @@ export const flows = pgTable("flows", {
   triggerType: text("trigger_type").notNull(),
   triggerValue: text("trigger_value"),
   isActive: boolean("is_active").notNull().default(true),
+  priority: integer("priority").notNull().default(0),
   definition: jsonb("definition").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -153,9 +167,8 @@ export const broadcasts = pgTable("broadcasts", {
     .references(() => bots.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   body: text("body").notNull(),
-  tagId: text("tag_id")
-    .notNull()
-    .references(() => tags.id, { onDelete: "restrict" }),
+  /** Null means "everyone" (all subscribed contacts of the bot). */
+  tagId: text("tag_id").references(() => tags.id, { onDelete: "restrict" }),
   status: text("status").notNull().default("draft"),
   confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
   totalCount: integer("total_count").notNull().default(0),
@@ -204,6 +217,57 @@ export const growthLinks = pgTable(
   },
   (table) => [uniqueIndex("growth_links_bot_slug_idx").on(table.botId, table.slug)],
 );
+
+export const sequences = pgTable("sequences", {
+  id: text("id").primaryKey(),
+  botId: text("bot_id")
+    .notNull()
+    .references(() => bots.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const sequenceSteps = pgTable("sequence_steps", {
+  id: text("id").primaryKey(),
+  sequenceId: text("sequence_id")
+    .notNull()
+    .references(() => sequences.id, { onDelete: "cascade" }),
+  position: integer("position").notNull(),
+  delaySeconds: integer("delay_seconds").notNull().default(0),
+  body: text("body").notNull(),
+});
+
+export const sequenceSubscriptions = pgTable(
+  "sequence_subscriptions",
+  {
+    id: text("id").primaryKey(),
+    sequenceId: text("sequence_id")
+      .notNull()
+      .references(() => sequences.id, { onDelete: "cascade" }),
+    contactId: text("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    nextIndex: integer("next_index").notNull().default(0),
+    nextAt: timestamp("next_at", { withTimezone: true }).notNull().defaultNow(),
+    status: text("status").notNull().default("active"),
+  },
+  (table) => [uniqueIndex("sequence_subscriptions_unique").on(table.sequenceId, table.contactId)],
+);
+
+export const automationRules = pgTable("automation_rules", {
+  id: text("id").primaryKey(),
+  botId: text("bot_id")
+    .notNull()
+    .references(() => bots.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  triggerType: text("trigger_type").notNull(),
+  triggerValue: text("trigger_value"),
+  actionType: text("action_type").notNull(),
+  actionValue: text("action_value"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const growthLinkEvents = pgTable("growth_link_events", {
   id: text("id").primaryKey(),

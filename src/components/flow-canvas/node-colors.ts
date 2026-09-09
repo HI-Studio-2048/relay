@@ -10,6 +10,7 @@ export type NodeTone = {
 
 export const NODE_TONE: Record<CanvasNodeKind, NodeTone> = {
   trigger: { hex: RELAY.start, family: "start" },
+  send_message: { hex: RELAY.content, family: "content" },
   message: { hex: RELAY.content, family: "content" },
   media: { hex: RELAY.content, family: "content" },
   buttons: { hex: RELAY.content, family: "content" },
@@ -20,6 +21,10 @@ export const NODE_TONE: Record<CanvasNodeKind, NodeTone> = {
   subscribe: { hex: RELAY.subscribe, family: "action" },
   delay: { hex: RELAY.delay, family: "action" },
   condition: { hex: RELAY.condition, family: "action" },
+  start_flow: { hex: RELAY.startFlow, family: "action" },
+  http: { hex: RELAY.http, family: "action" },
+  notify: { hex: RELAY.notify, family: "action" },
+  randomizer: { hex: RELAY.randomizer, family: "action" },
   end: { hex: RELAY.stop, family: "stop" },
 };
 

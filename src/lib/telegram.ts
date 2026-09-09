@@ -6,6 +6,7 @@ import {
   telegramMediaField,
   telegramSendMethod,
 } from "@/lib/media";
+import { renderTelegramText } from "@/lib/telegram-format";
 import type { FlowMedia, OutboundReply } from "@/lib/types";
 
 type TelegramOk<T> = { ok: true; result: T };
@@ -80,17 +81,52 @@ export async function deleteWebhook(token: string) {
   return call<boolean>(token, "deleteWebhook", { drop_pending_updates: false });
 }
 
-function replyMarkup(buttons?: { text: string; data?: string; url?: string }[]) {
-  if (!buttons?.length) return undefined;
-  return {
-    inline_keyboard: [
-      buttons.map((button) =>
-        button.url
-          ? { text: button.text, url: button.url }
-          : { text: button.text, callback_data: button.data ?? "n:" },
-      ),
-    ],
-  };
+export type ReplyMarkupOptions = {
+  /** Quick replies: a one-time reply keyboard, two per row. */
+  keyboard?: string[];
+  removeKeyboard?: boolean;
+  /** Prepend a "share my phone number" button (Telegram request_contact). */
+  requestContact?: boolean;
+};
+
+export const SHARE_PHONE_LABEL = "📱 Share my phone number";
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const rows: T[][] = [];
+  for (let index = 0; index < items.length; index += size) rows.push(items.slice(index, index + size));
+  return rows;
+}
+
+export function replyMarkup(
+  buttons?: { text: string; data?: string; url?: string }[],
+  options?: ReplyMarkupOptions,
+) {
+  if (buttons?.length) {
+    return {
+      inline_keyboard: [
+        buttons.map((button) =>
+          button.url
+            ? { text: button.text, url: button.url }
+            : { text: button.text, callback_data: button.data ?? "n:" },
+        ),
+      ],
+    };
+  }
+  const keyboard = options?.keyboard?.filter((text) => text.trim()) ?? [];
+  if (keyboard.length > 0 || options?.requestContact) {
+    const rows: { text: string; request_contact?: boolean }[][] = chunk(
+      keyboard.map((text) => ({ text })),
+      2,
+    );
+    if (options?.requestContact) rows.unshift([{ text: SHARE_PHONE_LABEL, request_contact: true }]);
+    return {
+      keyboard: rows,
+      resize_keyboard: true,
+      one_time_keyboard: true,
+    };
+  }
+  if (options?.removeKeyboard) return { remove_keyboard: true };
+  return undefined;
 }
 
 export async function sendMessage(
@@ -98,12 +134,26 @@ export async function sendMessage(
   chatId: string,
   text: string,
   buttons?: { text: string; data?: string; url?: string }[],
+  options?: ReplyMarkupOptions,
 ) {
+  const rendered = renderTelegramText(text);
   return call<{ message_id: number }>(token, "sendMessage", {
     chat_id: chatId,
-    text,
-    reply_markup: replyMarkup(buttons),
+    text: rendered.text,
+    ...(rendered.parse_mode ? { parse_mode: rendered.parse_mode } : {}),
+    reply_markup: replyMarkup(buttons, options),
   });
+}
+
+export async function sendChatAction(token: string, chatId: string, action = "typing") {
+  return call<boolean>(token, "sendChatAction", { chat_id: chatId, action });
+}
+
+export type BotCommand = { command: string; description: string };
+
+/** Telegram's "/" menu. Pass an empty list to clear it. */
+export async function setMyCommands(token: string, commands: BotCommand[]) {
+  return call<boolean>(token, "setMyCommands", { commands });
 }
 
 export async function sendMedia(
@@ -112,11 +162,13 @@ export async function sendMedia(
   media: FlowMedia,
   caption?: string,
   buttons?: { text: string; data?: string; url?: string }[],
+  options?: ReplyMarkupOptions,
 ) {
   const method = telegramSendMethod(media);
   const field = telegramMediaField(media);
-  const markup = replyMarkup(buttons);
-  const trimmed = mediaCaption(caption);
+  const markup = replyMarkup(buttons, options);
+  const rendered = mediaCaption(caption) ? renderTelegramText(mediaCaption(caption)!) : undefined;
+  const trimmed = rendered?.text;
   const parsed = parseStoredMediaUrl(media.url);
 
   if (parsed?.type === "local") {
@@ -129,6 +181,7 @@ export async function sendMedia(
       file.record.filename,
     );
     if (trimmed) form.append("caption", trimmed);
+    if (rendered?.parse_mode) form.append("parse_mode", rendered.parse_mode);
     if (markup) form.append("reply_markup", JSON.stringify(markup));
     return callForm<{ message_id: number }>(token, method, form);
   }
@@ -138,15 +191,21 @@ export async function sendMedia(
     chat_id: chatId,
     [field]: remote,
     caption: trimmed,
+    ...(rendered?.parse_mode ? { parse_mode: rendered.parse_mode } : {}),
     reply_markup: markup,
   });
 }
 
 export async function sendFlowReply(token: string, chatId: string, reply: OutboundReply) {
+  const options: ReplyMarkupOptions = {
+    keyboard: reply.keyboard,
+    removeKeyboard: reply.removeKeyboard,
+    requestContact: reply.requestContact,
+  };
   if (reply.media) {
-    return sendMedia(token, chatId, reply.media, reply.text, reply.buttons);
+    return sendMedia(token, chatId, reply.media, reply.text, reply.buttons, options);
   }
-  return sendMessage(token, chatId, reply.text, reply.buttons);
+  return sendMessage(token, chatId, reply.text, reply.buttons, options);
 }
 
 export async function answerCallbackQuery(token: string, callbackQueryId: string) {
@@ -160,6 +219,8 @@ export type TelegramUpdate = {
     text?: string;
     from?: TelegramUser;
     chat?: { id: number; type: string };
+    /** Shared via a request_contact reply-keyboard button. */
+    contact?: { phone_number: string; first_name?: string; last_name?: string; user_id?: number };
   };
   callback_query?: {
     id: string;

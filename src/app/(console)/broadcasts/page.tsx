@@ -2,15 +2,14 @@ import Link from "next/link";
 import { desc, eq } from "drizzle-orm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { listBots } from "@/lib/bots";
+import { currentBot } from "@/lib/current-bot";
 import { getDb } from "@/lib/db";
 import { broadcasts } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
 
 export default async function BroadcastsPage() {
-  const bots = await listBots();
-  const bot = bots[0];
+  const bot = await currentBot();
   if (!bot) {
     return <p className="text-sm text-muted-foreground">Connect a bot first.</p>;
   }
@@ -27,7 +26,7 @@ export default async function BroadcastsPage() {
         <div>
           <h1 className="font-heading text-3xl tracking-tight">Broadcasts</h1>
           <p className="text-sm text-muted-foreground">
-            Tag-scoped only. Nothing sends until you confirm. Telegram sends are rate-limited.
+            Send to everyone or to one tag. Nothing sends until you confirm. Telegram sends are rate-limited.
           </p>
         </div>
         <Button render={<Link href="/broadcasts/new" />}>Compose</Button>

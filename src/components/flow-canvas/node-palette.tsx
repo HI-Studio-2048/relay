@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Filter, GitBranch, Hash, ImageIcon, MessageSquare, PenLine, Square, Timer, UserRound, ClipboardList } from "lucide-react";
+import { Bell, CornerUpRight, Dices, Filter, Globe, Hash, MessageSquare, PenLine, Square, Timer, UserRound, ClipboardList } from "lucide-react";
 import { NODE_TONE } from "@/components/flow-canvas/node-colors";
 import type { CanvasNodeKind } from "@/lib/flow-canvas";
 
@@ -16,9 +16,12 @@ const GROUPS: {
   {
     label: "Content",
     items: [
-      { kind: "message", label: "Message", hint: "Send text", icon: MessageSquare },
-      { kind: "media", label: "Image / GIF", hint: "Photo or animation", icon: ImageIcon },
-      { kind: "buttons", label: "Buttons", hint: "Branch on tap", icon: GitBranch },
+      {
+        kind: "send_message",
+        label: "Send Message",
+        hint: "Text, image, buttons, quick replies",
+        icon: MessageSquare,
+      },
     ],
   },
   {
@@ -30,7 +33,11 @@ const GROUPS: {
       { kind: "set_field", label: "Set field", hint: "Write a CRM value", icon: PenLine },
       { kind: "subscribe", label: "Subscribe", hint: "Opt in or out", icon: Bell },
       { kind: "condition", label: "Condition", hint: "Yes / no branch", icon: Filter },
-      { kind: "delay", label: "Delay", hint: "Wait, then continue", icon: Timer },
+      { kind: "delay", label: "Smart Delay", hint: "Wait hours/days + send window", icon: Timer },
+      { kind: "randomizer", label: "A/B split", hint: "X% here, Y% there", icon: Dices },
+      { kind: "start_flow", label: "Start flow", hint: "Jump to another flow", icon: CornerUpRight },
+      { kind: "http", label: "HTTP request", hint: "POST or GET a webhook", icon: Globe },
+      { kind: "notify", label: "Notify admin", hint: "Alert on a new lead", icon: Bell },
       { kind: "end", label: "Stop", hint: "Stop the flow", icon: Square },
     ],
   },

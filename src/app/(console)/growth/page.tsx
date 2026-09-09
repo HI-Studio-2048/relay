@@ -4,7 +4,7 @@ import { ConnectPrompt } from "@/components/chrome/connect-prompt";
 import { EmptyState } from "@/components/chrome/empty-state";
 import { PageHeader } from "@/components/chrome/page-header";
 import { CanvasCard, MANYCHAT } from "@/components/chrome/tone";
-import { listBots } from "@/lib/bots";
+import { currentBot } from "@/lib/current-bot";
 import { getDb } from "@/lib/db";
 import { flows, tags } from "@/lib/db/schema";
 import { listGrowthLinks } from "@/lib/growth-links";
@@ -14,8 +14,7 @@ import { GrowthLinkCard } from "./growth-link-card";
 export const dynamic = "force-dynamic";
 
 export default async function GrowthPage() {
-  const bots = await listBots();
-  const bot = bots[0];
+  const bot = await currentBot();
   if (!bot) {
     return (
       <div className="space-y-6">

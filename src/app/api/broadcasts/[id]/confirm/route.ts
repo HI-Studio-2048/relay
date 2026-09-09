@@ -4,7 +4,7 @@ import { getDb } from "@/lib/db";
 import { broadcastRecipients, broadcasts } from "@/lib/db/schema";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
 import { enqueueBroadcast, shouldRunWorker } from "@/lib/queue";
-import { contactsWithTag } from "@/lib/store";
+import { broadcastAudience } from "@/lib/store";
 import type { BroadcastStatus } from "@/lib/types";
 import { drainJobs } from "@/lib/worker";
 
@@ -41,11 +41,14 @@ export async function POST(request: Request, context: RouteParams<{ id: string }
         : json({ error: gate.error, code: gate.code }, 409);
     }
 
-    const audience = await contactsWithTag(broadcast.botId, broadcast.tagId);
+    const audience = await broadcastAudience(broadcast.botId, broadcast.tagId);
     if (audience.length === 0) {
       return viaForm
         ? redirectTo("?error=empty")
-        : json({ error: "No contacts have this tag. Nothing to send." }, 400);
+        : json(
+            { error: broadcast.tagId ? "No contacts have this tag. Nothing to send." : "No subscribed contacts yet." },
+            400,
+          );
     }
 
     await db.delete(broadcastRecipients).where(eq(broadcastRecipients.broadcastId, id));

@@ -149,4 +149,53 @@ CREATE TABLE IF NOT EXISTS growth_link_events (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS growth_link_events_link_idx ON growth_link_events(link_id, created_at);
+
+CREATE TABLE IF NOT EXISTS sequences (
+  id text PRIMARY KEY,
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS sequence_steps (
+  id text PRIMARY KEY,
+  sequence_id text NOT NULL REFERENCES sequences(id) ON DELETE CASCADE,
+  position integer NOT NULL,
+  delay_seconds integer NOT NULL DEFAULT 0,
+  body text NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sequence_subscriptions (
+  id text PRIMARY KEY,
+  sequence_id text NOT NULL REFERENCES sequences(id) ON DELETE CASCADE,
+  contact_id text NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  next_index integer NOT NULL DEFAULT 0,
+  next_at timestamptz NOT NULL DEFAULT now(),
+  status text NOT NULL DEFAULT 'active',
+  UNIQUE (sequence_id, contact_id)
+);
+
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS welcomed boolean NOT NULL DEFAULT false;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS notes text NOT NULL DEFAULT '';
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS inbox_status text NOT NULL DEFAULT 'open';
+ALTER TABLE flows ADD COLUMN IF NOT EXISTS priority integer NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS automation_rules (
+  id text PRIMARY KEY,
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  trigger_type text NOT NULL,
+  trigger_value text,
+  action_type text NOT NULL,
+  action_value text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE broadcasts ALTER COLUMN tag_id DROP NOT NULL;
+
+ALTER TABLE bots ADD COLUMN IF NOT EXISTS channel text NOT NULL DEFAULT 'telegram';
+ALTER TABLE bots ADD COLUMN IF NOT EXISTS external_account_id text;
+ALTER TABLE bots ADD COLUMN IF NOT EXISTS app_secret_encrypted text;
 `;

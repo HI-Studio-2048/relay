@@ -7,6 +7,7 @@ import type {
   FlowMedia,
   FlowStep,
   FormField,
+  HttpMethod,
   SubscribeAction,
   TagAction,
 } from "@/lib/types";
@@ -15,6 +16,7 @@ export const TRIGGER_NODE_ID = "__trigger";
 
 export type CanvasNodeKind =
   | "trigger"
+  | "send_message"
   | "message"
   | "media"
   | "buttons"
@@ -25,6 +27,10 @@ export type CanvasNodeKind =
   | "subscribe"
   | "delay"
   | "condition"
+  | "start_flow"
+  | "http"
+  | "notify"
+  | "randomizer"
   | "end";
 
 export type CanvasButton = {
@@ -33,17 +39,54 @@ export type CanvasButton = {
   url?: string;
 };
 
+/** One content block inside a ManyChat-style Send Message node. */
+/** ManyChat media block kinds, mapped onto Telegram send methods via FlowMediaKind. */
+export type MediaBlockType = "image" | "video" | "audio" | "file";
+
+export type MessageBlock =
+  | { id: string; type: "text"; text: string; buttons: CanvasButton[] }
+  | { id: string; type: MediaBlockType; text: string; media?: FlowMedia; buttons: CanvasButton[] }
+  | { id: string; type: "delay"; seconds: number };
+
+export const MEDIA_BLOCK_TYPES: MediaBlockType[] = ["image", "video", "audio", "file"];
+
+export function isMediaBlock(
+  block: MessageBlock,
+): block is Extract<MessageBlock, { type: MediaBlockType }> {
+  return (MEDIA_BLOCK_TYPES as string[]).includes(block.type);
+}
+
+export function mediaBlockTypeFor(kind: FlowMedia["kind"] | undefined): MediaBlockType {
+  if (kind === "video") return "video";
+  if (kind === "audio") return "audio";
+  if (kind === "document") return "file";
+  return "image";
+}
+
+export type CanvasQuickReply = {
+  id: string;
+  text: string;
+};
+
+export type SendMessageData = {
+  kind: "send_message";
+  blocks: MessageBlock[];
+  quickReplies: CanvasQuickReply[];
+};
+
 export type CanvasNodeData =
   | { kind: "trigger" }
+  | SendMessageData
   | { kind: "message"; text: string; media?: FlowMedia }
   | { kind: "media"; text: string; media?: FlowMedia }
   | { kind: "buttons"; text: string; buttons: CanvasButton[]; media?: FlowMedia }
-  | { kind: "capture"; field: CaptureField; prompt: string }
+  | { kind: "capture"; field: CaptureField; prompt: string; skippable?: boolean }
   | { kind: "form"; intro: string; fields: FormField[] }
   | { kind: "tag"; tagName: string; action: TagAction }
   | { kind: "set_field"; field: CaptureField; value: string }
   | { kind: "subscribe"; listName: string; action: SubscribeAction }
-  | { kind: "delay"; seconds: number }
+  | { kind: "delay"; seconds: number; unit?: "seconds" | "minutes" | "hours" | "days"; sendAfter?: string; sendBefore?: string }
+  | { kind: "randomizer"; sticky: boolean; paths: { id: string; percent: number }[] }
   | {
       kind: "condition";
       check: ConditionCheck;
@@ -52,6 +95,9 @@ export type CanvasNodeData =
       op: ConditionOp;
       value: string;
     }
+  | { kind: "start_flow"; flowId: string }
+  | { kind: "http"; url: string; method: HttpMethod; body: string }
+  | { kind: "notify"; text: string }
   | { kind: "end"; text?: string };
 
 export type CanvasNode = {
@@ -94,6 +140,31 @@ export function nextButtonHandleId(buttons: CanvasButton[]): string {
   return buttonHandleId(index);
 }
 
+export function quickReplyHandleId(index: number): string {
+  return `qr-${index}`;
+}
+
+export function nextQuickReplyHandleId(replies: CanvasQuickReply[]): string {
+  const used = new Set(replies.map((reply) => reply.id));
+  let index = 0;
+  while (used.has(quickReplyHandleId(index))) index += 1;
+  return quickReplyHandleId(index);
+}
+
+export function newBlockId(): string {
+  return `b-${crypto.randomUUID().replace(/-/g, "").slice(0, 6)}`;
+}
+
+/** Every button across all blocks of a Send Message node, in send order. */
+export function messageNodeButtons(data: SendMessageData): CanvasButton[] {
+  return data.blocks.flatMap((block) => (block.type === "delay" ? [] : block.buttons));
+}
+
+export const MAX_MESSAGE_BLOCKS = 10;
+export const MAX_QUICK_REPLIES = 10;
+/** Telegram typing delays inside a message are short; longer waits belong in a Smart Delay node. */
+export const MAX_TYPING_DELAY_SECONDS = 60;
+
 export function edgeId(source: string, sourceHandle: string, target: string): string {
   return `e:${source}:${sourceHandle}->${target}`;
 }
@@ -101,7 +172,19 @@ export function edgeId(source: string, sourceHandle: string, target: string): st
 export function canvasEdgeLabel(nodes: CanvasNode[], edge: CanvasEdge): string | undefined {
   if (edge.sourceHandle === "yes") return "Yes";
   if (edge.sourceHandle === "no") return "No";
+  const randomizer = nodes.find((node) => node.id === edge.source);
+  if (randomizer?.data.kind === "randomizer") {
+    const path = randomizer.data.paths.find((item) => item.id === edge.sourceHandle);
+    if (path) return `${path.percent}%`;
+  }
   const source = nodes.find((node) => node.id === edge.source);
+  if (source?.data.kind === "send_message") {
+    if (edge.sourceHandle === "next") return undefined;
+    const button = messageNodeButtons(source.data).find((item) => item.id === edge.sourceHandle);
+    if (button) return button.text.trim() || undefined;
+    const reply = source.data.quickReplies.find((item) => item.id === edge.sourceHandle);
+    return reply?.text.trim() || undefined;
+  }
   if (source?.data.kind !== "buttons") return undefined;
   const label = source.data.buttons.find((button) => button.id === edge.sourceHandle)?.text.trim();
   return label || undefined;
@@ -117,13 +200,46 @@ function childrenOf(definition: FlowDefinition, id: string): string[] {
   if (!step) return [];
   if (step.type === "end") return [];
   if (step.type === "condition") return unique([step.nextTrue, step.nextFalse]);
+  if (step.type === "randomizer") return unique(step.paths.map((path) => path.next ?? ""));
   if (step.type === "text") {
-    if (step.buttons && step.buttons.length > 0) {
-      return unique(step.buttons.map((button) => button.next ?? ""));
-    }
-    return step.next ? [step.next] : [];
+    return unique([
+      ...(step.buttons ?? []).map((button) => button.next ?? ""),
+      ...(step.quickReplies ?? []).map((reply) => reply.next ?? ""),
+      step.next ?? "",
+    ]);
   }
   return "next" in step && step.next ? [step.next] : [];
+}
+
+type ChainStep = Extract<FlowStep, { type: "text" | "delay" }>;
+
+function isChainStep(step: FlowStep | undefined): step is ChainStep {
+  return step?.type === "text" || step?.type === "delay";
+}
+
+/** Follow `group` + `next` from a Send Message head step through its continuation blocks. */
+function collectChain(definition: FlowDefinition, head: ChainStep): ChainStep[] {
+  const chain: ChainStep[] = [head];
+  const seen = new Set<string>([head.id]);
+  let current: ChainStep = head;
+  while (current.group === head.id && current.next && !seen.has(current.next)) {
+    const next = definition.steps.find((step) => step.id === current.next);
+    if (!isChainStep(next) || next.group !== head.id) break;
+    seen.add(next.id);
+    chain.push(next);
+    current = next;
+  }
+  return chain;
+}
+
+/** Ids of steps folded into another node's Send Message chain. */
+function continuationStepIds(definition: FlowDefinition): Set<string> {
+  const folded = new Set<string>();
+  for (const step of definition.steps) {
+    if (!isChainStep(step) || step.group !== step.id) continue;
+    for (const member of collectChain(definition, step).slice(1)) folded.add(member.id);
+  }
+  return folded;
 }
 
 export function autoLayout(definition: FlowDefinition): Record<string, { x: number; y: number }> {
@@ -170,46 +286,53 @@ function resolvePositions(definition: FlowDefinition): Record<string, { x: numbe
   return { ...autoLayout(definition), ...definition.canvas?.nodes };
 }
 
+function blockIdForStep(headId: string, step: FlowStep, index: number, used: Set<string>): string {
+  const prefix = `${headId}:`;
+  let id = index === 0 ? "b0" : step.id.startsWith(prefix) ? step.id.slice(prefix.length) : step.id;
+  if (!id || used.has(id)) id = `${id || "b"}-${index}`;
+  used.add(id);
+  return id;
+}
+
+/** Build one Send Message node from a head step plus its continuation blocks. */
+function messageNodeFromChain(chain: ChainStep[], position: { x: number; y: number }): CanvasNode {
+  const head = chain[0]!;
+  const used = new Set<string>();
+  let buttonIndex = 0;
+  const blocks: MessageBlock[] = chain.map((step, index) => {
+    const id = blockIdForStep(head.id, step, index, used);
+    if (step.type === "delay") return { id, type: "delay", seconds: step.seconds };
+    const buttons: CanvasButton[] = (step.buttons ?? []).map((button) => ({
+      id: buttonHandleId(buttonIndex++),
+      text: button.text,
+      ...(button.url ? { url: button.url } : {}),
+    }));
+    if (step.media) return { id, type: mediaBlockTypeFor(step.media.kind), text: step.text, media: step.media, buttons };
+    return { id, type: "text", text: step.text, buttons };
+  });
+  const last = chain[chain.length - 1]!;
+  const quickReplies: CanvasQuickReply[] =
+    last.type === "text"
+      ? (last.quickReplies ?? []).map((reply, index) => ({ id: quickReplyHandleId(index), text: reply.text }))
+      : [];
+  return {
+    id: head.id,
+    type: "send_message",
+    position,
+    data: { kind: "send_message", blocks, quickReplies },
+  };
+}
+
 function nodeFromStep(step: FlowStep, position: { x: number; y: number }): CanvasNode {
-  if (step.type === "text" && step.buttons && step.buttons.length > 0) {
-    return {
-      id: step.id,
-      type: "buttons",
-      position,
-      data: {
-        kind: "buttons",
-        text: step.text,
-        media: step.media,
-        buttons: step.buttons.map((button, index) => ({
-          id: buttonHandleId(index),
-          text: button.text,
-          ...(button.url ? { url: button.url } : {}),
-        })),
-      },
-    };
-  }
-  if (step.type === "text" && step.media) {
-    return {
-      id: step.id,
-      type: "media",
-      position,
-      data: { kind: "media", text: step.text, media: step.media },
-    };
-  }
   if (step.type === "text") {
-    return {
-      id: step.id,
-      type: "message",
-      position,
-      data: { kind: "message", text: step.text, media: step.media },
-    };
+    return messageNodeFromChain([step], position);
   }
   if (step.type === "capture") {
     return {
       id: step.id,
       type: "capture",
       position,
-      data: { kind: "capture", field: step.field, prompt: step.prompt },
+      data: { kind: "capture", field: step.field, prompt: step.prompt, ...(step.skippable ? { skippable: true } : {}) },
     };
   }
   if (step.type === "tag") {
@@ -245,7 +368,25 @@ function nodeFromStep(step: FlowStep, position: { x: number; y: number }): Canva
       id: step.id,
       type: "delay",
       position,
-      data: { kind: "delay", seconds: step.seconds },
+      data: {
+        kind: "delay",
+        seconds: step.seconds,
+        unit: step.unit,
+        sendAfter: step.sendAfter,
+        sendBefore: step.sendBefore,
+      },
+    };
+  }
+  if (step.type === "randomizer") {
+    return {
+      id: step.id,
+      type: "randomizer",
+      position,
+      data: {
+        kind: "randomizer",
+        sticky: Boolean(step.sticky),
+        paths: step.paths.map((path) => ({ id: path.id, percent: path.percent })),
+      },
     };
   }
   if (step.type === "condition") {
@@ -271,6 +412,35 @@ function nodeFromStep(step: FlowStep, position: { x: number; y: number }): Canva
       data: { kind: "form", intro: step.intro ?? "", fields: step.fields },
     };
   }
+  if (step.type === "start_flow") {
+    return {
+      id: step.id,
+      type: "start_flow",
+      position,
+      data: { kind: "start_flow", flowId: step.flowId },
+    };
+  }
+  if (step.type === "http") {
+    return {
+      id: step.id,
+      type: "http",
+      position,
+      data: {
+        kind: "http",
+        url: step.url,
+        method: step.method === "GET" ? "GET" : "POST",
+        body: step.body ?? "",
+      },
+    };
+  }
+  if (step.type === "notify") {
+    return {
+      id: step.id,
+      type: "notify",
+      position,
+      data: { kind: "notify", text: step.text },
+    };
+  }
   return {
     id: step.id,
     type: "end",
@@ -279,17 +449,63 @@ function nodeFromStep(step: FlowStep, position: { x: number; y: number }): Canva
   };
 }
 
+function outgoingEdgesForChain(chain: ChainStep[]): CanvasEdge[] {
+  const source = chain[0]!.id;
+  const edges: CanvasEdge[] = [];
+  let buttonIndex = 0;
+  for (const step of chain) {
+    if (step.type !== "text") continue;
+    for (const button of step.buttons ?? []) {
+      const handle = buttonHandleId(buttonIndex++);
+      if (!button.next) continue;
+      edges.push({
+        id: edgeId(source, handle, button.next),
+        source,
+        target: button.next,
+        sourceHandle: handle,
+        targetHandle: "in",
+      });
+    }
+  }
+  const last = chain[chain.length - 1]!;
+  if (last.type === "text") {
+    (last.quickReplies ?? []).forEach((reply, index) => {
+      if (!reply.next) return;
+      const handle = quickReplyHandleId(index);
+      edges.push({
+        id: edgeId(source, handle, reply.next),
+        source,
+        target: reply.next,
+        sourceHandle: handle,
+        targetHandle: "in",
+      });
+    });
+  }
+  if (last.next) {
+    edges.push({
+      id: edgeId(source, "next", last.next),
+      source,
+      target: last.next,
+      sourceHandle: "next",
+      targetHandle: "in",
+    });
+  }
+  return edges;
+}
+
 function outgoingEdgesForStep(step: FlowStep): CanvasEdge[] {
-  if (step.type === "text" && step.buttons && step.buttons.length > 0) {
-    return step.buttons.flatMap((button, index) => {
-      if (!button.next) return [];
-      const handle = buttonHandleId(index);
+  if (step.type === "text") {
+    return outgoingEdgesForChain([step]);
+  }
+  if (step.type === "randomizer") {
+    return step.paths.flatMap((path) => {
+      if (!path.next) return [];
       return [
         {
-          id: edgeId(step.id, handle, button.next),
+          id: edgeId(step.id, path.id, path.next),
           source: step.id,
-          target: button.next,
-          sourceHandle: handle,
+          target: path.next,
+          sourceHandle: path.id,
           targetHandle: "in",
         },
       ];
@@ -333,6 +549,12 @@ function outgoingEdgesForStep(step: FlowStep): CanvasEdge[] {
 
 export function definitionToCanvas(definition: FlowDefinition): CanvasGraph {
   const positions = resolvePositions(definition);
+  const folded = continuationStepIds(definition);
+  const heads = definition.steps.filter((step) => !folded.has(step.id));
+  const chains = new Map<string, ChainStep[]>();
+  for (const step of heads) {
+    if (isChainStep(step) && step.group === step.id) chains.set(step.id, collectChain(definition, step));
+  }
   const nodes: CanvasNode[] = [
     {
       id: TRIGGER_NODE_ID,
@@ -340,9 +562,11 @@ export function definitionToCanvas(definition: FlowDefinition): CanvasGraph {
       position: positions[TRIGGER_NODE_ID] ?? { x: ORIGIN_X, y: ORIGIN_Y },
       data: { kind: "trigger" },
     },
-    ...definition.steps.map((step) =>
-      nodeFromStep(step, positions[step.id] ?? { x: ORIGIN_X, y: ORIGIN_Y }),
-    ),
+    ...heads.map((step) => {
+      const position = positions[step.id] ?? { x: ORIGIN_X, y: ORIGIN_Y };
+      const chain = chains.get(step.id);
+      return chain ? messageNodeFromChain(chain, position) : nodeFromStep(step, position);
+    }),
   ];
 
   const edges: CanvasEdge[] = [];
@@ -355,8 +579,9 @@ export function definitionToCanvas(definition: FlowDefinition): CanvasGraph {
       targetHandle: "in",
     });
   }
-  for (const step of definition.steps) {
-    edges.push(...outgoingEdgesForStep(step));
+  for (const step of heads) {
+    const chain = chains.get(step.id);
+    edges.push(...(chain ? outgoingEdgesForChain(chain) : outgoingEdgesForStep(step)));
   }
 
   return { nodes, edges };
@@ -364,6 +589,62 @@ export function definitionToCanvas(definition: FlowDefinition): CanvasGraph {
 
 function nextFromHandle(edges: CanvasEdge[], source: string, sourceHandle: string): string | undefined {
   return edges.find((edge) => edge.source === source && edge.sourceHandle === sourceHandle)?.target;
+}
+
+function compileButtons(nodeId: string, buttons: CanvasButton[], edges: CanvasEdge[]) {
+  return buttons.map((button) => ({
+    text: button.text,
+    ...(button.url ? { url: button.url } : { next: nextFromHandle(edges, nodeId, button.id) ?? "" }),
+  }));
+}
+
+/**
+ * A Send Message node becomes a chain of engine steps: the first keeps the node id so incoming
+ * edges resolve, later blocks are `${nodeId}:${blockId}` linked by `next` and tagged with `group`.
+ */
+export function blockLabel(type: MessageBlock["type"]): string {
+  if (type === "text") return "Text";
+  if (type === "image") return "Image / GIF";
+  if (type === "video") return "Video";
+  if (type === "audio") return "Audio";
+  if (type === "file") return "File";
+  return "Typing delay";
+}
+
+export function compileSendMessage(nodeId: string, data: SendMessageData, edges: CanvasEdge[]): FlowStep[] {
+  const blocks: MessageBlock[] =
+    data.blocks.length > 0 ? data.blocks : [{ id: "b0", type: "text", text: "", buttons: [] }];
+  const nodeNext = nextFromHandle(edges, nodeId, "next");
+  const grouped = blocks.length > 1;
+  const stepIdFor = (index: number) => (index === 0 ? nodeId : `${nodeId}:${blocks[index]!.id}`);
+  const quickReplies = data.quickReplies
+    .filter((reply) => reply.text.trim())
+    .map((reply) => ({ text: reply.text, next: nextFromHandle(edges, nodeId, reply.id) ?? "" }));
+
+  return blocks.map((block, index): FlowStep => {
+    const isLast = index === blocks.length - 1;
+    const next = isLast ? nodeNext : stepIdFor(index + 1);
+    const group = grouped ? { group: nodeId } : {};
+    if (block.type === "delay") {
+      return {
+        id: stepIdFor(index),
+        type: "delay",
+        seconds: Math.max(0, Math.min(MAX_TYPING_DELAY_SECONDS, Math.floor(block.seconds || 0))),
+        ...group,
+        next: next ?? "",
+      };
+    }
+    return {
+      id: stepIdFor(index),
+      type: "text",
+      text: block.text,
+      ...(isMediaBlock(block) && block.media ? { media: block.media } : {}),
+      ...(block.buttons.length > 0 ? { buttons: compileButtons(nodeId, block.buttons, edges) } : {}),
+      ...(isLast && quickReplies.length > 0 ? { quickReplies } : {}),
+      ...group,
+      ...(next ? { next } : {}),
+    };
+  });
 }
 
 export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
@@ -374,6 +655,11 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
   for (const node of graph.nodes) {
     canvas.nodes[node.id] = { x: node.position.x, y: node.position.y };
     if (node.id === TRIGGER_NODE_ID) continue;
+
+    if (node.data.kind === "send_message") {
+      steps.push(...compileSendMessage(node.id, node.data, graph.edges));
+      continue;
+    }
 
     if (node.data.kind === "message" || node.data.kind === "media") {
       const next = nextFromHandle(graph.edges, node.id, "next");
@@ -407,6 +693,7 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
         type: "capture",
         field: node.data.field,
         prompt: node.data.prompt,
+        ...(node.data.skippable ? { skippable: true } : {}),
         next: nextFromHandle(graph.edges, node.id, "next") ?? "",
       });
       continue;
@@ -461,7 +748,24 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
         id: node.id,
         type: "delay",
         seconds: node.data.seconds,
+        ...(node.data.unit ? { unit: node.data.unit } : {}),
+        ...(node.data.sendAfter ? { sendAfter: node.data.sendAfter } : {}),
+        ...(node.data.sendBefore ? { sendBefore: node.data.sendBefore } : {}),
         next: nextFromHandle(graph.edges, node.id, "next") ?? "",
+      });
+      continue;
+    }
+
+    if (node.data.kind === "randomizer") {
+      steps.push({
+        id: node.id,
+        type: "randomizer",
+        sticky: node.data.sticky,
+        paths: node.data.paths.map((path) => ({
+          id: path.id,
+          percent: path.percent,
+          next: nextFromHandle(graph.edges, node.id, path.id) ?? "",
+        })),
       });
       continue;
     }
@@ -481,6 +785,38 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
           : {}),
         nextTrue: nextFromHandle(graph.edges, node.id, "yes") ?? "",
         nextFalse: nextFromHandle(graph.edges, node.id, "no") ?? "",
+      });
+      continue;
+    }
+
+    if (node.data.kind === "start_flow") {
+      steps.push({
+        id: node.id,
+        type: "start_flow",
+        flowId: node.data.flowId,
+        next: nextFromHandle(graph.edges, node.id, "next"),
+      });
+      continue;
+    }
+
+    if (node.data.kind === "http") {
+      steps.push({
+        id: node.id,
+        type: "http",
+        url: node.data.url,
+        method: node.data.method,
+        ...(node.data.body.trim() ? { body: node.data.body } : {}),
+        next: nextFromHandle(graph.edges, node.id, "next") ?? "",
+      });
+      continue;
+    }
+
+    if (node.data.kind === "notify") {
+      steps.push({
+        id: node.id,
+        type: "notify",
+        text: node.data.text,
+        next: nextFromHandle(graph.edges, node.id, "next") ?? "",
       });
       continue;
     }
@@ -527,10 +863,21 @@ export function engineDefinition(definition: FlowDefinition): FlowDefinition {
                 })),
               }
             : {}),
+          ...(step.quickReplies && step.quickReplies.length > 0
+            ? { quickReplies: step.quickReplies.map((reply) => ({ text: reply.text, next: reply.next ?? "" })) }
+            : {}),
+          ...(step.group ? { group: step.group } : {}),
         };
       }
       if (step.type === "capture") {
-        return { id: step.id, type: "capture", field: step.field, prompt: step.prompt, next: step.next };
+        return {
+          id: step.id,
+          type: "capture",
+          field: step.field,
+          prompt: step.prompt,
+          ...(step.skippable ? { skippable: true as const } : {}),
+          next: step.next,
+        };
       }
       if (step.type === "form") {
         return {
@@ -569,7 +916,28 @@ export function engineDefinition(definition: FlowDefinition): FlowDefinition {
         };
       }
       if (step.type === "delay") {
-        return { id: step.id, type: "delay", seconds: step.seconds, next: step.next };
+        return {
+          id: step.id,
+          type: "delay",
+          seconds: step.seconds,
+          ...(step.unit ? { unit: step.unit } : {}),
+          ...(step.sendAfter ? { sendAfter: step.sendAfter } : {}),
+          ...(step.sendBefore ? { sendBefore: step.sendBefore } : {}),
+          ...(step.group ? { group: step.group } : {}),
+          next: step.next,
+        };
+      }
+      if (step.type === "randomizer") {
+        return {
+          id: step.id,
+          type: "randomizer",
+          ...(step.sticky ? { sticky: true as const } : {}),
+          paths: step.paths.map((path) => ({
+            id: path.id,
+            percent: path.percent,
+            ...(path.next ? { next: path.next } : {}),
+          })),
+        };
       }
       if (step.type === "condition") {
         return {
@@ -586,6 +954,27 @@ export function engineDefinition(definition: FlowDefinition): FlowDefinition {
           nextFalse: step.nextFalse,
         };
       }
+      if (step.type === "start_flow") {
+        return {
+          id: step.id,
+          type: "start_flow",
+          flowId: step.flowId,
+          ...(step.next ? { next: step.next } : {}),
+        };
+      }
+      if (step.type === "http") {
+        return {
+          id: step.id,
+          type: "http",
+          url: step.url,
+          method: step.method === "GET" ? "GET" : "POST",
+          ...(step.body?.trim() ? { body: step.body } : {}),
+          next: step.next,
+        };
+      }
+      if (step.type === "notify") {
+        return { id: step.id, type: "notify", text: step.text, next: step.next };
+      }
       return { id: step.id, type: "end", ...(step.text ? { text: step.text } : {}) };
     }),
   };
@@ -597,6 +986,17 @@ export function createCanvasNode(
   id = newStepId(),
 ): CanvasNode {
   switch (kind) {
+    case "send_message":
+      return {
+        id,
+        type: "send_message",
+        position,
+        data: {
+          kind: "send_message",
+          blocks: [{ id: newBlockId(), type: "text", text: "Hello.", buttons: [] }],
+          quickReplies: [],
+        },
+      };
     case "message":
       return { id, type: "message", position, data: { kind: "message", text: "Hello." } };
     case "media":
@@ -654,13 +1054,43 @@ export function createCanvasNode(
         data: { kind: "subscribe", listName: "newsletter", action: "subscribe" },
       };
     case "delay":
-      return { id, type: "delay", position, data: { kind: "delay", seconds: 300 } };
+      return { id, type: "delay", position, data: { kind: "delay", seconds: 300, unit: "seconds" } };
+    case "randomizer":
+      return {
+        id,
+        type: "randomizer",
+        position,
+        data: {
+          kind: "randomizer",
+          sticky: true,
+          paths: [
+            { id: "path-a", percent: 50 },
+            { id: "path-b", percent: 50 },
+          ],
+        },
+      };
     case "condition":
       return {
         id,
         type: "condition",
         position,
         data: { kind: "condition", check: "tag", tagName: "lead", field: "email", op: "set", value: "" },
+      };
+    case "start_flow":
+      return { id, type: "start_flow", position, data: { kind: "start_flow", flowId: "" } };
+    case "http":
+      return {
+        id,
+        type: "http",
+        position,
+        data: { kind: "http", url: "https://", method: "POST", body: "" },
+      };
+    case "notify":
+      return {
+        id,
+        type: "notify",
+        position,
+        data: { kind: "notify", text: "New lead: {{name}} {{email}}" },
       };
     case "end":
       return { id, type: "end", position, data: { kind: "end", text: "Done." } };
@@ -700,7 +1130,15 @@ export type CanvasValidation = {
   warnings: string[];
 };
 
-export function validateCanvas(graph: CanvasGraph): CanvasValidation {
+export type ChannelLimits = {
+  label: string;
+  maxButtons: number;
+  maxQuickReplies: number;
+  supportsCommands: boolean;
+  supportsPhoneShare: boolean;
+};
+
+export function validateCanvas(graph: CanvasGraph, channel?: ChannelLimits): CanvasValidation {
   const errors: string[] = [];
   const warnings: string[] = [];
   const stepIds = new Set(graph.nodes.filter((node) => node.id !== TRIGGER_NODE_ID).map((node) => node.id));
@@ -714,6 +1152,53 @@ export function validateCanvas(graph: CanvasGraph): CanvasValidation {
   }
 
   for (const node of graph.nodes) {
+    if (node.data.kind === "send_message") {
+      if (node.data.blocks.length === 0) warnings.push("A Send Message step has no content blocks.");
+      for (const block of node.data.blocks) {
+        if (block.type === "text" && !block.text.trim()) warnings.push("A text block is empty.");
+        if (isMediaBlock(block) && !block.media?.url) warnings.push(`${blockLabel(block.type)} block has no file yet.`);
+        if (block.type === "delay" && block.seconds > MAX_TYPING_DELAY_SECONDS) {
+          warnings.push(`A typing delay is capped at ${MAX_TYPING_DELAY_SECONDS}s; use Smart Delay for longer waits.`);
+        }
+        if (block.type === "delay") continue;
+        for (const button of block.buttons) {
+          if (!button.text.trim()) warnings.push("A button is missing a label.");
+          if (button.url) {
+            if (!/^https:\/\//i.test(button.url)) {
+              warnings.push(`Button “${button.text || "untitled"}” URL should start with https://`);
+            }
+            continue;
+          }
+          const dest = nextFromHandle(graph.edges, node.id, button.id);
+          if (!dest) warnings.push(`Button “${button.text || "untitled"}” is not connected.`);
+          else if (!stepIds.has(dest)) errors.push(`Button “${button.text}” points at a missing step.`);
+        }
+      }
+      if (channel) {
+        for (const block of node.data.blocks) {
+          if (block.type !== "delay" && block.buttons.length > channel.maxButtons) {
+            warnings.push(`${channel.label} shows at most ${channel.maxButtons} buttons per message; extras are sent as text.`);
+            break;
+          }
+        }
+        if (node.data.quickReplies.length > channel.maxQuickReplies) {
+          warnings.push(`${channel.label} allows at most ${channel.maxQuickReplies} quick replies.`);
+        }
+      }
+      const last = node.data.blocks[node.data.blocks.length - 1];
+      if (node.data.quickReplies.length > 0 && last?.type === "delay") {
+        warnings.push("Quick replies need a text or image block as the last block.");
+      }
+      if (node.data.quickReplies.length > 0 && nextFromHandle(graph.edges, node.id, "next")) {
+        warnings.push("Quick replies wait for a tap, so the Next step connector on that message is not used.");
+      }
+      for (const reply of node.data.quickReplies) {
+        if (!reply.text.trim()) warnings.push("A quick reply is missing a label.");
+        const dest = nextFromHandle(graph.edges, node.id, reply.id);
+        if (!dest) warnings.push(`Quick reply “${reply.text || "untitled"}” is not connected.`);
+        else if (!stepIds.has(dest)) errors.push(`Quick reply “${reply.text}” points at a missing step.`);
+      }
+    }
     if (node.data.kind === "buttons") {
       if (node.data.buttons.length === 0) {
         warnings.push("A buttons step has no choices.");
@@ -772,6 +1257,27 @@ export function validateCanvas(graph: CanvasGraph): CanvasValidation {
     }
     if (node.data.kind === "delay" && node.data.seconds < 0) {
       errors.push("A delay cannot be negative.");
+    }
+    if (node.data.kind === "randomizer") {
+      if (node.data.paths.length < 2) warnings.push("A randomizer needs at least two paths.");
+      const total = node.data.paths.reduce((sum, path) => sum + path.percent, 0);
+      if (total !== 100) warnings.push("Randomizer percentages should add up to 100.");
+      for (const path of node.data.paths) {
+        if (!nextFromHandle(graph.edges, node.id, path.id)) {
+          warnings.push("A randomizer path is not connected.");
+        }
+      }
+    }
+    if (node.data.kind === "start_flow" && !node.data.flowId.trim()) {
+      warnings.push("A Start flow step has no target flow.");
+    }
+    if (node.data.kind === "http") {
+      if (!/^https:\/\//i.test(node.data.url.trim())) {
+        warnings.push("An HTTP step URL should start with https://");
+      }
+    }
+    if (node.data.kind === "notify" && !node.data.text.trim()) {
+      warnings.push("A Notify admin step has no message.");
     }
   }
 

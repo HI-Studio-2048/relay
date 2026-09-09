@@ -24,6 +24,10 @@ export const RELAY = {
   subscribe: "#12B886",
   delay: "#4C6EF5",
   condition: "#FFB800",
+  startFlow: "#5F3DC4",
+  http: "#0CA678",
+  notify: "#F76707",
+  randomizer: "#E67700",
 } as const;
 
 /** @deprecated Use RELAY. Same hex map — kept so existing canvas imports stay short. */
@@ -52,6 +56,10 @@ export const RELAY_CSS_VARS = {
   subscribe: "--relay-subscribe",
   delay: "--relay-delay",
   condition: "--relay-condition",
+  startFlow: "--relay-start-flow",
+  http: "--relay-http",
+  notify: "--relay-notify",
+  randomizer: "--relay-randomizer",
   shadow: "--relay-shadow",
   radius: "--relay-radius",
 } as const;

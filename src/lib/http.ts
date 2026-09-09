@@ -1,5 +1,6 @@
 import { BroadcastConfirmError } from "@/lib/broadcast";
 import { MediaError } from "@/lib/media";
+import { ChannelApiError } from "@/lib/channels/meta";
 import { TelegramApiError } from "@/lib/telegram";
 import { redactSecrets } from "@/lib/crypto";
 
@@ -11,7 +12,7 @@ export function fail(error: unknown, fallback = "Request failed") {
   if (error instanceof BroadcastConfirmError) {
     return json({ error: error.message, code: error.code }, 409);
   }
-  if (error instanceof TelegramApiError) {
+  if (error instanceof TelegramApiError || error instanceof ChannelApiError) {
     return json({ error: redactSecrets(error.message) }, 502);
   }
   if (error instanceof MediaError) {

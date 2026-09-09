@@ -4,9 +4,12 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import {
   Bell,
   ClipboardList,
+  CornerUpRight,
+  Dices,
   Filter,
   Flag,
   GitBranch,
+  Globe,
   Hash,
   ImageIcon,
   MessageSquare,
@@ -18,7 +21,7 @@ import {
 import { MediaThumb } from "@/components/flow-canvas/media-picker";
 import { MANYCHAT, NODE_TONE } from "@/components/flow-canvas/node-colors";
 import { cn } from "@/lib/utils";
-import type { CanvasNodeData } from "@/lib/flow-canvas";
+import { blockLabel, isMediaBlock, type CanvasNodeData } from "@/lib/flow-canvas";
 
 type FlowNode<K extends CanvasNodeData["kind"]> = Node<Extract<CanvasNodeData, { kind: K }>, K>;
 
@@ -98,6 +101,115 @@ export function TriggerNode({ selected }: NodeProps<FlowNode<"trigger">>) {
         className={handleClass()}
         style={handleStyle("trigger")}
       />
+    </NodeFrame>
+  );
+}
+
+function BlockButtons({ buttons }: { buttons: { id: string; text: string; url?: string }[] }) {
+  if (buttons.length === 0) return null;
+  return (
+    <div className="space-y-1 pt-1">
+      {buttons.map((button) => (
+        <div
+          key={button.id}
+          className="relative flex items-center rounded-md border px-2 py-1 pr-3"
+          style={{ borderColor: `${MANYCHAT.content}55`, background: "#fff", color: MANYCHAT.content }}
+        >
+          <span className="truncate text-xs font-medium">{button.text || "Untitled"}</span>
+          {button.url ? (
+            <span className="ml-auto pl-2 text-[10px] uppercase" style={{ color: MANYCHAT.muted }}>
+              URL
+            </span>
+          ) : (
+            <Handle
+              type="source"
+              position={Position.Right}
+              id={button.id}
+              className={cn(handleClass(), "!right-[-15px]")}
+              style={handleStyle("send_message")}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function SendMessageNode({ selected, data }: NodeProps<FlowNode<"send_message">>) {
+  return (
+    <NodeFrame selected={selected} kind="send_message" icon={MessageSquare} title="Send Message">
+      <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("send_message")} />
+      {data.blocks.length === 0 ? (
+        <p className="text-[11px]" style={{ color: MANYCHAT.muted }}>
+          No content yet — add a text or image block
+        </p>
+      ) : null}
+      {data.blocks.map((block) => {
+        if (block.type === "delay") {
+          return (
+            <div
+              key={block.id}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px]"
+              style={{ background: MANYCHAT.wash, color: MANYCHAT.muted }}
+            >
+              <Timer className="size-3" /> Typing {formatDelay(block.seconds)}
+            </div>
+          );
+        }
+        return (
+          <div key={block.id} className="rounded-lg px-2 py-1.5" style={{ background: MANYCHAT.wash }}>
+            {isMediaBlock(block) ? (
+              block.media ? (
+                <MediaThumb media={block.media} className="h-20" />
+              ) : (
+                <div
+                  className="flex h-14 items-center justify-center rounded-md border border-dashed px-2 text-center text-[11px]"
+                  style={{ borderColor: `${MANYCHAT.content}66`, color: MANYCHAT.content }}
+                >
+                  {blockLabel(block.type)}
+                </div>
+              )
+            ) : null}
+            {block.text || block.type === "text" ? (
+              <Preview>{block.text || "Empty text block"}</Preview>
+            ) : null}
+            <BlockButtons buttons={block.buttons} />
+          </div>
+        );
+      })}
+      {data.quickReplies.length > 0 ? (
+        <div className="space-y-1 pt-1">
+          <p className="text-[10px] font-medium tracking-wide uppercase" style={{ color: MANYCHAT.muted }}>
+            Quick replies
+          </p>
+          {data.quickReplies.map((reply) => (
+            <div
+              key={reply.id}
+              className="relative flex items-center rounded-full border px-2.5 py-1 pr-3"
+              style={{ borderColor: `${MANYCHAT.content}55`, color: MANYCHAT.ink }}
+            >
+              <span className="truncate text-xs">{reply.text || "Untitled"}</span>
+              <Handle
+                type="source"
+                position={Position.Right}
+                id={reply.id}
+                className={cn(handleClass(), "!right-[-15px]")}
+                style={handleStyle("send_message")}
+              />
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className="relative flex items-center justify-end pt-1 pr-1 text-[10px]" style={{ color: MANYCHAT.muted }}>
+        Next step
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="next"
+          className={cn(handleClass(), "!right-[-15px]")}
+          style={handleStyle("send_message")}
+        />
+      </div>
     </NodeFrame>
   );
 }
@@ -184,6 +296,13 @@ export function CaptureNode({ selected, data }: NodeProps<FlowNode<"capture">>) 
         {fieldLabel}
       </p>
       <Preview>{data.prompt || "Ask a question"}</Preview>
+      {data.field === "phone" || data.skippable ? (
+        <p className="text-[11px]" style={{ color: MANYCHAT.muted }}>
+          {[data.field === "phone" ? "Share-phone button" : null, data.skippable ? "Skip button" : null]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      ) : null}
       <Handle type="source" position={Position.Right} id="next" className={handleClass()} style={handleStyle("capture")} />
     </NodeFrame>
   );
@@ -249,11 +368,59 @@ export function SubscribeNode({ selected, data }: NodeProps<FlowNode<"subscribe"
 }
 
 export function DelayNode({ selected, data }: NodeProps<FlowNode<"delay">>) {
+  const window =
+    data.sendAfter && data.sendBefore ? ` · ${data.sendAfter}–${data.sendBefore}` : "";
   return (
-    <NodeFrame selected={selected} kind="delay" icon={Timer} title="Action">
+    <NodeFrame selected={selected} kind="delay" icon={Timer} title="Smart Delay">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("delay")} />
-      <Preview>Wait {formatDelay(data.seconds)}</Preview>
+      <Preview>Wait {formatDelay(data.seconds)}{window}</Preview>
       <Handle type="source" position={Position.Right} id="next" className={handleClass()} style={handleStyle("delay")} />
+    </NodeFrame>
+  );
+}
+
+export function RandomizerNode({ selected, data }: NodeProps<FlowNode<"randomizer">>) {
+  return (
+    <NodeFrame selected={selected} kind="randomizer" icon={Dices} title="A/B split">
+      <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("randomizer")} />
+      <Preview>
+        {data.paths.map((path, index) => `${path.percent}% → ${String.fromCharCode(65 + index)}`).join(" · ")}
+      </Preview>
+      <div className="flex h-1.5 overflow-hidden rounded-full" style={{ background: MANYCHAT.wash }}>
+        {data.paths.map((path, index) => (
+          <span
+            key={path.id}
+            className="h-full"
+            style={{
+              width: `${path.percent}%`,
+              background: index === 0 ? MANYCHAT.randomizer : index === 1 ? MANYCHAT.content : MANYCHAT.action,
+            }}
+          />
+        ))}
+      </div>
+      <p className="text-[11px]" style={{ color: MANYCHAT.muted }}>
+        {data.sticky ? "Sticky variant" : "Random every time"}
+      </p>
+      <div className="relative space-y-1 pt-1">
+        {data.paths.map((path, index) => (
+          <div
+            key={path.id}
+            className="relative flex items-center rounded-md px-2 py-1 pr-3"
+            style={{ background: MANYCHAT.wash }}
+          >
+            <span className="text-xs">
+              {path.percent}% goes to {String.fromCharCode(65 + index)}
+            </span>
+            <Handle
+              type="source"
+              position={Position.Right}
+              id={path.id}
+              className={cn(handleClass(), "!right-[-15px]")}
+              style={handleStyle("randomizer")}
+            />
+          </div>
+        ))}
+      </div>
     </NodeFrame>
   );
 }
@@ -301,6 +468,38 @@ export function ConditionNode({ selected, data }: NodeProps<FlowNode<"condition"
   );
 }
 
+export function StartFlowNode({ selected, data }: NodeProps<FlowNode<"start_flow">>) {
+  return (
+    <NodeFrame selected={selected} kind="start_flow" icon={CornerUpRight} title="Action">
+      <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("start_flow")} />
+      <Preview>{data.flowId ? "Start another flow" : "Pick a flow"}</Preview>
+      <Handle type="source" position={Position.Right} id="next" className={handleClass()} style={handleStyle("start_flow")} />
+    </NodeFrame>
+  );
+}
+
+export function HttpNode({ selected, data }: NodeProps<FlowNode<"http">>) {
+  return (
+    <NodeFrame selected={selected} kind="http" icon={Globe} title="Action">
+      <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("http")} />
+      <Preview>
+        {data.method} {data.url || "https://"}
+      </Preview>
+      <Handle type="source" position={Position.Right} id="next" className={handleClass()} style={handleStyle("http")} />
+    </NodeFrame>
+  );
+}
+
+export function NotifyNode({ selected, data }: NodeProps<FlowNode<"notify">>) {
+  return (
+    <NodeFrame selected={selected} kind="notify" icon={Bell} title="Action">
+      <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("notify")} />
+      <Preview>{data.text || "Notify admin"}</Preview>
+      <Handle type="source" position={Position.Right} id="next" className={handleClass()} style={handleStyle("notify")} />
+    </NodeFrame>
+  );
+}
+
 export function EndNode({ selected, data }: NodeProps<FlowNode<"end">>) {
   return (
     <NodeFrame selected={selected} kind="end" icon={Square} title="Stop">
@@ -312,6 +511,7 @@ export function EndNode({ selected, data }: NodeProps<FlowNode<"end">>) {
 
 export const flowNodeTypes = {
   trigger: TriggerNode,
+  send_message: SendMessageNode,
   message: MessageNode,
   media: MediaNode,
   buttons: ButtonsNode,
@@ -321,6 +521,10 @@ export const flowNodeTypes = {
   set_field: SetFieldNode,
   subscribe: SubscribeNode,
   delay: DelayNode,
+  randomizer: RandomizerNode,
   condition: ConditionNode,
+  start_flow: StartFlowNode,
+  http: HttpNode,
+  notify: NotifyNode,
   end: EndNode,
 };

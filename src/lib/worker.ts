@@ -1,16 +1,16 @@
 import { eq } from "drizzle-orm";
 import { isBroadcastable } from "@/lib/broadcast";
-import { decryptSecret } from "@/lib/crypto";
+import { accountFromRow, sendChannelReply } from "@/lib/channels";
 import { getDb } from "@/lib/db";
 import { bots, broadcastRecipients, broadcasts, contacts } from "@/lib/db/schema";
+import { interpolateTemplate } from "@/lib/flow-effects";
 import { log } from "@/lib/logger";
 import { resumeDueDelays } from "@/lib/flow-resume";
+import { resumeDueSequences } from "@/lib/sequence-resume";
 import { dequeueJob, shouldRunWorker, type Job } from "@/lib/queue";
 import { acquireSendSlot } from "@/lib/rate-limit";
-import { saveMessage } from "@/lib/store";
-import { sendMessage } from "@/lib/telegram";
-import { processTelegramUpdate } from "@/lib/webhook";
-import type { TelegramUpdate } from "@/lib/telegram";
+import { loadContactRecord, saveMessage } from "@/lib/store";
+import { processChannelUpdate } from "@/lib/webhook";
 
 type GlobalWorker = { relayWorkerStarted?: boolean };
 const globalForWorker = globalThis as unknown as GlobalWorker;
@@ -23,7 +23,7 @@ async function handleBroadcast(broadcastId: string) {
 
   const [bot] = await db.select().from(bots).where(eq(bots.id, broadcast.botId)).limit(1);
   if (!bot) return;
-  const token = decryptSecret(bot.tokenEncrypted);
+  const account = accountFromRow(bot);
 
   await db
     .update(broadcasts)
@@ -51,7 +51,9 @@ async function handleBroadcast(broadcastId: string) {
         continue;
       }
       await acquireSendSlot(broadcast.botId, contact.telegramUserId);
-      const sent = await sendMessage(token, contact.telegramUserId, broadcast.body);
+      const record = await loadContactRecord(contact.id);
+      const personalized = record ? interpolateTemplate(broadcast.body, record) : broadcast.body;
+      const sent = await sendChannelReply(account, contact.telegramUserId, { text: personalized, source: "broadcast" });
       await db
         .update(broadcastRecipients)
         .set({ status: "sent", sentAt: new Date(), error: null })
@@ -62,7 +64,7 @@ async function handleBroadcast(broadcastId: string) {
         direction: "outbound",
         source: "broadcast",
         body: broadcast.body,
-        telegramMessageId: String(sent.message_id),
+        telegramMessageId: sent.message_id || null,
       });
       sentCount += 1;
     } catch (error) {
@@ -94,7 +96,7 @@ async function handleBroadcast(broadcastId: string) {
 
 async function handleJob(job: Job) {
   if (job.kind === "webhook") {
-    await processTelegramUpdate(job.botId, job.update as TelegramUpdate);
+    await processChannelUpdate(job.botId, job.update);
     return;
   }
   if (job.kind === "broadcast") {
@@ -122,6 +124,7 @@ export function startWorker() {
     try {
       await drainJobs();
       await resumeDueDelays();
+      await resumeDueSequences();
     } catch (error) {
       log.error("Worker tick failed", error instanceof Error ? error.message : error);
     } finally {

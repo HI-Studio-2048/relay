@@ -63,6 +63,9 @@
   --color-relay-subscribe: var(--relay-subscribe);
   --color-relay-delay: var(--relay-delay);
   --color-relay-condition: var(--relay-condition);
+  --color-relay-start-flow: var(--relay-start-flow);
+  --color-relay-http: var(--relay-http);
+  --color-relay-notify: var(--relay-notify);
 }
 
 :root {
@@ -116,6 +119,9 @@
   --relay-subscribe: #12b886;
   --relay-delay: #4c6ef5;
   --relay-condition: #ffb800;
+  --relay-start-flow: #5f3dc4;
+  --relay-http: #0ca678;
+  --relay-notify: #f76707;
   --relay-shadow: 0 1px 3px rgba(16, 24, 40, 0.1);
   --relay-radius: 1rem;
 }
@@ -171,6 +177,9 @@
   --relay-subscribe: #12b886;
   --relay-delay: #4c6ef5;
   --relay-condition: #ffb800;
+  --relay-start-flow: #5f3dc4;
+  --relay-http: #0ca678;
+  --relay-notify: #f76707;
   --relay-shadow: 0 1px 3px rgba(16, 24, 40, 0.1);
   --relay-radius: 1rem;
 }

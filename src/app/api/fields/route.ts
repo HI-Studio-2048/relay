@@ -8,7 +8,8 @@ export async function GET(request: Request) {
     const botId = new URL(request.url).searchParams.get("botId");
     if (!botId) return json({ error: "botId is required" }, 400);
     const db = await getDb();
-    return json({ fields: await db.select().from(customFields).where(eq(customFields.botId, botId)) });
+    const rows = await db.select().from(customFields).where(eq(customFields.botId, botId));
+    return json({ fields: rows.filter((field) => !field.key.startsWith("_")) });
   } catch (error) {
     return fail(error);
   }

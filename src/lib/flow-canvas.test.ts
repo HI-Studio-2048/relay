@@ -46,15 +46,21 @@ describe("flow canvas serialize/deserialize", () => {
     expect(later?.target).toBe("later");
 
     const intro = graph.nodes.find((node) => node.id === "intro_media");
-    expect(intro?.type).toBe("media");
-    if (intro?.data.kind === "media") {
-      expect(intro.data.media?.kind).toBe("animation");
+    expect(intro?.type).toBe("send_message");
+    if (intro?.data.kind === "send_message") {
+      const block = intro.data.blocks[0];
+      expect(block?.type).toBe("image");
+      if (block?.type === "image") expect(block.media?.kind).toBe("animation");
     }
 
     const welcome = graph.nodes.find((node) => node.id === "welcome");
-    expect(welcome?.type).toBe("buttons");
-    if (welcome?.data.kind === "buttons") {
-      expect(welcome.data.buttons.map((button) => button.text)).toEqual(["Yes, let's go", "Not now"]);
+    expect(welcome?.type).toBe("send_message");
+    if (welcome?.data.kind === "send_message") {
+      const block = welcome.data.blocks[0];
+      expect(block?.type).toBe("text");
+      if (block?.type === "text") {
+        expect(block.buttons.map((button) => button.text)).toEqual(["Yes, let's go", "Not now"]);
+      }
     }
   });
 

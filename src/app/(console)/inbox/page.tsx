@@ -1,13 +1,12 @@
 import Link from "next/link";
-import { listBots } from "@/lib/bots";
+import { currentBot } from "@/lib/current-bot";
 import { displayName } from "@/lib/lead-capture";
 import { listInbox, loadContactRecord } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
 export default async function InboxPage() {
-  const bots = await listBots();
-  const bot = bots[0];
+  const bot = await currentBot();
   if (!bot) {
     return <p className="text-sm text-muted-foreground">Connect a bot to open the inbox.</p>;
   }
@@ -20,6 +19,7 @@ export default async function InboxPage() {
         contactId: row.contact.id,
         name: contact ? displayName(contact) : row.contact.telegramUserId,
         username: row.contact.username,
+        status: contact?.inboxStatus ?? row.contact.inboxStatus ?? "open",
         lastAt: row.lastAt,
       };
     }),
@@ -48,7 +48,8 @@ export default async function InboxPage() {
               <div>
                 <p className="font-medium">{thread.name}</p>
                 <p className="text-xs text-muted-foreground">
-                  {thread.username ? `@${thread.username}` : "No username"}
+                  {thread.status === "closed" ? "Closed" : "Open"}
+                  {thread.username ? ` · @${thread.username}` : ""}
                 </p>
               </div>
               <p className="text-xs text-muted-foreground">

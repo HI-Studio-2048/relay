@@ -1,8 +1,18 @@
-import { decryptSecret } from "@/lib/crypto";
 import { eq } from "drizzle-orm";
+import {
+  accountFromRow,
+  ackChannelCallback,
+  lookupChannelProfile,
+  parseChannelUpdate,
+  type ChannelAccount,
+  type NormalizedInbound,
+} from "@/lib/channels";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
-import { processInboundEvent } from "@/lib/flow-engine";
+import { deliverReplies } from "@/lib/flow-dispatch";
+import { applyFlowEffects } from "@/lib/flow-effects";
+import { processInboundEvent, type EngineResult } from "@/lib/flow-engine";
+import { SLUG_PATTERN } from "@/lib/growth";
 import {
   applyGrowthAttribution,
   attributedContact,
@@ -12,7 +22,6 @@ import {
   recordGrowthStart,
 } from "@/lib/growth-links";
 import { log } from "@/lib/logger";
-import { acquireSendSlot } from "@/lib/rate-limit";
 import {
   findContactByTelegram,
   loadActiveFlows,
@@ -21,103 +30,132 @@ import {
   persistSession,
   saveMessage,
 } from "@/lib/store";
-import { outboundPreview } from "@/lib/media";
-import {
-  answerCallbackQuery,
-  sendFlowReply,
-  type TelegramUpdate,
-} from "@/lib/telegram";
+import type { TelegramUpdate } from "@/lib/telegram";
 
-export async function processTelegramUpdate(botId: string, update: TelegramUpdate) {
+type BotRow = typeof bots.$inferSelect;
+
+/** Entry point for every channel: parse the platform payload, then run each event through the engine. */
+export async function processChannelUpdate(botId: string, payload: unknown) {
   const db = await getDb();
   const [bot] = await db.select().from(bots).where(eq(bots.id, botId)).limit(1);
   if (!bot) {
     log.warn("Webhook for unknown bot");
     return;
   }
-
-  const from = update.message?.from ?? update.callback_query?.from;
-  if (!from || from.is_bot) return;
-
-  const token = decryptSecret(bot.tokenEncrypted);
-  const telegramUserId = String(from.id);
-  const text = update.message?.text ?? null;
-  const callbackData = update.callback_query?.data ?? null;
-
-  if (update.callback_query?.id) {
+  const account = accountFromRow(bot);
+  for (const inbound of parseChannelUpdate(account, payload)) {
     try {
-      await answerCallbackQuery(token, update.callback_query.id);
+      await processInbound(bot, account, inbound);
     } catch (error) {
-      log.warn("answerCallbackQuery failed", error instanceof Error ? error.message : error);
+      log.error("Inbound processing failed", error instanceof Error ? error.message : error);
+    }
+  }
+}
+
+/** Kept for the Telegram webhook route and existing tests. */
+export async function processTelegramUpdate(botId: string, update: TelegramUpdate) {
+  return processChannelUpdate(botId, update);
+}
+
+async function processInbound(bot: BotRow, account: ChannelAccount, inbound: NormalizedInbound) {
+  const botId = bot.id;
+  if (inbound.ackCallbackId) {
+    try {
+      await ackChannelCallback(account, inbound);
+    } catch (error) {
+      log.warn("Callback ack failed", error instanceof Error ? error.message : error);
     }
   }
 
-  const existing = await findContactByTelegram(botId, telegramUserId);
+  const externalUserId = inbound.externalUserId;
+  const existing = await findContactByTelegram(botId, externalUserId);
   const session = existing ? await loadActiveSession(existing.id) : null;
+
+  let text = inbound.text ?? null;
+  // Meta channels have no /start. A first message that equals a growth-link slug (wa.me pre-filled text)
+  // opens that link exactly like Telegram's /start <slug>.
+  if (account.channel !== "telegram" && !existing && text && SLUG_PATTERN.test(text.trim())) {
+    const link = await findGrowthLink(botId, text.trim());
+    if (link) text = `/start ${text.trim()}`;
+  }
+
+  let profile = { username: inbound.username ?? null, firstName: inbound.firstName ?? null, lastName: inbound.lastName ?? null };
+  if (!existing && !profile.firstName) {
+    const looked = await lookupChannelProfile(account, externalUserId);
+    if (looked) profile = { username: looked.username ?? profile.username, firstName: looked.firstName, lastName: looked.lastName };
+  }
+
   const startParam = parseStartPayload(text);
   const growth = startParam ? await findGrowthLink(botId, startParam) : null;
   let flows = await loadActiveFlows(botId);
-  const prepared = growth
-    ? attributedContact(
-        existing,
-        {
-          telegramUserId,
-          username: from.username ?? null,
-          firstName: from.first_name ?? null,
-          lastName: from.last_name ?? null,
-        },
-        growth,
-      )
-    : existing;
+  const identity = { telegramUserId: externalUserId, ...profile };
+  const prepared = growth ? attributedContact(existing, identity, growth) : existing;
   if (growth?.flowId && !session?.awaitingInput) {
     flows = preferLinkedFlow(flows, growth.flowId, growth.slug);
   }
-  const result = processInboundEvent({
-    contact: prepared,
-    session,
-    flows,
-    event: {
-      telegramUserId,
-      username: from.username ?? null,
-      firstName: from.first_name ?? null,
-      lastName: from.last_name ?? null,
-      languageCode: from.language_code ?? null,
-      text,
-      callbackData,
-      telegramMessageId: update.message ? String(update.message.message_id) : null,
-    },
-  });
+
+  const baseEvent = {
+    telegramUserId: externalUserId,
+    username: profile.username,
+    firstName: profile.firstName,
+    lastName: profile.lastName,
+    languageCode: inbound.languageCode ?? null,
+    callbackData: inbound.callbackData ?? null,
+    contactPhone: inbound.contactPhone ?? null,
+    telegramMessageId: inbound.externalMessageId ?? null,
+  };
+
+  let result: EngineResult = processInboundEvent({ contact: prepared, session, flows, event: { ...baseEvent, text } });
+
+  // Meta channels: a brand-new contact whose first message matched nothing still gets the welcome flow,
+  // the way ManyChat's Welcome Message fires on the first interaction.
+  const untouched = result.replies.length === 0 && !result.session && !inbound.callbackData;
+  if (account.channel !== "telegram" && !existing && untouched && text !== "/start") {
+    const welcome = processInboundEvent({
+      contact: result.contact,
+      session: null,
+      flows,
+      event: { ...baseEvent, text: "/start", telegramMessageId: null },
+    });
+    result = { ...welcome, inboundSaved: result.inboundSaved };
+  }
 
   let contact = result.contact;
-  if (growth) {
-    contact = applyGrowthAttribution(contact, growth);
-    await recordGrowthStart(growth.id, contact.id);
+  if (growth) contact = applyGrowthAttribution(contact, growth);
+  // WhatsApp identifies people by phone number, so the CRM phone is known from the first message.
+  if (account.channel === "whatsapp" && inbound.contactPhone && !contact.phone) {
+    contact = { ...contact, phone: inbound.contactPhone };
   }
 
   await persistContact(botId, contact);
   await persistSession(contact.id, result.session);
 
-  if (result.inboundSaved && (text || callbackData)) {
+  if (growth) {
+    try {
+      await recordGrowthStart(growth.id, contact.id);
+    } catch (error) {
+      log.warn("recordGrowthStart failed", error instanceof Error ? error.message : error);
+    }
+  }
+
+  if (result.inboundSaved && (text || inbound.callbackData || inbound.contactPhone)) {
     await saveMessage({
       botId,
       contactId: contact.id,
       direction: "inbound",
       source: "user",
-      body: text ?? `[button] ${callbackData}`,
-      telegramMessageId: update.message ? String(update.message.message_id) : null,
+      body:
+        text ??
+        (inbound.contactPhone && account.channel === "telegram"
+          ? `[shared phone] ${inbound.contactPhone}`
+          : `[button] ${inbound.callbackData}`),
+      telegramMessageId: inbound.externalMessageId ?? null,
     });
   }
 
-  for (const reply of result.replies) {
-    await acquireSendSlot(botId, telegramUserId);
-    const sent = await sendFlowReply(token, telegramUserId, reply);
-    await saveMessage({
-      botId,
-      contactId: contact.id,
-      direction: "outbound",
-      source: reply.source === "flow" ? "flow" : "agent",
-      body: outboundPreview(reply.text, reply.media),
-      telegramMessageId: String(sent.message_id),
-    });
-  }
+  await deliverReplies({ botId, account, contact, replies: result.replies });
+
+  // Effects run after the replies: a typing indicator belongs after the text it follows,
+  // and webhooks/notifications should describe a message that has already gone out.
+  await applyFlowEffects({ botId, account, contact, effects: result.effects });
 }

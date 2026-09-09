@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { Badge } from "@/components/ui/badge";
-import { listBots } from "@/lib/bots";
+import { currentBot } from "@/lib/current-bot";
 import { getDb } from "@/lib/db";
 import { flows } from "@/lib/db/schema";
 import { CreateFlowForm } from "./create-flow-form";
@@ -9,8 +9,7 @@ import { CreateFlowForm } from "./create-flow-form";
 export const dynamic = "force-dynamic";
 
 export default async function FlowsPage() {
-  const bots = await listBots();
-  const bot = bots[0];
+  const bot = await currentBot();
   if (!bot) {
     return <p className="text-sm text-muted-foreground">Connect a bot first.</p>;
   }

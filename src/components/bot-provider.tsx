@@ -1,12 +1,17 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { BOT_STORAGE_KEY, api } from "@/lib/client";
 
 export type PublicBot = {
   id: string;
   name: string;
+  channel: "telegram" | "instagram" | "messenger" | "whatsapp";
   telegramUsername: string | null;
+  externalAccountId?: string | null;
+  hasAppSecret?: boolean;
+  verifyToken?: string | null;
   status: string;
   webhookUrl: string | null;
   lastHealthAt: string | null;
@@ -35,12 +40,16 @@ function pickBotId(bots: PublicBot[], current: string | null) {
 export function BotProvider({
   children,
   initialBots = [],
+  initialBotId = null,
 }: {
   children: React.ReactNode;
   initialBots?: PublicBot[];
+  /** Server-selected account (cookie), so the first render matches the server pages. */
+  initialBotId?: string | null;
 }) {
+  const router = useRouter();
   const [bots, setBots] = useState<PublicBot[]>(initialBots);
-  const [botId, setBotIdState] = useState<string | null>(initialBots[0]?.id ?? null);
+  const [botId, setBotIdState] = useState<string | null>(initialBotId ?? initialBots[0]?.id ?? null);
   const [loading, setLoading] = useState(initialBots.length === 0);
 
   const refresh = useCallback(async () => {
@@ -57,10 +66,17 @@ export function BotProvider({
     void refresh();
   }, [refresh]);
 
-  const setBotId = useCallback((id: string) => {
-    localStorage.setItem(BOT_STORAGE_KEY, id);
-    setBotIdState(id);
-  }, []);
+  const setBotId = useCallback(
+    (id: string) => {
+      localStorage.setItem(BOT_STORAGE_KEY, id);
+      setBotIdState(id);
+      // Server pages read the cookie, so switching accounts re-renders inbox, contacts, and flows for it.
+      void api("/api/bots/select", { method: "POST", body: JSON.stringify({ botId: id }) })
+        .then(() => router.refresh())
+        .catch(() => undefined);
+    },
+    [router],
+  );
 
   const value = useMemo(
     () => ({

@@ -8,9 +8,10 @@ import { toast } from "sonner";
 import { FlowListEditor } from "@/components/flow-canvas/flow-list-editor";
 import { FlowShareButton } from "@/components/flow-canvas/flow-share-dialog";
 import type { FlowCanvasHandle } from "@/components/flow-canvas/flow-canvas-editor";
-import type { FlowMeta, InspectorField } from "@/components/flow-canvas/node-inspector";
+import type { FlowMeta, InspectorField, InspectorFlowOption } from "@/components/flow-canvas/node-inspector";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client";
+import { CHANNELS, type ChannelId } from "@/lib/channels/types";
 import type { CanvasValidation } from "@/lib/flow-canvas";
 import type { FlowEditorRecord } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -29,11 +30,17 @@ export function FlowWorkspace({
   initialFlow,
   customFields,
   tagNames,
+  otherFlows,
+  channel = "telegram",
 }: {
   initialFlow: FlowEditorRecord;
   customFields: InspectorField[];
   tagNames: string[];
+  otherFlows: InspectorFlowOption[];
+  /** Channel of the account this flow belongs to; drives platform-specific warnings. */
+  channel?: ChannelId;
 }) {
+  const channelLimits = CHANNELS[channel];
   const [flow, setFlow] = useState(initialFlow);
   const [view, setView] = useState<"canvas" | "list">("canvas");
   const [canvasEpoch, setCanvasEpoch] = useState(0);
@@ -98,6 +105,16 @@ export function FlowWorkspace({
     }
   };
 
+  const duplicate = async () => {
+    try {
+      const data = await api<{ flow: { id: string } }>(`/api/flows/${flow.id}/duplicate`, { method: "POST" });
+      toast.success("Flow duplicated (inactive until you turn it on)");
+      router.push(`/flows/${data.flow.id}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Duplicate failed");
+    }
+  };
+
   const switchView = (next: "canvas" | "list") => {
     if (next === view) return;
     if (view === "canvas") pullCanvas();
@@ -122,7 +139,7 @@ export function FlowWorkspace({
     ? extraIssues > 0
       ? `${firstIssue} (+${extraIssues} more)`
       : firstIssue
-    : "Connect handles to set the next step. Drop an image or GIF onto a content node or the canvas.";
+    : `Connect handles to set the next step. Drop an image or GIF onto a content node or the canvas. Editing for ${channelLimits.label}.`;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -169,6 +186,9 @@ export function FlowWorkspace({
             </button>
           </div>
           <FlowShareButton botId={flow.botId} flowId={flow.id} />
+          <Button size="sm" variant="outline" onClick={() => void duplicate()}>
+            Duplicate
+          </Button>
           <Button size="sm" onClick={() => void save()} disabled={saving}>
             {saving ? "Saving…" : "Save"}
           </Button>
@@ -181,17 +201,19 @@ export function FlowWorkspace({
       {view === "canvas" ? (
         <FlowCanvasEditor
           key={canvasEpoch}
+          channelLimits={channelLimits}
           ref={canvasRef}
           initialDefinition={flow.definition}
           meta={meta}
           customFields={customFields}
           tagNames={tagNames}
+          otherFlows={otherFlows}
           onMetaChange={onMetaChange}
           onValidationChange={setValidation}
         />
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-8">
-          <FlowListEditor flow={flow} onChange={setFlow} />
+          <FlowListEditor flow={flow} otherFlows={otherFlows} onChange={setFlow} />
         </div>
       )}
     </div>

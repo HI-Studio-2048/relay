@@ -27,9 +27,14 @@ import {
   type DragEvent,
 } from "react";
 import { toast } from "sonner";
-import { isImageFile, uploadMediaFile } from "@/components/flow-canvas/media-picker";
+import { isMediaFile, uploadMediaFile } from "@/components/flow-canvas/media-picker";
 import { MANYCHAT, nodeHex } from "@/components/flow-canvas/node-colors";
-import { NodeInspector, type FlowMeta, type InspectorField } from "@/components/flow-canvas/node-inspector";
+import {
+  NodeInspector,
+  type FlowMeta,
+  type InspectorField,
+  type InspectorFlowOption,
+} from "@/components/flow-canvas/node-inspector";
 import { NodePalette } from "@/components/flow-canvas/node-palette";
 import { flowNodeTypes } from "@/components/flow-canvas/nodes";
 import {
@@ -38,7 +43,11 @@ import {
   canvasToDefinition,
   createCanvasNode,
   definitionToCanvas,
+  isMediaBlock,
   isValidCanvasConnection,
+  mediaBlockTypeFor,
+  messageNodeButtons,
+  newBlockId,
   replaceHandleEdge,
   validateCanvas,
   type CanvasEdge,
@@ -46,7 +55,9 @@ import {
   type CanvasNodeData,
   type CanvasNodeKind,
   type CanvasValidation,
+  type ChannelLimits,
 } from "@/lib/flow-canvas";
+import { classifyMedia } from "@/lib/media-kinds";
 import type { FlowDefinition } from "@/lib/types";
 
 export type FlowCanvasHandle = {
@@ -108,17 +119,22 @@ function fromRf(nodes: RfNode[], edges: Edge[]): { nodes: CanvasNode[]; edges: C
 
 function CanvasStage({
   initialDefinition,
+  channelLimits,
   meta,
   customFields,
   tagNames,
+  otherFlows,
   onMetaChange,
   onValidationChange,
   canvasRef,
 }: {
   initialDefinition: FlowDefinition;
+  /** Platform limits (buttons, quick replies) used for channel-specific warnings. */
+  channelLimits?: ChannelLimits;
   meta: FlowMeta;
   customFields: InspectorField[];
   tagNames: string[];
+  otherFlows: InspectorFlowOption[];
   onMetaChange: (patch: Partial<FlowMeta>) => void;
   onValidationChange?: (validation: CanvasValidation) => void;
   canvasRef: React.Ref<FlowCanvasHandle>;
@@ -135,14 +151,14 @@ function CanvasStage({
     canvasRef,
     () => ({
       getDefinition: () => canvasToDefinition(graph()),
-      getValidation: () => validateCanvas(graph()),
+      getValidation: () => validateCanvas(graph(), channelLimits),
     }),
     [graph],
   );
 
   useEffect(() => {
-    onValidationChange?.(validateCanvas(graph()));
-  }, [graph, onValidationChange]);
+    onValidationChange?.(validateCanvas(graph(), channelLimits));
+  }, [graph, onValidationChange, channelLimits]);
 
   const labeledEdges = useMemo(() => {
     const mapped = fromRf(nodes, edges);
@@ -202,13 +218,34 @@ function CanvasStage({
 
   const attachFileAt = useCallback(
     async (file: File, position: { x: number; y: number }) => {
-      const id = addNode("media", position);
+      const id = addNode("send_message", position);
+      setNodes((current) =>
+        current.map((node) =>
+          node.id === id && node.data.kind === "send_message"
+            ? {
+                ...node,
+                data: {
+                  ...node.data,
+                  blocks: [{ id: newBlockId(), type: mediaBlockTypeFor(classifyMedia(file.type, file.name)), text: "", buttons: [] }],
+                },
+              }
+            : node,
+        ),
+      );
       try {
         const media = await uploadMediaFile(file);
         setNodes((current) =>
           current.map((node) =>
-            node.id === id && (node.data.kind === "media" || node.data.kind === "message")
-              ? { ...node, data: { ...node.data, media } }
+            node.id === id && node.data.kind === "send_message"
+              ? {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    blocks: node.data.blocks.map((block) =>
+                      isMediaBlock(block) ? { ...block, type: mediaBlockTypeFor(media.kind), media } : block,
+                    ),
+                  },
+                }
               : node,
           ),
         );
@@ -224,7 +261,7 @@ function CanvasStage({
     (event: DragEvent) => {
       event.preventDefault();
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      const file = [...event.dataTransfer.files].find(isImageFile);
+      const file = [...event.dataTransfer.files].find(isMediaFile);
       if (file) {
         void attachFileAt(file, position);
         return;
@@ -248,6 +285,16 @@ function CanvasStage({
       setEdges((current) =>
         current.filter((edge) => edge.source !== id || !edge.sourceHandle?.startsWith("btn-") || handles.has(edge.sourceHandle)),
       );
+    }
+    if (data.kind === "send_message") {
+      const handles = new Set<string>([
+        "next",
+        ...messageNodeButtons(data)
+          .filter((button) => !button.url)
+          .map((button) => button.id),
+        ...data.quickReplies.map((reply) => reply.id),
+      ]);
+      setEdges((current) => current.filter((edge) => edge.source !== id || handles.has(edge.sourceHandle ?? "")));
     }
   };
 
@@ -310,6 +357,7 @@ function CanvasStage({
         meta={meta}
         customFields={customFields}
         tagNames={tagNames}
+        otherFlows={otherFlows}
         onMetaChange={onMetaChange}
         onDataChange={onDataChange}
         onDelete={onDelete}
@@ -322,9 +370,12 @@ export const FlowCanvasEditor = forwardRef<
   FlowCanvasHandle,
   {
     initialDefinition: FlowDefinition;
+  /** Platform limits (buttons, quick replies) used for channel-specific warnings. */
+  channelLimits?: ChannelLimits;
     meta: FlowMeta;
     customFields: InspectorField[];
     tagNames: string[];
+    otherFlows: InspectorFlowOption[];
     onMetaChange: (patch: Partial<FlowMeta>) => void;
     onValidationChange?: (validation: CanvasValidation) => void;
   }

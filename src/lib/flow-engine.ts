@@ -1,9 +1,17 @@
 import { applyCapturedValue, assignFieldValue, parseCaptureField } from "@/lib/lead-capture";
+import {
+  compareKeywordPriority,
+  isKeywordTrigger,
+  matchesKeywordRule,
+  parseKeywordList,
+} from "@/lib/keywords";
+import { chooseRandomizerPath, nextResumeAt } from "@/lib/smart-delay";
 import type {
   CaptureField,
   ConditionOp,
   ContactRecord,
   FlowDefinition,
+  FlowEffect,
   FlowSessionState,
   FlowStep,
   InboundEvent,
@@ -16,6 +24,7 @@ export type FlowRecord = {
   triggerType: TriggerType;
   triggerValue: string | null;
   isActive: boolean;
+  priority?: number;
   definition: FlowDefinition;
 };
 
@@ -24,7 +33,17 @@ export type EngineResult = {
   session: FlowSessionState | null;
   replies: OutboundReply[];
   inboundSaved: boolean;
+  effects: FlowEffect[];
 };
+
+type ExecuteResult = {
+  session: FlowSessionState | null;
+  replies: OutboundReply[];
+  contact: ContactRecord;
+  effects: FlowEffect[];
+};
+
+const MAX_FLOW_HOPS = 5;
 
 function newId(): string {
   return crypto.randomUUID();
@@ -73,13 +92,18 @@ export function matchFlowTrigger(flows: FlowRecord[], text: string | null | unde
   }
 
   const keyword = trimmed.toLowerCase();
-  return (
-    flows.find((flow) => {
-      if (!flow.isActive || flow.triggerType !== "keyword") return false;
-      const value = (flow.triggerValue ?? "").trim().toLowerCase();
-      return value.length > 0 && keyword === value;
-    }) ?? null
-  );
+  const ranked = flows
+    .filter((flow) => flow.isActive && isKeywordTrigger(flow.triggerType))
+    .slice()
+    .sort(compareKeywordPriority);
+  for (const flow of ranked) {
+    if (!isKeywordTrigger(flow.triggerType)) continue;
+    if (matchesKeywordRule(flow.triggerType, keyword, parseKeywordList(flow.triggerValue))) {
+      return flow;
+    }
+  }
+
+  return flows.find((flow) => flow.isActive && flow.triggerType === "default") ?? null;
 }
 
 function startSession(contactId: string, flow: FlowRecord): FlowSessionState {
@@ -146,6 +170,38 @@ function applySubscribe(
   };
 }
 
+/** ManyChat "Skip" quick reply on a User Input step. */
+export const SKIP_LABEL = "Skip";
+
+export function isSkipAnswer(text: string | null | undefined): boolean {
+  return (text ?? "").trim().toLowerCase() === SKIP_LABEL.toLowerCase();
+}
+
+function activeQuickReplies(step: Extract<FlowStep, { type: "text" }>) {
+  return (step.quickReplies ?? []).filter((reply) => reply.text.trim().length > 0);
+}
+
+/** Match a typed (or tapped) quick reply against the step the session is waiting on. */
+export function matchQuickReply(
+  step: FlowStep | undefined,
+  text: string | null | undefined,
+): { text: string; next?: string } | null {
+  if (!step || step.type !== "text" || !text) return null;
+  const wanted = text.trim().toLowerCase();
+  if (!wanted) return null;
+  return activeQuickReplies(step).find((reply) => reply.text.trim().toLowerCase() === wanted) ?? null;
+}
+
+/** After a quick reply is chosen, the first plain reply clears the one-time keyboard. */
+function withKeyboardCleared(executed: ExecuteResult): ExecuteResult {
+  const index = executed.replies.findIndex((reply) => !reply.keyboard);
+  if (index === -1) return executed;
+  const replies = executed.replies.slice();
+  const first = replies[index]!;
+  if (!first.buttons?.length) replies[index] = { ...first, removeKeyboard: true };
+  return { ...executed, replies };
+}
+
 function applyTag(contact: ContactRecord, tagName: string, action: "add" | "remove"): ContactRecord {
   const name = tagName.trim();
   if (!name) return contact;
@@ -162,10 +218,13 @@ export function executeFrom(
   session: FlowSessionState,
   contact: ContactRecord,
   now = Date.now(),
-): { session: FlowSessionState | null; replies: OutboundReply[]; contact: ContactRecord } {
+  flows: FlowRecord[] = [],
+  hopCount = 0,
+): ExecuteResult {
   let current = { ...session };
   let nextContact = contact;
   const replies: OutboundReply[] = [];
+  const effects: FlowEffect[] = [];
   const seen = new Set<string>();
 
   while (current.status === "active") {
@@ -173,37 +232,60 @@ export function executeFrom(
     seen.add(current.stepId);
     const step = stepById(definition, current.stepId);
     if (!step) {
-      return { session: null, replies, contact: nextContact };
+      return { session: null, replies, contact: nextContact, effects };
     }
 
     if (step.type === "text") {
-      const buttons = step.buttons?.map((button) =>
+      const inline = step.buttons?.map((button) =>
         button.url
           ? { text: button.text, url: button.url }
           : { text: button.text, data: `n:${button.next ?? ""}` },
       );
+      const quickReplies = activeQuickReplies(step);
+      // Telegram allows one reply_markup per message: inline buttons win, and quick replies
+      // fall back to callback buttons so every choice still renders.
+      const buttons =
+        inline && inline.length > 0 && quickReplies.length > 0
+          ? [...inline, ...quickReplies.map((reply) => ({ text: reply.text, data: `n:${reply.next ?? ""}` }))]
+          : inline;
+      const keyboard =
+        (!inline || inline.length === 0) && quickReplies.length > 0
+          ? quickReplies.map((reply) => reply.text)
+          : undefined;
       replies.push({
         text: step.text,
         media: step.media,
         buttons,
+        ...(keyboard ? { keyboard } : {}),
         source: "flow",
       });
-      const hasCallback = (step.buttons ?? []).some((button) => !button.url && button.next);
-      if (hasCallback) {
-        current = { ...current, awaitingInput: false, resumeAt: null };
-        return { session: current, replies, contact: nextContact };
+      if (quickReplies.length > 0) {
+        // Quick replies wait for the contact's tap; each one is its own exit.
+        current = { ...current, awaitingInput: true, formIndex: undefined, resumeAt: null };
+        return { session: current, replies, contact: nextContact, effects };
       }
+      const hasCallback = (step.buttons ?? []).some((button) => !button.url && button.next);
       if (step.next) {
+        // A Send Message node keeps sending its later blocks even when an earlier block has buttons.
         current = { ...current, stepId: step.next, awaitingInput: false, resumeAt: null };
         continue;
       }
-      return { session: null, replies, contact: nextContact };
+      if (hasCallback) {
+        current = { ...current, awaitingInput: false, resumeAt: null };
+        return { session: current, replies, contact: nextContact, effects };
+      }
+      return { session: null, replies, contact: nextContact, effects };
     }
 
     if (step.type === "capture") {
-      replies.push({ text: step.prompt, source: "flow" });
+      replies.push({
+        text: step.prompt,
+        source: "flow",
+        ...(step.field === "phone" ? { requestContact: true } : {}),
+        ...(step.skippable ? { keyboard: [SKIP_LABEL] } : {}),
+      });
       current = { ...current, awaitingInput: true, formIndex: undefined, resumeAt: null };
-      return { session: current, replies, contact: nextContact };
+      return { session: current, replies, contact: nextContact, effects };
     }
 
     if (step.type === "form") {
@@ -219,7 +301,7 @@ export function executeFrom(
       const field = fields[Math.min(index, fields.length - 1)]!;
       replies.push({ text: field.prompt, source: "flow" });
       current = { ...current, awaitingInput: true, formIndex: index, resumeAt: null };
-      return { session: current, replies, contact: nextContact };
+      return { session: current, replies, contact: nextContact, effects };
     }
 
     if (step.type === "tag") {
@@ -247,38 +329,109 @@ export function executeFrom(
 
     if (step.type === "delay") {
       const wait = Math.max(0, Math.floor(step.seconds || 0));
-      if (wait <= 0) {
+      const dueMs = current.resumeAt ? Date.parse(current.resumeAt) : NaN;
+      if ((wait <= 0 && !step.sendAfter && !step.sendBefore) || (Number.isFinite(dueMs) && dueMs <= now)) {
         current = { ...current, stepId: step.next, awaitingInput: false, resumeAt: null };
         continue;
       }
-      const due = current.resumeAt ? Date.parse(current.resumeAt) : NaN;
-      if (Number.isFinite(due) && due <= now) {
+      const resumeAt = nextResumeAt(now, wait, step.sendAfter, step.sendBefore);
+      if (resumeAt.getTime() <= now) {
         current = { ...current, stepId: step.next, awaitingInput: false, resumeAt: null };
         continue;
       }
+      // A typing delay inside a Send Message node shows Telegram's "typing…" bubble while it waits.
+      if (step.group) effects.push({ type: "typing" });
       current = {
         ...current,
         awaitingInput: false,
-        resumeAt: new Date(now + wait * 1000).toISOString(),
+        resumeAt: resumeAt.toISOString(),
       };
-      return { session: current, replies, contact: nextContact };
+      return { session: current, replies, contact: nextContact, effects };
+    }
+
+    if (step.type === "randomizer") {
+      const key = `_rand:${step.id}`;
+      const saved = step.sticky ? nextContact.customFields[key] : undefined;
+      const chosen =
+        (saved ? step.paths.find((path) => path.id === saved && path.next) : null) ??
+        chooseRandomizerPath(step.paths, Math.random());
+      const next = chosen?.next;
+      if (step.sticky && chosen) {
+        nextContact = {
+          ...nextContact,
+          customFields: { ...nextContact.customFields, [key]: chosen.id },
+        };
+      }
+      if (!next) return { session: null, replies, contact: nextContact, effects };
+      current = { ...current, stepId: next, awaitingInput: false, resumeAt: null };
+      continue;
     }
 
     if (step.type === "condition") {
       const ok = evaluateCondition(nextContact, step);
       const next = ok ? step.nextTrue : step.nextFalse;
-      if (!next) return { session: null, replies, contact: nextContact };
+      if (!next) return { session: null, replies, contact: nextContact, effects };
       current = { ...current, stepId: next, awaitingInput: false, resumeAt: null };
       continue;
     }
 
+    if (step.type === "http") {
+      const url = step.url.trim();
+      if (url) {
+        effects.push({
+          type: "http",
+          url,
+          method: step.method === "GET" ? "GET" : "POST",
+          ...(step.body?.trim() ? { body: step.body } : {}),
+        });
+      }
+      current = { ...current, stepId: step.next, awaitingInput: false, resumeAt: null };
+      continue;
+    }
+
+    if (step.type === "notify") {
+      effects.push({ type: "notify", text: step.text });
+      current = { ...current, stepId: step.next, awaitingInput: false, resumeAt: null };
+      continue;
+    }
+
+    if (step.type === "start_flow") {
+      const target = flows.find((flow) => flow.id === step.flowId && flow.isActive);
+      if (target && hopCount < MAX_FLOW_HOPS) {
+        const hopped = executeFrom(
+          target.definition,
+          startSession(nextContact.id, target),
+          nextContact,
+          now,
+          flows,
+          hopCount + 1,
+        );
+        return {
+          session: hopped.session,
+          replies: [...replies, ...hopped.replies],
+          contact: hopped.contact,
+          effects: [...effects, ...hopped.effects],
+        };
+      }
+      if (step.next) {
+        current = { ...current, stepId: step.next, awaitingInput: false, resumeAt: null };
+        continue;
+      }
+      return { session: null, replies, contact: nextContact, effects };
+    }
+
     if (step.type === "end") {
       if (step.text) replies.push({ text: step.text, source: "flow" });
-      return { session: { ...current, status: "completed", awaitingInput: false, resumeAt: null }, replies, contact: nextContact };
+      return {
+        session: { ...current, status: "completed", awaitingInput: false, resumeAt: null },
+        replies,
+        contact: nextContact,
+        effects,
+      };
     }
   }
 
-  return { session: current, replies, contact: nextContact };
+  return { session: current, replies, contact: nextContact, effects };
 }
 
 function upsertFromEvent(existing: ContactRecord | null, event: InboundEvent): ContactRecord {
@@ -290,6 +443,9 @@ function upsertFromEvent(existing: ContactRecord | null, event: InboundEvent): C
       lastName: existing.lastName || event.lastName || null,
       subscriptions: existing.subscriptions ?? [],
       unsubscribed: existing.unsubscribed ?? false,
+      welcomed: existing.welcomed ?? false,
+      notes: existing.notes ?? "",
+      inboxStatus: existing.inboxStatus === "closed" ? "closed" : "open",
     };
   }
   return {
@@ -304,6 +460,33 @@ function upsertFromEvent(existing: ContactRecord | null, event: InboundEvent): C
     tags: [],
     subscriptions: [],
     unsubscribed: false,
+    welcomed: false,
+    notes: "",
+    inboxStatus: "open",
+  };
+}
+
+function applySystemKeywords(contact: ContactRecord, text: string | null | undefined): ContactRecord {
+  const raw = (text ?? "").trim().toLowerCase();
+  if (raw === "stop" || raw === "unsubscribe") {
+    return { ...contact, unsubscribed: true };
+  }
+  if (raw === "subscribe") {
+    return { ...contact, unsubscribed: false };
+  }
+  return contact;
+}
+
+function toEngineResult(
+  executed: ExecuteResult,
+  inboundSaved: boolean,
+): EngineResult {
+  return {
+    contact: executed.contact,
+    session: executed.session?.status === "completed" ? null : executed.session,
+    replies: executed.replies,
+    inboundSaved,
+    effects: executed.effects,
   };
 }
 
@@ -315,52 +498,86 @@ export function processInboundEvent(input: {
   now?: number;
 }): EngineResult {
   let contact = upsertFromEvent(input.contact, input.event);
-  const inboundSaved = Boolean(input.event.text || input.event.callbackData);
+  contact = applySystemKeywords(contact, input.event.text);
+  const inboundSaved = Boolean(input.event.text || input.event.callbackData || input.event.contactPhone);
   const now = input.now ?? Date.now();
+  const start = parseStartPayload(input.event.text ?? "");
 
   const flowById = new Map(input.flows.map((flow) => [flow.id, flow]));
 
-  if (input.event.callbackData) {
+  if (input.session?.status === "paused" && !start.isStart) {
+    return { contact, session: input.session, replies: [], inboundSaved, effects: [] };
+  }
+
+  if (input.event.callbackData && input.session?.status !== "paused") {
     const nextId = input.event.callbackData.startsWith("n:")
       ? input.event.callbackData.slice(2)
       : null;
     if (nextId && input.session) {
       const flow = flowById.get(input.session.flowId);
       if (flow) {
-        const executed = executeFrom(
-          flow.definition,
-          { ...input.session, stepId: nextId, awaitingInput: false, resumeAt: null },
-          contact,
-          now,
-        );
-        return {
-          contact: executed.contact,
-          session: executed.session?.status === "completed" ? null : executed.session,
-          replies: executed.replies,
+        return toEngineResult(
+          executeFrom(
+            flow.definition,
+            { ...input.session, stepId: nextId, awaitingInput: false, resumeAt: null },
+            contact,
+            now,
+            input.flows,
+          ),
           inboundSaved,
-        };
+        );
       }
     }
   }
 
-  if (input.session?.awaitingInput && input.event.text) {
+  const answer = input.event.text || input.event.contactPhone || null;
+  if (input.session?.awaitingInput && answer && input.session.status !== "paused") {
     const flow = flowById.get(input.session.flowId);
     const step = flow ? stepById(flow.definition, input.session.stepId) : undefined;
+    const quickReply = flow ? matchQuickReply(step, input.event.text) : null;
+    if (flow && quickReply) {
+      if (!quickReply.next) {
+        return { contact, session: null, replies: [], inboundSaved, effects: [] };
+      }
+      return toEngineResult(
+        withKeyboardCleared(
+          executeFrom(
+            flow.definition,
+            { ...input.session, stepId: quickReply.next, awaitingInput: false, formIndex: undefined, resumeAt: null },
+            contact,
+            now,
+            input.flows,
+          ),
+        ),
+        inboundSaved,
+      );
+    }
     if (flow && step?.type === "capture") {
+      const usedKeyboard = step.field === "phone" || Boolean(step.skippable);
+      if (step.skippable && isSkipAnswer(input.event.text)) {
+        return toEngineResult(
+          withKeyboardCleared(
+            executeFrom(
+              flow.definition,
+              { ...input.session, stepId: step.next, awaitingInput: false, formIndex: undefined },
+              contact,
+              now,
+              input.flows,
+            ),
+          ),
+          inboundSaved,
+        );
+      }
       try {
-        contact = applyCapturedValue(contact, parseCaptureField(step.field), input.event.text);
+        contact = applyCapturedValue(contact, parseCaptureField(step.field), answer);
         const executed = executeFrom(
           flow.definition,
           { ...input.session, stepId: step.next, awaitingInput: false, formIndex: undefined },
           contact,
           now,
+          input.flows,
         );
-        return {
-          contact: executed.contact,
-          session: executed.session?.status === "completed" ? null : executed.session,
-          replies: executed.replies,
-          inboundSaved,
-        };
+        return toEngineResult(usedKeyboard ? withKeyboardCleared(executed) : executed, inboundSaved);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Please try again.";
         return {
@@ -368,6 +585,7 @@ export function processInboundEvent(input: {
           session: input.session,
           replies: [{ text: message, source: "flow" }],
           inboundSaved,
+          effects: [],
         };
       }
     }
@@ -377,7 +595,7 @@ export function processInboundEvent(input: {
       const currentField = fields[index];
       if (currentField) {
         try {
-          contact = applyCapturedValue(contact, parseCaptureField(currentField.field), input.event.text);
+          contact = applyCapturedValue(contact, parseCaptureField(currentField.field), answer);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Please try again.";
           return {
@@ -385,50 +603,47 @@ export function processInboundEvent(input: {
             session: input.session,
             replies: [{ text: message, source: "flow" }],
             inboundSaved,
+            effects: [],
           };
         }
         const nextIndex = index + 1;
         if (nextIndex < fields.length) {
-          const executed = executeFrom(
+          return toEngineResult(
+            executeFrom(
+              flow.definition,
+              { ...input.session, awaitingInput: false, formIndex: nextIndex },
+              contact,
+              now,
+              input.flows,
+            ),
+            inboundSaved,
+          );
+        }
+        return toEngineResult(
+          executeFrom(
             flow.definition,
-            { ...input.session, awaitingInput: false, formIndex: nextIndex },
+            { ...input.session, stepId: step.next, awaitingInput: false, formIndex: undefined },
             contact,
             now,
-          );
-          return {
-            contact: executed.contact,
-            session: executed.session?.status === "completed" ? null : executed.session,
-            replies: executed.replies,
-            inboundSaved,
-          };
-        }
-        const executed = executeFrom(
-          flow.definition,
-          { ...input.session, stepId: step.next, awaitingInput: false, formIndex: undefined },
-          contact,
-          now,
-        );
-        return {
-          contact: executed.contact,
-          session: executed.session?.status === "completed" ? null : executed.session,
-          replies: executed.replies,
+            input.flows,
+          ),
           inboundSaved,
-        };
+        );
       }
     }
   }
 
   const matched = matchFlowTrigger(input.flows, input.event.text);
+  if (matched?.triggerType === "start" && contact.welcomed) {
+    return { contact, session: input.session, replies: [], inboundSaved, effects: [] };
+  }
   if (matched) {
-    const session = startSession(contact.id, matched);
-    const executed = executeFrom(matched.definition, session, contact, now);
-    return {
-      contact: executed.contact,
-      session: executed.session?.status === "completed" ? null : executed.session,
-      replies: executed.replies,
+    const nextContact = matched.triggerType === "start" ? { ...contact, welcomed: true } : contact;
+    return toEngineResult(
+      executeFrom(matched.definition, startSession(nextContact.id, matched), nextContact, now, input.flows),
       inboundSaved,
-    };
+    );
   }
 
-  return { contact, session: input.session, replies: [], inboundSaved };
+  return { contact, session: input.session, replies: [], inboundSaved, effects: [] };
 }

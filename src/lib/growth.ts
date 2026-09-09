@@ -56,6 +56,31 @@ export function telegramStartUrl(username: string | null | undefined, slug: stri
   return `https://t.me/${handle}?start=${encodeURIComponent(slug)}`;
 }
 
+/**
+ * ManyChat-style entry link per channel: t.me ?start=, m.me / ig.me ?ref=, or a wa.me pre-filled text
+ * (WhatsApp has no ref parameter; the engine treats a first message equal to a slug as that link).
+ */
+export function channelStartUrl(
+  input: { channel?: string | null; handle?: string | null; externalAccountId?: string | null },
+  slug: string,
+): string | null {
+  const channel = input.channel ?? "telegram";
+  const handle = input.handle?.replace(/^@/, "") ?? "";
+  if (channel === "telegram") return telegramStartUrl(handle, slug);
+  if (channel === "messenger") {
+    const target = handle || input.externalAccountId;
+    return target ? `https://m.me/${encodeURIComponent(target)}?ref=${encodeURIComponent(slug)}` : null;
+  }
+  if (channel === "instagram") {
+    return handle ? `https://ig.me/m/${encodeURIComponent(handle)}?ref=${encodeURIComponent(slug)}` : null;
+  }
+  if (channel === "whatsapp") {
+    const phone = (handle || "").replace(/[^\d]/g, "");
+    return phone ? `https://wa.me/${phone}?text=${encodeURIComponent(slug)}` : null;
+  }
+  return null;
+}
+
 export function growthRedirectPath(slug: string): string {
   return `/go/${encodeURIComponent(slug)}`;
 }
@@ -85,9 +110,13 @@ export function nextShareSlug(preferred: string, taken: Iterable<string>): strin
 
 export function presentGrowthLink<T extends { slug: string }>(
   row: T,
-  input: { telegramUsername?: string | null; origin?: string | null },
+  input: { telegramUsername?: string | null; channel?: string | null; externalAccountId?: string | null; origin?: string | null },
 ) {
-  const telegramUrl = telegramStartUrl(input.telegramUsername, row.slug);
+  /** Kept under its historical name; it is the channel's deep link (t.me, m.me, ig.me, or wa.me). */
+  const telegramUrl = channelStartUrl(
+    { channel: input.channel, handle: input.telegramUsername, externalAccountId: input.externalAccountId },
+    row.slug,
+  );
   const redirectPath = growthRedirectPath(row.slug);
   const origin = input.origin?.replace(/\/$/, "") ?? "";
   const shortUrl = origin ? `${origin}${redirectPath}` : redirectPath;

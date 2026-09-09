@@ -378,9 +378,10 @@ describe("canvas serialize for new step kinds", () => {
     );
 
     const welcome = graph.nodes.find((node) => node.id === "welcome");
-    expect(welcome?.data.kind).toBe("buttons");
-    if (welcome?.data.kind === "buttons") {
-      expect(welcome.data.buttons[1]?.url).toBe("https://histudio.test");
+    expect(welcome?.data.kind).toBe("send_message");
+    if (welcome?.data.kind === "send_message") {
+      const block = welcome.data.blocks[0];
+      if (block?.type === "text") expect(block.buttons[1]?.url).toBe("https://histudio.test");
     }
 
     const back = canvasToDefinition(graph);
@@ -465,6 +466,175 @@ describe("canvas serialize for new step kinds", () => {
     expect(step).toMatchObject({
       type: "text",
       buttons: [{ text: "Site", url: "https://histudio.test" }],
+    });
+  });
+});
+
+describe("ManyChat-style triggers and actions", () => {
+  it("matches keyword contains and default reply", () => {
+    const contains: FlowRecord = {
+      id: "price",
+      triggerType: "keyword_contains",
+      triggerValue: "price",
+      isActive: true,
+      definition: { startStepId: "a", steps: [{ id: "a", type: "end", text: "pricing" }] },
+    };
+    const fallback: FlowRecord = {
+      id: "default",
+      triggerType: "default",
+      triggerValue: null,
+      isActive: true,
+      definition: { startStepId: "b", steps: [{ id: "b", type: "end", text: "fallback" }] },
+    };
+    expect(matchFlowTrigger([contains, fallback], "What is the PRICE today?")?.id).toBe("price");
+    expect(matchFlowTrigger([contains, fallback], "hello there")?.id).toBe("default");
+    expect(matchFlowTrigger([contains, fallback], "/start")?.id).toBeUndefined();
+  });
+
+  it("matches keyword doesn't contain and honors Stop / Unsubscribe", () => {
+    const other: FlowRecord = {
+      id: "other",
+      triggerType: "keyword_not_contains",
+      triggerValue: "refund",
+      isActive: true,
+      definition: { startStepId: "a", steps: [{ id: "a", type: "end", text: "ok" }] },
+    };
+    expect(matchFlowTrigger([other], "hello there")?.id).toBe("other");
+    expect(matchFlowTrigger([other], "I want a refund")?.id).toBeUndefined();
+
+    const stopped = processInboundEvent({
+      contact: emptyContact(),
+      session: null,
+      flows: [],
+      event: { telegramUserId: "1001", text: "stop" },
+    });
+    expect(stopped.contact.unsubscribed).toBe(true);
+  });
+
+  it("jumps into another flow and collects HTTP + notify effects", () => {
+    const child: FlowRecord = {
+      id: "child",
+      triggerType: "keyword",
+      triggerValue: "child",
+      isActive: true,
+      definition: {
+        startStepId: "hi",
+        steps: [
+          { id: "hi", type: "notify", text: "Lead {{name}} {{email}}", next: "done" },
+          { id: "done", type: "end", text: "from child" },
+        ],
+      },
+    };
+    const parent: FlowRecord = {
+      id: "parent",
+      triggerType: "start",
+      triggerValue: null,
+      isActive: true,
+      definition: {
+        startStepId: "hook",
+        steps: [
+          {
+            id: "hook",
+            type: "http",
+            url: "https://example.test/lead",
+            method: "POST",
+            body: '{"email":"{{email}}"}',
+            next: "go",
+          },
+          { id: "go", type: "start_flow", flowId: "child" },
+        ],
+      },
+    };
+    const result = processInboundEvent({
+      contact: { ...emptyContact(), firstName: "Ada", email: "ada@histudio.test" },
+      session: null,
+      flows: [parent, child],
+      event: { telegramUserId: "1001", text: "/start" },
+    });
+    expect(result.replies.at(-1)?.text).toBe("from child");
+    expect(result.effects).toEqual([
+      { type: "http", url: "https://example.test/lead", method: "POST", body: '{"email":"{{email}}"}' },
+      { type: "notify", text: "Lead {{name}} {{email}}" },
+    ]);
+  });
+
+  it("does not start automations while a live-chat session is paused", () => {
+    const welcome: FlowRecord = {
+      id: "welcome",
+      triggerType: "start",
+      triggerValue: null,
+      isActive: true,
+      definition: { startStepId: "b", steps: [{ id: "b", type: "end", text: "welcome back" }] },
+    };
+    const paused = processInboundEvent({
+      contact: emptyContact(),
+      session: {
+        id: "s1",
+        contactId: "c1",
+        flowId: "welcome",
+        stepId: "b",
+        awaitingInput: false,
+        status: "paused",
+      },
+      flows: [welcome],
+      event: { telegramUserId: "1001", text: "hello" },
+    });
+    expect(paused.replies).toEqual([]);
+    expect(paused.session?.status).toBe("paused");
+
+    const restarted = processInboundEvent({
+      contact: emptyContact(),
+      session: paused.session,
+      flows: [welcome],
+      event: { telegramUserId: "1001", text: "/start" },
+    });
+    expect(restarted.replies[0]?.text).toBe("welcome back");
+  });
+
+  it("round-trips start_flow, http, and notify canvas nodes", () => {
+    const start = createCanvasNode("start_flow", { x: 200, y: 80 }, "go");
+    const http = createCanvasNode("http", { x: 400, y: 80 }, "hook");
+    const notify = createCanvasNode("notify", { x: 600, y: 80 }, "ping");
+    const end = createCanvasNode("end", { x: 800, y: 80 }, "end1");
+    if (start.data.kind === "start_flow") start.data.flowId = "other";
+    const graph = {
+      nodes: [
+        {
+          id: TRIGGER_NODE_ID,
+          type: "trigger" as const,
+          position: { x: 0, y: 80 },
+          data: { kind: "trigger" as const },
+        },
+        start,
+        http,
+        notify,
+        end,
+      ],
+      edges: replaceHandleEdge(
+        replaceHandleEdge(
+          replaceHandleEdge(
+            replaceHandleEdge([], { source: TRIGGER_NODE_ID, sourceHandle: "out", target: "go" }),
+            { source: "go", sourceHandle: "next", target: "hook" },
+          ),
+          { source: "hook", sourceHandle: "next", target: "ping" },
+        ),
+        { source: "ping", sourceHandle: "next", target: "end1" },
+      ),
+    };
+    const definition = engineDefinition(canvasToDefinition(graph));
+    expect(definition.steps.find((step) => step.id === "go")).toMatchObject({
+      type: "start_flow",
+      flowId: "other",
+      next: "hook",
+    });
+    expect(definition.steps.find((step) => step.id === "hook")).toMatchObject({
+      type: "http",
+      method: "POST",
+      next: "ping",
+    });
+    expect(definition.steps.find((step) => step.id === "ping")).toMatchObject({
+      type: "notify",
+      next: "end1",
     });
   });
 });

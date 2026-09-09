@@ -136,9 +136,11 @@ describe("canvas + engine media", () => {
 
     const reloaded = definitionToCanvas(definition);
     const node = reloaded.nodes.find((item) => item.id === "pic1");
-    expect(node?.type).toBe("media");
-    if (node?.data.kind === "media") {
-      expect(node.data.media?.kind).toBe("animation");
+    expect(node?.type).toBe("send_message");
+    if (node?.data.kind === "send_message") {
+      const block = node.data.blocks[0];
+      expect(block?.type).toBe("image");
+      if (block?.type === "image") expect(block.media?.kind).toBe("animation");
     }
   });
 

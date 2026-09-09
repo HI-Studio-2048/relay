@@ -7,22 +7,69 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { CHANNELS, CHANNEL_IDS, type ChannelId } from "@/lib/channels/types";
 import { api } from "@/lib/client";
 
+const GUIDES: Record<ChannelId, { title: string; steps: string[]; tokenLabel: string; accountLabel?: string }> = {
+  telegram: {
+    title: "Telegram bot",
+    tokenLabel: "Bot token",
+    steps: [
+      "Talk to @BotFather, create a bot, copy the token.",
+      "Relay calls getMe, stores the token encrypted, and sets the webhook for you.",
+    ],
+  },
+  instagram: {
+    title: "Instagram (via a Facebook Page)",
+    tokenLabel: "Page access token",
+    accountLabel: "Facebook Page ID",
+    steps: [
+      "In Meta for Developers, add Instagram to your app and connect the Instagram professional account to a Facebook Page.",
+      "Generate a Page access token with instagram_manage_messages and pages_messaging, then paste it with the Page ID.",
+      "After connecting, paste the webhook URL and verify token below into the app's Instagram webhooks (subscribe to messages, messaging_postbacks).",
+    ],
+  },
+  messenger: {
+    title: "Facebook Messenger",
+    tokenLabel: "Page access token",
+    accountLabel: "Facebook Page ID",
+    steps: [
+      "In Meta for Developers, add Messenger to your app and generate a Page access token with pages_messaging.",
+      "After connecting, paste the webhook URL and verify token below into Messenger webhooks (subscribe to messages, messaging_postbacks, messaging_referrals).",
+    ],
+  },
+  whatsapp: {
+    title: "WhatsApp Business (Cloud API)",
+    tokenLabel: "Permanent access token",
+    accountLabel: "Phone number ID",
+    steps: [
+      "In Meta for Developers, add WhatsApp to your app and create a system-user token with whatsapp_business_messaging.",
+      "Copy the Phone number ID from WhatsApp → API Setup.",
+      "After connecting, paste the webhook URL and verify token below into WhatsApp webhooks (subscribe to messages).",
+    ],
+  },
+};
+
 export default function SetupPage() {
-  const { bot, refresh, setBotId } = useBot();
+  const { bot, bots, refresh, setBotId } = useBot();
+  const [channel, setChannel] = useState<ChannelId>("telegram");
   const [token, setToken] = useState("");
+  const [accountId, setAccountId] = useState("");
+  const [appSecret, setAppSecret] = useState("");
   const [busy, setBusy] = useState(false);
+  const guide = GUIDES[channel];
+  const isMeta = channel !== "telegram";
 
   const connect = async () => {
     setBusy(true);
     try {
       const data = await api<{ bot: { id: string; name: string } }>("/api/bots", {
         method: "POST",
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ channel, token, externalAccountId: accountId, appSecret }),
       });
       setBotId(data.bot.id);
       setToken("");
+      setAppSecret("");
       await refresh();
       toast.success(`Connected ${data.bot.name}`);
     } catch (error) {
@@ -48,15 +95,12 @@ export default function SetupPage() {
 
   const remove = async () => {
     if (!bot) return;
-    if (!window.confirm("Delete this bot and its contacts, flows, and messages?")) return;
+    if (!window.confirm("Disconnect this account and delete its contacts, flows, and messages?")) return;
     setBusy(true);
     try {
-      await api(`/api/bots/${bot.id}`, {
-        method: "DELETE",
-        body: JSON.stringify({ confirm: true }),
-      });
+      await api(`/api/bots/${bot.id}`, { method: "DELETE", body: JSON.stringify({ confirm: true }) });
       await refresh();
-      toast.success("Bot removed");
+      toast.success("Account removed");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not delete");
     } finally {
@@ -67,34 +111,84 @@ export default function SetupPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-heading text-3xl tracking-tight">Bot connection</h1>
+        <h1 className="font-heading text-3xl tracking-tight">Channels</h1>
         <p className="text-sm text-muted-foreground">
-          Token is encrypted at rest and never written to logs. Telegram is the only channel in v1.
+          Connect Telegram, Instagram, Messenger, and WhatsApp. Each account gets its own inbox, contacts, and
+          flows; switch between them in the sidebar. Tokens are encrypted at rest and never written to logs.
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Paste a BotFather token</CardTitle>
-          <CardDescription>
-            Talk to @BotFather, create a bot, copy the token. Relay calls getMe, stores the token
-            encrypted, and sets the webhook to /api/telegram/webhook/&lt;botId&gt;.
-          </CardDescription>
+          <CardTitle>Connect a channel</CardTitle>
+          <CardDescription>Pick the platform, then paste the credentials from its developer console.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {CHANNEL_IDS.map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setChannel(id)}
+                className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+                style={{
+                  borderColor: channel === id ? CHANNELS[id].color : undefined,
+                  boxShadow: channel === id ? `0 0 0 2px ${CHANNELS[id].color}33` : undefined,
+                }}
+              >
+                <span className="inline-block size-2.5 rounded-full" style={{ background: CHANNELS[id].color }} />
+                {CHANNELS[id].label}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-sm font-medium">{guide.title}</p>
+            <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+              {guide.steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          </div>
+
+          {isMeta ? (
+            <div className="space-y-2">
+              <Label htmlFor="account">{guide.accountLabel}</Label>
+              <Input
+                id="account"
+                autoComplete="off"
+                placeholder={channel === "whatsapp" ? "1234567890123456" : "Page ID"}
+                value={accountId}
+                onChange={(event) => setAccountId(event.target.value)}
+              />
+            </div>
+          ) : null}
           <div className="space-y-2">
-            <Label htmlFor="token">Bot token</Label>
+            <Label htmlFor="token">{guide.tokenLabel}</Label>
             <Input
               id="token"
               type="password"
               autoComplete="off"
-              placeholder="123456:ABC…"
+              placeholder={isMeta ? "EAAG…" : "123456:ABC…"}
               value={token}
               onChange={(event) => setToken(event.target.value)}
             />
           </div>
-          <Button onClick={() => void connect()} disabled={busy || !token.trim()}>
-            {busy ? "Connecting…" : "Connect and set webhook"}
+          {isMeta ? (
+            <div className="space-y-2">
+              <Label htmlFor="secret">App secret (recommended)</Label>
+              <Input
+                id="secret"
+                type="password"
+                autoComplete="off"
+                placeholder="Used to verify webhook signatures"
+                value={appSecret}
+                onChange={(event) => setAppSecret(event.target.value)}
+              />
+            </div>
+          ) : null}
+          <Button onClick={() => void connect()} disabled={busy || !token.trim() || (isMeta && !accountId.trim())}>
+            {busy ? "Connecting…" : isMeta ? "Connect account" : "Connect and set webhook"}
           </Button>
         </CardContent>
       </Card>
@@ -102,13 +196,32 @@ export default function SetupPage() {
       {bot ? (
         <Card>
           <CardHeader>
-            <CardTitle>{bot.name}</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <span className="inline-block size-2.5 rounded-full" style={{ background: CHANNELS[bot.channel].color }} />
+              {bot.name}
+            </CardTitle>
             <CardDescription>
-              Status {bot.status}
-              {bot.webhookUrl ? ` · ${bot.webhookUrl}` : " · PUBLIC_URL missing, webhook not set"}
+              {CHANNELS[bot.channel].label} · status {bot.status}
+              {bot.webhookUrl ? "" : " · PUBLIC_URL missing, webhook not set"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            {bot.channel !== "telegram" && bot.webhookUrl ? (
+              <div className="space-y-1 rounded-lg bg-muted p-3 text-sm">
+                <p className="font-medium">Paste into the Meta App dashboard</p>
+                <p className="break-all">
+                  <span className="text-muted-foreground">Callback URL:</span> {bot.webhookUrl}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Verify token:</span> {bot.verifyToken}
+                </p>
+                {!bot.hasAppSecret ? (
+                  <p className="text-xs text-amber-600">No app secret stored — webhook signatures are not verified yet.</p>
+                ) : null}
+              </div>
+            ) : bot.webhookUrl ? (
+              <p className="break-all text-sm text-muted-foreground">Webhook: {bot.webhookUrl}</p>
+            ) : null}
             {bot.lastHealthError ? (
               <p className="text-sm text-destructive">{bot.lastHealthError}</p>
             ) : (
@@ -121,9 +234,31 @@ export default function SetupPage() {
                 Run health check
               </Button>
               <Button variant="destructive" onClick={() => void remove()} disabled={busy}>
-                Delete bot
+                Disconnect
               </Button>
             </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {bots.length > 1 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Connected accounts</CardTitle>
+            <CardDescription>Click one to work in it. The sidebar switcher does the same.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            {bots.map((item) => (
+              <Button
+                key={item.id}
+                variant={item.id === bot?.id ? "default" : "outline"}
+                size="sm"
+                onClick={() => setBotId(item.id)}
+              >
+                <span className="mr-1.5 inline-block size-2 rounded-full" style={{ background: CHANNELS[item.channel].color }} />
+                {CHANNELS[item.channel].label} · {item.name}
+              </Button>
+            ))}
           </CardContent>
         </Card>
       ) : null}

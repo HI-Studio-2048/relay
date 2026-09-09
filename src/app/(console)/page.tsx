@@ -9,7 +9,7 @@ import { Section } from "@/components/chrome/section";
 import { StatusPill } from "@/components/chrome/status-pill";
 import { CanvasCard, MANYCHAT, ToneChip, ToneLabel } from "@/components/chrome/tone";
 import { Button } from "@/components/ui/button";
-import { listBots } from "@/lib/bots";
+import { currentBot } from "@/lib/current-bot";
 import { getDb } from "@/lib/db";
 import { broadcasts, flows } from "@/lib/db/schema";
 import { relativeTime } from "@/lib/format";
@@ -20,8 +20,7 @@ import { eq } from "drizzle-orm";
 export const dynamic = "force-dynamic";
 
 export default async function OverviewPage() {
-  const bots = await listBots();
-  const bot = bots[0];
+  const bot = await currentBot();
 
   if (!bot) {
     return (

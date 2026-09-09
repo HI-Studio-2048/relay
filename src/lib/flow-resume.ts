@@ -1,20 +1,18 @@
 import { eq } from "drizzle-orm";
-import { decryptSecret } from "@/lib/crypto";
+import { accountFromRow } from "@/lib/channels";
 import { getDb } from "@/lib/db";
 import { bots, contacts } from "@/lib/db/schema";
+import { applyFlowEffects } from "@/lib/flow-effects";
 import { executeFrom } from "@/lib/flow-engine";
 import { log } from "@/lib/logger";
-import { outboundPreview } from "@/lib/media";
-import { acquireSendSlot } from "@/lib/rate-limit";
+import { deliverReplies } from "@/lib/flow-dispatch";
 import {
   listDueDelaySessions,
   loadActiveFlows,
   loadContactRecord,
   persistContact,
   persistSession,
-  saveMessage,
 } from "@/lib/store";
-import { sendFlowReply } from "@/lib/telegram";
 
 export async function resumeDueDelays() {
   const rows = await listDueDelaySessions();
@@ -47,24 +45,21 @@ export async function resumeDueDelays() {
           resumeAt: row.resumeAt?.toISOString() ?? new Date(0).toISOString(),
         },
         contact,
+        Date.now(),
+        flows,
       );
 
       await persistContact(contactRow.botId, executed.contact);
       await persistSession(contactRow.id, executed.session?.status === "completed" ? null : executed.session);
 
-      const token = decryptSecret(bot.tokenEncrypted);
-      for (const reply of executed.replies) {
-        await acquireSendSlot(contactRow.botId, contactRow.telegramUserId);
-        const sent = await sendFlowReply(token, contactRow.telegramUserId, reply);
-        await saveMessage({
-          botId: contactRow.botId,
-          contactId: contactRow.id,
-          direction: "outbound",
-          source: "flow",
-          body: outboundPreview(reply.text, reply.media),
-          telegramMessageId: String(sent.message_id),
-        });
-      }
+      const account = accountFromRow(bot);
+      await deliverReplies({ botId: contactRow.botId, account, contact: executed.contact, replies: executed.replies });
+      await applyFlowEffects({
+        botId: contactRow.botId,
+        account,
+        contact: executed.contact,
+        effects: executed.effects,
+      });
     } catch (error) {
       log.error("Delay resume failed", error instanceof Error ? error.message : error);
     }

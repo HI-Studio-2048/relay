@@ -13,12 +13,16 @@ import {
   X,
   Link2,
   Activity,
+  Repeat,
+  ListFilter,
+  MessageSquareText,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useBot } from "@/components/bot-provider";
 import { StatusPill } from "@/components/chrome/status-pill";
 import { CanvasCard, ToneChip, type ToneName } from "@/components/chrome/tone";
 import { Button } from "@/components/ui/button";
+import { CHANNELS } from "@/lib/channels/types";
 import { cn } from "@/lib/utils";
 
 const GROUPS: {
@@ -43,6 +47,9 @@ const GROUPS: {
     label: "Automate",
     items: [
       { href: "/flows", label: "Flows", icon: Workflow, tone: "content" },
+      { href: "/keywords", label: "Keywords", icon: MessageSquareText, tone: "content" },
+      { href: "/sequences", label: "Sequences", icon: Repeat, tone: "action" },
+      { href: "/rules", label: "Rules", icon: ListFilter, tone: "action" },
       { href: "/broadcasts", label: "Broadcasts", icon: Megaphone, tone: "action", count: "confirm" },
     ],
   },
@@ -57,6 +64,9 @@ function sectionTitle(pathname: string) {
   if (pathname.startsWith("/inbox")) return "Inbox";
   if (pathname.startsWith("/contacts")) return "Contacts";
   if (pathname.startsWith("/flows")) return "Flows";
+  if (pathname.startsWith("/keywords")) return "Keywords";
+  if (pathname.startsWith("/sequences")) return "Sequences";
+  if (pathname.startsWith("/rules")) return "Rules";
   if (pathname.startsWith("/broadcasts")) return "Broadcasts";
   if (pathname.startsWith("/growth")) return "Growth";
   if (pathname.startsWith("/setup")) return "Settings";
@@ -159,8 +169,13 @@ function BotDock({ onNavigate }: { onNavigate?: () => void }) {
             <p className="truncate text-[13px] font-medium text-[#1b1f24]">{bot.name}</p>
             <StatusPill status={bot.status} />
           </div>
-          <p className="mt-0.5 truncate text-[11px] text-[#6b7280]">
-            {bot.telegramUsername ? `@${bot.telegramUsername}` : "Telegram bot"}
+          <p className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-[#6b7280]">
+            <span
+              className="inline-block size-2 shrink-0 rounded-full"
+              style={{ background: CHANNELS[bot.channel ?? "telegram"].color }}
+            />
+            {CHANNELS[bot.channel ?? "telegram"].label}
+            {bot.telegramUsername ? ` · ${bot.channel === "whatsapp" ? "" : "@"}${bot.telegramUsername}` : ""}
           </p>
           {bots.length > 1 ? (
             <select
@@ -170,14 +185,14 @@ function BotDock({ onNavigate }: { onNavigate?: () => void }) {
             >
               {bots.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.name} · {item.status}
+                  {CHANNELS[item.channel ?? "telegram"].label} · {item.name}
                 </option>
               ))}
             </select>
           ) : null}
         </CanvasCard>
       ) : (
-        <p className="px-2 text-[11px] text-[#6b7280]">No bot connected yet.</p>
+        <p className="px-2 text-[11px] text-[#6b7280]">No channel connected yet.</p>
       )}
     </div>
   );

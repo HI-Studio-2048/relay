@@ -34,6 +34,11 @@ export function adminPassword(): string | null {
   return value ? value : null;
 }
 
+export function adminTelegramChatId(): string | null {
+  const value = process.env.ADMIN_TELEGRAM_CHAT_ID?.trim();
+  return value ? value : null;
+}
+
 export function hasDatabaseUrl() {
   return Boolean(process.env.DATABASE_URL);
 }

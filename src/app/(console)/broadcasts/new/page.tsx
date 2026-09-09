@@ -1,27 +1,30 @@
 import { eq } from "drizzle-orm";
-import { listBots } from "@/lib/bots";
+import { currentBot } from "@/lib/current-bot";
 import { getDb } from "@/lib/db";
 import { tags } from "@/lib/db/schema";
-import { contactsWithTag } from "@/lib/store";
+import { broadcastAudience, contactsWithTag } from "@/lib/store";
 import { ComposeBroadcast } from "./compose-broadcast";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewBroadcastPage() {
-  const bots = await listBots();
-  const bot = bots[0];
+  const bot = await currentBot();
   if (!bot) {
     return <p className="text-sm text-muted-foreground">Connect a bot first.</p>;
   }
   const db = await getDb();
   const tagRows = await db.select().from(tags).where(eq(tags.botId, bot.id));
   const first = tagRows[0];
-  const audience = first ? (await contactsWithTag(bot.id, first.id)).length : 0;
+  const [tagAudience, everyone] = await Promise.all([
+    first ? contactsWithTag(bot.id, first.id) : Promise.resolve([]),
+    broadcastAudience(bot.id, null),
+  ]);
   return (
     <ComposeBroadcast
       botId={bot.id}
       initialTags={tagRows.map((tag) => ({ id: tag.id, name: tag.name }))}
-      initialAudience={audience}
+      initialAudience={tagAudience.length}
+      initialEveryone={everyone.length}
     />
   );
 }
