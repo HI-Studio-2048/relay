@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { RelayLogo } from "@/components/chrome/relay-logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,7 @@ function LoginForm() {
   return (
     <Card className="w-full max-w-sm">
       <CardHeader>
+        <RelayLogo className="mb-2 size-12" />
         <CardTitle>Relay</CardTitle>
         <CardDescription>HI Studio admin. Enter the shared ADMIN_PASSWORD.</CardDescription>
       </CardHeader>

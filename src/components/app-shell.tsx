@@ -12,13 +12,13 @@ import {
   Menu,
   X,
   Link2,
-  Activity,
   Repeat,
   ListFilter,
   MessageSquareText,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useBot } from "@/components/bot-provider";
+import { RelayLogo } from "@/components/chrome/relay-logo";
 import { StatusPill } from "@/components/chrome/status-pill";
 import { CanvasCard, ToneChip, type ToneName } from "@/components/chrome/tone";
 import { Button } from "@/components/ui/button";
@@ -85,7 +85,7 @@ function NavCount({ value }: { value: number }) {
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <Link href="/" className="flex items-center gap-2.5 px-2">
-      <ToneChip tone="start" icon={Activity} className="size-8" />
+      <RelayLogo />
       {compact ? null : (
         <span>
           <span className="block font-heading text-[15px] leading-none tracking-tight text-[#1b1f24]">Relay</span>
