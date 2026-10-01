@@ -267,4 +267,16 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS author text;
 ALTER TABLE flow_events ADD COLUMN IF NOT EXISTS name text;
 ALTER TABLE flow_events ADD COLUMN IF NOT EXISTS value double precision;
 ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS flow_id text REFERENCES flows(id) ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS flow_versions (
+  id text PRIMARY KEY,
+  flow_id text NOT NULL REFERENCES flows(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  trigger_type text NOT NULL,
+  trigger_value text,
+  definition jsonb NOT NULL,
+  author text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS flow_versions_flow_idx ON flow_versions(flow_id, created_at);
 `;

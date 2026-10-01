@@ -141,6 +141,20 @@ export const flows = pgTable("flows", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Snapshot of a flow before each save, for restore. */
+export const flowVersions = pgTable("flow_versions", {
+  id: text("id").primaryKey(),
+  flowId: text("flow_id")
+    .notNull()
+    .references(() => flows.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  triggerType: text("trigger_type").notNull(),
+  triggerValue: text("trigger_value"),
+  definition: jsonb("definition").notNull(),
+  author: text("author"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const flowSessions = pgTable("flow_sessions", {
   id: text("id").primaryKey(),
   contactId: text("contact_id")

@@ -1,8 +1,9 @@
-import { eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { syncBotCommands } from "@/lib/bot-commands";
 import { assertConfirm } from "@/lib/broadcast";
 import { getDb } from "@/lib/db";
-import { flows } from "@/lib/db/schema";
+import { flowVersions, flows } from "@/lib/db/schema";
+import { agentIdFromCookieHeader, findMember } from "@/lib/team";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
 import type { FlowDefinition } from "@/lib/types";
 
@@ -30,6 +31,32 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
       definition?: FlowDefinition;
     }>(request);
     const db = await getDb();
+    // Keep the version being replaced (definition / trigger edits only), newest 20 per flow.
+    const [before] = await db.select().from(flows).where(eq(flows.id, id)).limit(1);
+    const changed =
+      before !== undefined &&
+      ((body.definition !== undefined && JSON.stringify(body.definition) !== JSON.stringify(before.definition)) ||
+        (body.triggerType !== undefined && body.triggerType !== before.triggerType) ||
+        (body.triggerValue !== undefined && body.triggerValue !== before.triggerValue));
+    if (changed) {
+      const agent = await findMember(agentIdFromCookieHeader(request.headers.get("cookie")));
+      await db.insert(flowVersions).values({
+        id: crypto.randomUUID(),
+        flowId: id,
+        name: before.name,
+        triggerType: before.triggerType,
+        triggerValue: before.triggerValue,
+        definition: before.definition,
+        author: agent?.name ?? null,
+      });
+      const older = await db
+        .select({ id: flowVersions.id })
+        .from(flowVersions)
+        .where(eq(flowVersions.flowId, id))
+        .orderBy(desc(flowVersions.createdAt))
+        .offset(20);
+      if (older.length) await db.delete(flowVersions).where(inArray(flowVersions.id, older.map((row) => row.id)));
+    }
     const [flow] = await db
       .update(flows)
       .set({

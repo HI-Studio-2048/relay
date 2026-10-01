@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { FlowListEditor } from "@/components/flow-canvas/flow-list-editor";
 import { FlowShareButton } from "@/components/flow-canvas/flow-share-dialog";
 import { FlowSimulator } from "@/components/flow-canvas/flow-simulator";
+import { FlowHistory } from "@/components/flow-canvas/flow-history";
 import { FlowStatsContext, type NodeStats } from "@/components/flow-canvas/flow-stats-context";
 import type { FlowCanvasHandle } from "@/components/flow-canvas/flow-canvas-editor";
 import type { FlowMeta, InspectorField, InspectorFlowOption } from "@/components/flow-canvas/node-inspector";
@@ -51,6 +52,7 @@ export function FlowWorkspace({
   const canvasRef = useRef<FlowCanvasHandle>(null);
   const router = useRouter();
   const [testing, setTesting] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [stepStats, setStepStats] = useState<Record<string, { sent: number; clicks: number }>>({});
   const [flowStats, setFlowStats] = useState<{ runs: number; people: number; ctr: number; completionRate: number; clicks: number } | null>(null);
 
@@ -229,6 +231,9 @@ export function FlowWorkspace({
           <Button size="sm" variant="outline" onClick={() => setTesting((value) => !value)}>
             Test
           </Button>
+          <Button size="sm" variant="ghost" onClick={() => setShowHistory((value) => !value)}>
+            History
+          </Button>
           <FlowShareButton botId={flow.botId} flowId={flow.id} />
           <Button size="sm" variant="outline" onClick={() => void duplicate()}>
             Duplicate
@@ -261,6 +266,17 @@ export function FlowWorkspace({
       ) : null}
 
       <div className="relative flex min-h-0 flex-1 flex-col">
+      {showHistory ? (
+        <FlowHistory
+          flowId={flow.id}
+          onClose={() => setShowHistory(false)}
+          onRestored={(restored) => {
+            setFlow({ ...restored, botId: flow.botId });
+            setCanvasEpoch((value) => value + 1);
+            setShowHistory(false);
+          }}
+        />
+      ) : null}
       {testing ? (
         <FlowSimulator
           onClose={() => setTesting(false)}
