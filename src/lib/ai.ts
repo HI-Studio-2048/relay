@@ -230,6 +230,40 @@ export async function classifyIntent(input: { text: string; intents: IntentOptio
   return input.intents.some((intent) => intent.id === result.intent) ? result.intent : null;
 }
 
+const TranslateSchema = z.object({
+  source_language: z.string().describe("English name of the language the text is written in, e.g. Spanish."),
+  translation: z.string().describe("The text in the target language. Unchanged if it is already in that language."),
+});
+
+export type Translation = { sourceLanguage: string; translation: string };
+
+/**
+ * Live Chat translation. `target` is a language name, or null to use the language the customer writes
+ * in (inferred from `customerSamples`). Keeps emoji, links, names and {{variables}} as they are.
+ */
+export async function translateText(input: { text: string; target: string | null; customerSamples?: string[] }): Promise<Translation> {
+  const target = input.target
+    ? input.target
+    : `the language the customer writes in (see their messages below)`;
+  const samples = (input.customerSamples ?? []).filter(Boolean).slice(-5);
+  const result = await parse(TranslateSchema, {
+    system: [
+      "You translate direct messages between a business and its customers.",
+      "Translate naturally, keep the tone and length. Keep emoji, URLs, @handles, product names and {{variables}} exactly as they are.",
+    ].join("\n"),
+    effort: "low",
+    maxTokens: 4000,
+    user: [
+      samples.length ? `<customer_messages>\n${samples.map((line) => line.slice(0, 300)).join("\n")}\n</customer_messages>` : "",
+      `Translate into ${target}.`,
+      `<text>\n${input.text.slice(0, 4000)}\n</text>`,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+  });
+  return { sourceLanguage: result.source_language, translation: result.translation };
+}
+
 const GeneratedFlowSchema = z.object({
   name: z.string(),
   trigger: z.object({

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BookmarkPlus, Sparkles, CheckCircle2, MessageCircle, PanelRight, Play, RotateCcw, Send, X } from "lucide-react";
+import { ArrowLeft, BookmarkPlus, Languages, Sparkles, CheckCircle2, MessageCircle, PanelRight, Play, RotateCcw, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { useBot } from "@/components/bot-provider";
 import { ContactAvatar } from "@/components/chrome/avatar";
@@ -47,7 +47,25 @@ function SourceLabel({ message }: { message: Message }) {
   return <span className="font-medium">{label}</span>;
 }
 
-function Bubble({ message }: { message: Message }) {
+/** The teammate's language as an English name ("Spanish"), for translating customer messages. */
+function agentLanguage() {
+  try {
+    const code = (navigator.language || "en").split("-")[0]!;
+    return new Intl.DisplayNames(["en"], { type: "language" }).of(code) ?? "English";
+  } catch {
+    return "English";
+  }
+}
+
+function Bubble({
+  message,
+  translation,
+  onTranslate,
+}: {
+  message: Message;
+  translation?: { text: string; from: string } | "loading";
+  onTranslate?: () => void;
+}) {
   const outbound = message.direction === "outbound";
   const event = message.body.match(EVENT_PREFIX);
   const time = new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -96,10 +114,22 @@ function Bubble({ message }: { message: Message }) {
         )}
       >
         <p className="break-words whitespace-pre-wrap">{message.body}</p>
+        {translation && translation !== "loading" ? (
+          <p className="mt-1.5 border-t border-[#eef0f3] pt-1.5 break-words whitespace-pre-wrap text-[#374151]">
+            <span className="mr-1 text-[10px] font-medium text-[#7b61ff] uppercase">{translation.from} →</span>
+            {translation.text}
+          </p>
+        ) : null}
         <p className={cn("mt-1 flex gap-1 text-[10px]", outbound && message.source === "agent" ? "text-white/75" : "text-[#8b95a1]")}>
           <SourceLabel message={message} />
           {outbound ? "·" : null}
           {time}
+          {!outbound && onTranslate && !translation ? (
+            <button type="button" onClick={onTranslate} className="ml-1 text-[#0084ff] hover:underline">
+              Translate
+            </button>
+          ) : null}
+          {translation === "loading" ? <span className="ml-1 animate-pulse">Translating…</span> : null}
         </p>
       </div>
     </div>
@@ -128,6 +158,9 @@ export function ThreadView({
   const [contact, setContact] = useState(initialContact);
   const [messages, setMessages] = useState(initialMessages);
   const [text, setText] = useState("");
+  const [translations, setTranslations] = useState<Record<string, { text: string; from: string } | "loading">>({});
+  const [untranslated, setUntranslated] = useState<string | null>(null);
+  const [translatingDraft, setTranslatingDraft] = useState(false);
   const [notes, setNotes] = useState(initialContact.notes ?? "");
   const [sending, setSending] = useState(false);
   const [automation, setAutomation] = useState<Automation>({ status: "idle", flowId: null, flowName: null });
@@ -217,12 +250,48 @@ export function ThreadView({
     try {
       await api(`/api/inbox/${contactId}/reply`, { method: "POST", body: JSON.stringify({ text }) });
       setText("");
+      setUntranslated(null);
       setAssist(null);
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Send failed");
     } finally {
       setSending(false);
+    }
+  };
+
+  const translateMessage = async (message: Message) => {
+    setTranslations((current) => ({ ...current, [message.id]: "loading" }));
+    try {
+      const data = await api<{ translation: string; sourceLanguage: string }>(`/api/inbox/${contactId}/translate`, {
+        method: "POST",
+        body: JSON.stringify({ text: message.body, to: "agent", language: agentLanguage() }),
+      });
+      setTranslations((current) => ({ ...current, [message.id]: { text: data.translation, from: data.sourceLanguage } }));
+    } catch (error) {
+      setTranslations((current) => {
+        const next = { ...current };
+        delete next[message.id];
+        return next;
+      });
+      toast.error(error instanceof Error ? error.message : "Translation is unavailable");
+    }
+  };
+
+  const translateDraft = async () => {
+    if (!text.trim()) return;
+    setTranslatingDraft(true);
+    try {
+      const data = await api<{ translation: string; sourceLanguage: string }>(`/api/inbox/${contactId}/translate`, {
+        method: "POST",
+        body: JSON.stringify({ text, to: "customer" }),
+      });
+      setUntranslated(text);
+      setText(data.translation);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Translation is unavailable");
+    } finally {
+      setTranslatingDraft(false);
     }
   };
 
@@ -364,7 +433,11 @@ export function ThreadView({
                   {divider ? (
                     <p className="py-1 text-center text-[11px] font-medium text-[#8b95a1]">{day}</p>
                   ) : null}
-                  <Bubble message={message} />
+                  <Bubble
+                    message={message}
+                    translation={translations[message.id]}
+                    onTranslate={message.direction === "inbound" ? () => void translateMessage(message) : undefined}
+                  />
                 </div>
               );
             })
@@ -425,6 +498,21 @@ export function ThreadView({
               </div>
             </div>
           ) : null}
+          {untranslated !== null ? (
+            <p className="mb-1.5 flex items-center gap-2 text-[11px] text-[#6b7280]">
+              <Languages className="size-3 text-[#7b61ff]" /> Translated into their language.
+              <button
+                type="button"
+                className="text-[#0084ff] hover:underline"
+                onClick={() => {
+                  setText(untranslated);
+                  setUntranslated(null);
+                }}
+              >
+                Undo
+              </button>
+            </p>
+          ) : null}
           <div className="flex items-end gap-2">
             <textarea
               value={text}
@@ -450,6 +538,16 @@ export function ThreadView({
               onClick={() => void suggest()}
             >
               <Sparkles className={cn("size-4 text-[#d946ef]", assisting && "animate-pulse")} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Translate draft into their language"
+              title="Translate your draft into the language they write in"
+              disabled={translatingDraft || !text.trim()}
+              onClick={() => void translateDraft()}
+            >
+              <Languages className={cn("size-4 text-[#7b61ff]", translatingDraft && "animate-pulse")} />
             </Button>
             <Button variant="ghost" size="icon" aria-label="Save as reply" disabled={!text.trim()} onClick={() => void saveAsReply()}>
               <BookmarkPlus className="size-4" />
