@@ -1,3 +1,4 @@
+import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 import * as schema from "@/lib/db/schema";
@@ -5,7 +6,7 @@ import { MIGRATION_SQL } from "@/lib/db/sql";
 
 /** Every column Drizzle writes must exist in the hand-written migration, or inserts fail at runtime. */
 describe("schema matches migration SQL", () => {
-  const tables = Object.values(schema).filter((value): value is PgTable => value instanceof PgTable);
+  const tables = Object.values(schema).filter((value) => is(value, PgTable)) as unknown as PgTable[];
 
   it("has tables to check", () => {
     expect(tables.length).toBeGreaterThan(10);
