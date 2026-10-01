@@ -1,4 +1,3 @@
-import type { TriggerType } from "@/lib/types";
 
 export const KEYWORD_TRIGGER_TYPES = [
   "keyword",

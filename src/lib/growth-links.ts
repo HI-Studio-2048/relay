@@ -1,7 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { bots, growthLinkEvents, growthLinks } from "@/lib/db/schema";
-import { linksForFlow, nextShareSlug, presentGrowthLink, slugifyName } from "@/lib/growth";
+import { nextShareSlug, presentGrowthLink, slugifyName } from "@/lib/growth";
 import { publicUrl } from "@/lib/env";
 
 export {

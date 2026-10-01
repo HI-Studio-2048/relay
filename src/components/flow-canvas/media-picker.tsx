@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type DragEvent } from "react";
+import { useState, type DragEvent } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,10 +94,12 @@ export function MediaPicker({
   const [url, setUrl] = useState(value?.url?.startsWith("https://") ? value.url : "");
   const [busy, setBusy] = useState(false);
   const [over, setOver] = useState(false);
-
-  useEffect(() => {
+  // Follow the attached file when it changes from outside (derived during render, no effect).
+  const [syncedUrl, setSyncedUrl] = useState(value?.url);
+  if (syncedUrl !== value?.url) {
+    setSyncedUrl(value?.url);
     setUrl(value?.url?.startsWith("https://") ? value.url : "");
-  }, [value?.url]);
+  }
 
   const upload = async (file: File) => {
     setBusy(true);

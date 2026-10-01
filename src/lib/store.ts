@@ -1,9 +1,6 @@
 import { and, desc, eq, ilike, isNotNull, lte, notInArray, notLike, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import {
-  bots,
-  broadcastRecipients,
-  broadcasts,
   contactFieldValues,
   contactTags,
   contacts,

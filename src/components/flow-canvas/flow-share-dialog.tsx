@@ -29,8 +29,11 @@ export function FlowShareButton({
   useEffect(() => {
     if (!open || !botId) return;
     let cancelled = false;
-    setBusy(true);
-    setError(null);
+    const start = setTimeout(() => {
+      if (cancelled) return;
+      setBusy(true);
+      setError(null);
+    }, 0);
     void api<{ link: GrowthLinkView }>(`/api/growth-links`, {
       method: "POST",
       body: JSON.stringify({ botId, flowId, ensure: true }),
@@ -46,6 +49,7 @@ export function FlowShareButton({
       });
     return () => {
       cancelled = true;
+      clearTimeout(start);
     };
   }, [open, botId, flowId]);
 
