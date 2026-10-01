@@ -1,10 +1,10 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, like, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
-import { contacts, customFields, flowEvents, flows, growthLinkEvents, growthLinks, tags } from "@/lib/db/schema";
+import { contacts, customFields, flowEvents, flows, growthLinkEvents, growthLinks, messages, tags } from "@/lib/db/schema";
 import { loadContactRecord } from "@/lib/store";
 import { ContactEditor } from "./contact-editor";
-import { Journey, type JourneyEvent } from "./journey";
+import { Journey, type JourneyEvent, type JourneySummary } from "./journey";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +14,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
   if (!contact) notFound();
   const db = await getDb();
   const [row] = await db.select().from(contacts).where(eq(contacts.id, id)).limit(1);
-  const [fieldRows, tagRows, flowRows, linkRows] = await Promise.all([
+  const [fieldRows, tagRows, flowRows, linkRows, [goalTotals], messageTotals, [lastRating]] = await Promise.all([
     db.select().from(customFields).where(eq(customFields.botId, row!.botId)),
     db.select().from(tags).where(eq(tags.botId, row!.botId)),
     db
@@ -30,7 +30,29 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
       .innerJoin(growthLinks, eq(growthLinks.id, growthLinkEvents.linkId))
       .where(eq(growthLinkEvents.contactId, id))
       .limit(20),
+    db
+      .select({ count: sql<number>`count(*)::int`, value: sql<number>`coalesce(sum(${flowEvents.value}), 0)::float` })
+      .from(flowEvents)
+      .where(and(eq(flowEvents.contactId, id), eq(flowEvents.kind, "goal"))),
+    db
+      .select({ direction: messages.direction, count: sql<number>`count(*)::int` })
+      .from(messages)
+      .where(eq(messages.contactId, id))
+      .groupBy(messages.direction),
+    db
+      .select({ body: messages.body })
+      .from(messages)
+      .where(and(eq(messages.contactId, id), like(messages.body, "[rating] %")))
+      .orderBy(desc(messages.createdAt))
+      .limit(1),
   ]);
+  const summary: JourneySummary = {
+    value: Number(goalTotals?.value ?? 0),
+    goals: Number(goalTotals?.count ?? 0),
+    messagesIn: messageTotals.find((row) => row.direction === "inbound")?.count ?? 0,
+    messagesOut: messageTotals.find((row) => row.direction === "outbound")?.count ?? 0,
+    lastRating: lastRating ? lastRating.body.slice("[rating] ".length) : null,
+  };
 
   const events: JourneyEvent[] = [
     { at: new Date(row!.createdAt).toISOString(), kind: "joined" as const, label: "Became a contact", detail: row!.platform },
@@ -60,7 +82,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
         initialFields={fieldRows.filter((field) => !field.key.startsWith("_"))}
         initialTags={tagRows}
       />
-      <Journey events={events} />
+      <Journey events={events} summary={summary} />
     </div>
   );
 }

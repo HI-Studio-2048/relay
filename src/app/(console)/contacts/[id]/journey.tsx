@@ -19,10 +19,27 @@ const ICON: Record<JourneyEvent["kind"], { icon: LucideIcon; color: string }> = 
 };
 
 /** Everything that happened to one contact, newest first. */
-export function Journey({ events }: { events: JourneyEvent[] }) {
+export type JourneySummary = { value: number; goals: number; messagesIn: number; messagesOut: number; lastRating: string | null };
+
+export function Journey({ events, summary }: { events: JourneyEvent[]; summary?: JourneySummary }) {
   return (
     <CanvasCard className="space-y-3 p-4">
       <p className="font-heading text-[15px] text-[#1b1f24]">Journey</p>
+      {summary ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            { label: "Lifetime value", value: summary.value ? summary.value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—" },
+            { label: "Goals reached", value: String(summary.goals) },
+            { label: "Messages", value: `${summary.messagesIn} in · ${summary.messagesOut} out` },
+            { label: "Last rating", value: summary.lastRating ?? "—" },
+          ].map((tile) => (
+            <div key={tile.label} className="rounded-xl bg-[#f9fafb] px-3 py-2 ring-1 ring-[#eef0f3]">
+              <p className="text-[11px] text-[#6b7280]">{tile.label}</p>
+              <p className="text-[14px] font-medium tabular-nums text-[#1b1f24]">{tile.value}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {events.length === 0 ? (
         <p className="text-[13px] text-[#6b7280]">Nothing yet.</p>
       ) : (
