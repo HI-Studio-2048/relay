@@ -320,6 +320,35 @@ export const flowEvents = pgTable("flow_events", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Public API keys (Bearer rly_…). Only a SHA-256 of the key is stored. */
+export const apiKeys = pgTable("api_keys", {
+  id: text("id").primaryKey(),
+  botId: text("bot_id")
+    .notNull()
+    .references(() => bots.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  keyHash: text("key_hash").notNull(),
+  prefix: text("prefix").notNull(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Outgoing webhooks (Zapier / Make / your backend). Payloads are signed with X-Relay-Signature. */
+export const webhookSubscriptions = pgTable("webhook_subscriptions", {
+  id: text("id").primaryKey(),
+  botId: text("bot_id")
+    .notNull()
+    .references(() => bots.id, { onDelete: "cascade" }),
+  url: text("url").notNull(),
+  secret: text("secret").notNull(),
+  events: jsonb("events").$type<string[]>().notNull().default([]),
+  isActive: boolean("is_active").notNull().default(true),
+  lastStatus: integer("last_status"),
+  lastError: text("last_error"),
+  lastDeliveredAt: timestamp("last_delivered_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const botsRelations = relations(bots, ({ many }) => ({
   contacts: many(contacts),
   tags: many(tags),

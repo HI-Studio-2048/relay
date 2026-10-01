@@ -15,6 +15,7 @@ import {
 } from "@/lib/db/schema";
 import { isBroadcastable } from "@/lib/broadcast";
 import { matchesSegment, type Segment, type SegmentSubject } from "@/lib/segments";
+import { emitWebhookSoon, publicContact } from "@/lib/developer";
 import { fireContactRules } from "@/lib/rules";
 import { syncContactSequences } from "@/lib/sequences";
 import { EXAMPLE_GROWTH_LINK_FLOW, EXAMPLE_LEAD_CAPTURE_FLOW } from "@/lib/example-flow";
@@ -109,6 +110,7 @@ export async function persistContact(
       ...values,
       createdAt: now(),
     });
+    emitWebhookSoon(botId, "contact.created", { contact: publicContact(record) });
   }
 
   const fieldDefs = await db.select().from(customFields).where(eq(customFields.botId, botId));

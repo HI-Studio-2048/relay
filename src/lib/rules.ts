@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { automationRules } from "@/lib/db/schema";
 import { interpolateTemplate, notifyAdmin } from "@/lib/flow-effects";
+import { emitWebhookSoon, publicContact, type WebhookEvent } from "@/lib/developer";
 import { log } from "@/lib/logger";
 import { findSequenceByName, subscribeToSequence, unsubscribeFromSequence } from "@/lib/sequences";
 import {
@@ -26,6 +27,17 @@ export async function listRules(botId: string) {
 export async function fireContactRules(botId: string, previous: ContactRecord | null, next: ContactRecord) {
   const events = contactRuleEvents(previous, next);
   if (events.length === 0) return;
+  const hooks: Record<string, WebhookEvent> = {
+    tag_applied: "contact.tag_added",
+    tag_removed: "contact.tag_removed",
+    field_set: "contact.field_set",
+    subscribed: "contact.subscribed",
+  };
+  for (const event of events) {
+    if (event.type === "field_set" && event.value.startsWith("_")) continue;
+    const hook = hooks[event.type];
+    if (hook) emitWebhookSoon(botId, hook, { contact: publicContact(next), value: event.value });
+  }
   const db = await getDb();
   const rows = await db
     .select()

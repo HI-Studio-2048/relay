@@ -16,6 +16,7 @@ import {
   ListFilter,
   MessageSquareText,
   Sparkles,
+  Plug,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useBot } from "@/components/bot-provider";
@@ -57,7 +58,10 @@ const GROUPS: {
   },
   {
     label: "Growth",
-    items: [{ href: "/growth", label: "Links", icon: Link2, tone: "action" }],
+    items: [
+      { href: "/growth", label: "Links", icon: Link2, tone: "action" },
+      { href: "/integrations", label: "API & webhooks", icon: Plug, tone: "stop" },
+    ],
   },
 ];
 
@@ -73,6 +77,7 @@ function sectionTitle(pathname: string) {
   if (pathname.startsWith("/growth")) return "Growth";
   if (pathname.startsWith("/setup")) return "Settings";
   if (pathname.startsWith("/ai")) return "AI assistant";
+  if (pathname.startsWith("/integrations")) return "API & webhooks";
   return "Relay";
 }
 

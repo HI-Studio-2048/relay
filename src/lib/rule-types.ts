@@ -54,6 +54,9 @@ export function contactRuleEvents(previous: ContactRecord | null, next: ContactR
     if (!afterLists.has(lower(list))) events.push({ type: "unsubscribed", value: list });
   }
 
+  // Email / phone captured or changed count as field_set too ("when email is set → start flow").
+  if ((next.email ?? "").trim() && (previous?.email ?? "") !== next.email) events.push({ type: "field_set", value: "email" });
+  if ((next.phone ?? "").trim() && (previous?.phone ?? "") !== next.phone) events.push({ type: "field_set", value: "phone" });
   for (const [key, value] of Object.entries(next.customFields)) {
     if (value.trim() && (previous?.customFields[key] ?? "") !== value) events.push({ type: "field_set", value: key });
   }

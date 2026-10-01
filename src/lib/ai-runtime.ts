@@ -7,6 +7,7 @@ import { deliverReplies } from "@/lib/flow-dispatch";
 import { applyFlowEffects, notifyAdmin } from "@/lib/flow-effects";
 import { executeFrom } from "@/lib/flow-engine";
 import { assignFieldValue, parseCaptureField } from "@/lib/lead-capture";
+import { emitWebhookSoon, publicContact } from "@/lib/developer";
 import { log } from "@/lib/logger";
 import {
   listMessages,
@@ -52,6 +53,7 @@ async function handOff(botId: string, account: ChannelAccount, contact: ContactR
   // A hand-off keeps the bot quiet for a day, or until a teammate resumes it in Live Chat.
   await pauseContactAutomation(contact.id, 24 * 60);
   await persistContact(botId, { ...contact, inboxStatus: "open" }, { skipRules: true });
+  emitWebhookSoon(botId, "conversation.handoff", { contact: publicContact(contact), reply: text });
   await notifyAdmin(`AI handed off ${[contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.username || "a contact"} to a human.`).catch(() => false);
 }
 

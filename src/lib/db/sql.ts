@@ -230,4 +230,28 @@ CREATE INDEX IF NOT EXISTS flow_events_bot_idx ON flow_events(bot_id, created_at
 ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS segment jsonb;
 ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS flow_id text REFERENCES flows(id) ON DELETE SET NULL;
 ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS scheduled_at timestamptz;
+
+CREATE TABLE IF NOT EXISTS api_keys (
+  id text PRIMARY KEY,
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  key_hash text NOT NULL,
+  prefix text NOT NULL,
+  last_used_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS api_keys_hash_idx ON api_keys(key_hash);
+
+CREATE TABLE IF NOT EXISTS webhook_subscriptions (
+  id text PRIMARY KEY,
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  url text NOT NULL,
+  secret text NOT NULL,
+  events jsonb NOT NULL DEFAULT '[]'::jsonb,
+  is_active boolean NOT NULL DEFAULT true,
+  last_status integer,
+  last_error text,
+  last_delivered_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 `;

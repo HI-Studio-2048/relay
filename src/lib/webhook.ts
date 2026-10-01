@@ -10,6 +10,7 @@ import {
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
 import { readAiSettings } from "@/lib/ai";
+import { emitWebhookSoon, publicContact } from "@/lib/developer";
 import { buttonSourceStep, recordFlowEvents } from "@/lib/analytics";
 import { runAiAutoReply } from "@/lib/ai-runtime";
 import { replyToZernioComment, sendZernioPrivateReply } from "@/lib/channels/zernio";
@@ -180,6 +181,19 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
           : `[button] ${inbound.callbackTitle ?? buttonLabel(flows, session, inbound.callbackData)}`),
       telegramMessageId: inbound.externalMessageId ?? null,
     });
+  }
+
+  if (result.inboundSaved) {
+    emitWebhookSoon(botId, "message.received", {
+      contact: publicContact(contact),
+      kind,
+      text: text ?? null,
+      button: inbound.callbackData ? inbound.callbackTitle ?? inbound.callbackData : null,
+      ...(inbound.comment ? { comment: { id: inbound.comment.id, post_id: inbound.comment.postId, permalink: inbound.comment.permalink ?? null } } : {}),
+    });
+  }
+  for (const flowId of result.completedFlowIds ?? []) {
+    emitWebhookSoon(botId, "flow.completed", { contact: publicContact(contact), flow: { id: flowId } });
   }
 
   const clickedNext = inbound.callbackData?.startsWith("n:") ? inbound.callbackData.slice(2) : null;
