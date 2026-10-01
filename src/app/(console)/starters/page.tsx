@@ -5,6 +5,7 @@ import { currentBot } from "@/lib/current-bot";
 import { getDb } from "@/lib/db";
 import { bots, flows } from "@/lib/db/schema";
 import { readHours, readStarters } from "@/lib/starters";
+import { readModeration } from "@/lib/social-triggers";
 import { StartersForm } from "./starters-form";
 
 export const dynamic = "force-dynamic";
@@ -24,9 +25,9 @@ export default async function StartersPage() {
         title="Conversation starters"
         icon={MessageCircleQuestion}
         tone="content"
-        description="What people see before they type: Instagram ice breakers and the Messenger menu, each opening a flow. Plus business hours with an away message."
+        description="What people see before they type: Instagram ice breakers and the Messenger menu, each opening a flow. Plus business hours with an away message, and comment moderation."
       />
-      <StartersForm botId={bot.id} channel={bot.channel} flows={flowRows} initialStarters={readStarters(row?.settings)} initialHours={readHours(row?.settings)} />
+      <StartersForm botId={bot.id} channel={bot.channel} flows={flowRows} initialStarters={readStarters(row?.settings)} initialHours={readHours(row?.settings)} initialModeration={readModeration(row?.settings)} />
     </div>
   );
 }

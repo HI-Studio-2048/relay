@@ -14,7 +14,8 @@ import { isWithinHours, readHours } from "@/lib/starters";
 import { emitWebhookSoon, publicContact } from "@/lib/developer";
 import { buttonSourceStep, recordFlowEvents } from "@/lib/analytics";
 import { runAiAutoReply } from "@/lib/ai-runtime";
-import { replyToZernioComment, sendZernioPrivateReply } from "@/lib/channels/zernio";
+import { hideZernioComment, replyToZernioComment, sendZernioPrivateReply } from "@/lib/channels/zernio";
+import { moderationReason, readModeration } from "@/lib/social-triggers";
 import { deliverReplies, loadBotFieldValues } from "@/lib/flow-dispatch";
 import { interpolateTemplate } from "@/lib/flow-effects";
 import { outboundPreview } from "@/lib/media";
@@ -150,6 +151,39 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
   };
   const kind = inbound.kind ?? "message";
 
+  // Comment moderation runs before any automation: a hidden comment gets no reply at all.
+  const commentRef =
+    kind === "comment" && inbound.comment && account.channel === "zernio" && inbound.channelAccountId
+      ? { accountId: inbound.channelAccountId, postId: inbound.comment.postId, commentId: inbound.comment.id, platform: inbound.platform ?? null }
+      : null;
+  const hideReason = commentRef ? moderationReason(readModeration(bot.settings), text ?? "") : null;
+  if (commentRef && hideReason) {
+    try {
+      await hideZernioComment(account.token, commentRef);
+    } catch (error) {
+      log.warn("Hiding a comment failed", error instanceof Error ? error.message : error);
+    }
+    const base = existing ?? prepared;
+    const record = base ?? {
+      id: crypto.randomUUID(),
+      telegramUserId: externalUserId,
+      username: profile.username,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      email: null,
+      phone: null,
+      customFields: {},
+      tags: [],
+      platform: inbound.platform ?? null,
+      channelAccountId: inbound.channelAccountId ?? null,
+      avatarUrl: inbound.avatarUrl ?? null,
+    };
+    await persistContact(botId, record);
+    await saveMessage({ botId, contactId: record.id, direction: "inbound", source: "user", body: `[comment] ${text ?? ""}`.trim() });
+    await saveMessage({ botId, contactId: record.id, direction: "outbound", source: "flow", body: `[public reply] Hidden automatically (${hideReason})` });
+    return;
+  }
+
   // Live Chat takeover: a teammate (or an AI hand-off) is handling this person. Log the message or
   // comment and leave it for them — no flow, keyword, comment automation or AI reply.
   const paused = Boolean(existing?.botPausedUntil && isBotPaused({ botPausedUntil: existing.botPausedUntil }));
@@ -244,6 +278,14 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
     const answered = await answerComment(botId, account, contact, inbound, result.publicReply ?? null, replies);
     replies = [];
     if (answered.session !== undefined) await persistSession(contact.id, answered.session);
+    const matched = result.matchedFlowId ? flows.find((flow) => flow.id === result.matchedFlowId) : null;
+    if (matched?.definition.trigger?.hideAfterReply && commentRef) {
+      try {
+        await hideZernioComment(account.token, commentRef);
+      } catch (error) {
+        log.warn("Hiding a comment failed", error instanceof Error ? error.message : error);
+      }
+    }
   }
   await deliverReplies({ botId, account, contact, replies });
 

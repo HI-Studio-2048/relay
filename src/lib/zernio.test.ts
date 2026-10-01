@@ -335,3 +335,15 @@ describe("Instagram follower facts", () => {
     expect(followed.contact.tags).toContain("follower-unlocked");
   });
 });
+
+describe("comment moderation", () => {
+  it("hides on whole words and links only when enabled", async () => {
+    const { moderationReason, readModeration } = await import("@/lib/social-triggers");
+    const moderation = readModeration({ moderation: { enabled: true, words: ["Scam", " spam "], hideLinks: true } });
+    expect(moderationReason(moderation, "this is a SCAM!")).toBe("“scam”");
+    expect(moderationReason(moderation, "scampi looks great")).toBeNull();
+    expect(moderationReason(moderation, "check out cheap-followers.xyz now")).toBe("link");
+    expect(moderationReason(moderation, "Love this 😍")).toBeNull();
+    expect(moderationReason({ ...moderation, enabled: false }, "scam")).toBeNull();
+  });
+});

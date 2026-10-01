@@ -139,6 +139,14 @@ export function SocialTriggerEditor({
         />
         Ignore replies to other comments
       </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={value.hideAfterReply ?? false}
+          onChange={(event) => onChange({ ...value, hideAfterReply: event.target.checked })}
+        />
+        Hide the comment after replying
+      </label>
       <p className="text-[11px] leading-snug text-muted-foreground">
         The first message goes out as a private reply to the comment — Instagram allows one until the person
         answers, so give it a button and continue the flow from the tap.

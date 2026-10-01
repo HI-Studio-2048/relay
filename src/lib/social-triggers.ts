@@ -22,7 +22,30 @@ export type SocialTriggerConfig = {
   excludeReplies?: boolean;
   /** Fire once per person per post (ManyChat default). */
   oncePerContact?: boolean;
+  /** Hide the comment after replying (keep price questions or emails out of public view). */
+  hideAfterReply?: boolean;
 };
+
+/** Account-wide comment moderation, stored on bots.settings.moderation. */
+export type ModerationSettings = { enabled: boolean; words: string[]; hideLinks: boolean };
+
+export function readModeration(settings: Record<string, unknown> | null | undefined): ModerationSettings {
+  const raw = (settings?.moderation ?? {}) as Partial<ModerationSettings>;
+  return {
+    enabled: Boolean(raw.enabled),
+    words: Array.isArray(raw.words) ? raw.words.map((word) => String(word).trim().toLowerCase()).filter(Boolean).slice(0, 200) : [],
+    hideLinks: Boolean(raw.hideLinks),
+  };
+}
+
+/** Why a comment should be hidden, or null. Words match whole words, case-insensitively. */
+export function moderationReason(moderation: ModerationSettings, text: string): string | null {
+  if (!moderation.enabled) return null;
+  const lower = text.toLowerCase();
+  if (moderation.hideLinks && /(https?:\/\/|www\.|\b[a-z0-9-]+\.(com|net|io|ly|co|xyz|link|shop)\b)/i.test(text)) return "link";
+  const hit = moderation.words.find((word) => new RegExp(`(^|[^\\p{L}\\p{N}])${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^\\p{L}\\p{N}])`, "u").test(lower));
+  return hit ? `“${hit}”` : null;
+}
 
 export type SocialEvent = {
   kind: SocialTriggerType;

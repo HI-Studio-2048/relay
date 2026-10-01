@@ -213,6 +213,13 @@ export async function replyToZernioComment(apiKey: string, ref: ZernioCommentRef
   });
 }
 
+/** Hide a comment from public view (Instagram, Facebook and others that support it). */
+export async function hideZernioComment(apiKey: string, ref: ZernioCommentRef) {
+  await zernioRequest("POST", `/v1/inbox/comments/${encodeURIComponent(ref.postId)}/${encodeURIComponent(ref.commentId)}/hide`, apiKey, {
+    accountId: ref.accountId,
+  });
+}
+
 /** Instagram / Facebook "private reply": the DM that opens a conversation from a comment. */
 export async function sendZernioPrivateReply(apiKey: string, ref: ZernioCommentRef, reply: OutboundReply): Promise<SentMessage> {
   const [body] = buildZernioMessages({ ...reply, media: undefined }, ref.platform ?? "instagram");
