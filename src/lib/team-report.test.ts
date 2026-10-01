@@ -27,10 +27,24 @@ describe("team report", () => {
     expect(report.humanReplies).toBe(4);
     expect(report.automatedReplies).toBe(1);
     expect(report.agents).toEqual([
-      { name: "Maya", replies: 2, conversations: 1, medianResponseMs: 10 * 60000 },
-      { name: "Jordan", replies: 2, conversations: 2, medianResponseMs: 4 * 60000 },
+      { name: "Maya", replies: 2, conversations: 1, medianResponseMs: 10 * 60000, csat: null, ratings: 0 },
+      { name: "Jordan", replies: 2, conversations: 2, medianResponseMs: 4 * 60000, csat: null, ratings: 0 },
     ]);
     expect(report.medianResponseMs).toBe(7 * 60000);
+  });
+
+  it("scores CSAT ratings against the last teammate who replied", () => {
+    const report = buildTeamReport([
+      msg("a", 0, "inbound", "user"),
+      msg("a", 3, "outbound", "agent", "Maya"),
+      { ...msg("a", 9, "inbound", "user"), body: "[rating] 3/3 😀 Great" },
+      msg("b", 0, "inbound", "user"),
+      msg("b", 5, "outbound", "agent", "Maya"),
+      { ...msg("b", 9, "inbound", "user"), body: "[rating] 1/3 🙁 Not good" },
+    ]);
+    expect(report.agents[0]).toMatchObject({ name: "Maya", csat: 0.5, ratings: 2 });
+    expect(report.csat).toBe(0.5);
+    expect(report.medianResponseMs).toBe(4 * 60000);
   });
 
   it("formats durations", () => {

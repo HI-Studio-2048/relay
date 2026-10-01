@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { renderForChannel } from "@/lib/channels/format";
-import { CHANNELS, type ChannelAccount, type NormalizedInbound, type SentMessage } from "@/lib/channels/types";
+import { CHANNELS, isRelayPayload, type ChannelAccount, type NormalizedInbound, type SentMessage } from "@/lib/channels/types";
 import { publicUrl } from "@/lib/env";
 import { log } from "@/lib/logger";
 import type { FlowMedia, OutboundReply } from "@/lib/types";
@@ -251,8 +251,8 @@ export function parseMetaWebhook(payload: MetaWebhookPayload): NormalizedInbound
         const isStart = postback === GET_STARTED_PAYLOAD || Boolean(ref);
         events.push({
           externalUserId: sender,
-          text: isStart ? (ref ? `/start ${ref}` : "/start") : postback.startsWith("n:") || postback.startsWith("flow:") ? null : event.postback?.title ?? null,
-          callbackData: postback.startsWith("n:") || postback.startsWith("flow:") ? postback : null,
+          text: isStart ? (ref ? `/start ${ref}` : "/start") : isRelayPayload(postback) ? null : event.postback?.title ?? null,
+          callbackData: isRelayPayload(postback) ? postback : null,
           ...(postback.startsWith("n:") && event.postback?.title ? { callbackTitle: event.postback.title } : {}),
           referral: ref,
         });

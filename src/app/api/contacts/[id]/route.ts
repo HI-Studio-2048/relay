@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
 import { loadContactRecord, persistContact } from "@/lib/store";
+import { sendCsatSurvey } from "@/lib/csat-send";
 
 export async function GET(_request: Request, context: RouteParams<{ id: string }>) {
   try {
@@ -47,7 +48,9 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
         : contact.tags,
     };
     await persistContact(row!.botId, next);
-    return json({ contact: await loadContactRecord(id) });
+    // Closing a conversation a teammate handled can ask the person to rate it (CSAT).
+    const surveyed = body.inboxStatus === "closed" && contact.inboxStatus !== "closed" ? await sendCsatSurvey(id) : false;
+    return json({ contact: await loadContactRecord(id), surveyed });
   } catch (error) {
     return fail(error);
   }

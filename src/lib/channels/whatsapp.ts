@@ -1,6 +1,6 @@
 import { renderForChannel } from "@/lib/channels/format";
 import { absoluteMediaUrl, graphPost } from "@/lib/channels/meta";
-import { CHANNELS, type ChannelAccount, type NormalizedInbound, type SentMessage } from "@/lib/channels/types";
+import { CHANNELS, isRelayPayload, type ChannelAccount, type NormalizedInbound, type SentMessage } from "@/lib/channels/types";
 import { log } from "@/lib/logger";
 import type { FlowMedia, OutboundReply } from "@/lib/types";
 
@@ -144,7 +144,7 @@ export function parseWhatsAppWebhook(payload: WhatsAppWebhookPayload): Normalize
           firstName: first || null,
           lastName: rest.join(" ") || null,
           text,
-          callbackData: chosenId?.startsWith("n:") ? chosenId : null,
+          callbackData: isRelayPayload(chosenId) ? chosenId : null,
           contactPhone: `+${message.from.replace(/^\+/, "")}`,
           externalMessageId: message.id ?? null,
           referral: message.referral?.ref ?? null,

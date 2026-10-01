@@ -295,6 +295,11 @@ export default async function OverviewPage() {
             <p className="text-[12px] text-[#6b7280]">
               Median first response <span className="font-medium text-[#1b1f24]">{formatDuration(team.medianResponseMs)}</span> ·{" "}
               {team.humanReplies.toLocaleString()} human / {team.automatedReplies.toLocaleString()} automated replies
+              {team.csat !== null ? (
+                <>
+                  {" "}· CSAT <span className="font-medium text-[#1b1f24]">{Math.round(team.csat * 100)}%</span> ({team.ratings})
+                </>
+              ) : null}
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -305,6 +310,7 @@ export default async function OverviewPage() {
                   <th className="py-1.5 text-right">Replies</th>
                   <th className="py-1.5 text-right">Conversations</th>
                   <th className="py-1.5 text-right">Median first response</th>
+                  <th className="py-1.5 text-right">CSAT</th>
                 </tr>
               </thead>
               <tbody>
@@ -314,6 +320,9 @@ export default async function OverviewPage() {
                     <td className="py-2 text-right tabular-nums">{agent.replies}</td>
                     <td className="py-2 text-right tabular-nums">{agent.conversations}</td>
                     <td className="py-2 text-right tabular-nums">{formatDuration(agent.medianResponseMs)}</td>
+                    <td className="py-2 text-right tabular-nums" title={`${agent.ratings} rating${agent.ratings === 1 ? "" : "s"}`}>
+                      {agent.csat !== null ? `${Math.round(agent.csat * 100)}%` : "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

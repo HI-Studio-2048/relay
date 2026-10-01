@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Clock, Menu, MessageCircleQuestion, Plus, ShieldCheck, X } from "lucide-react";
+import { Clock, Menu, MessageCircleQuestion, Plus, ShieldCheck, X, Smile } from "lucide-react";
 import { toast } from "sonner";
 import { Panel } from "@/components/chrome/panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import type { CsatSettings } from "@/lib/csat";
 import { api } from "@/lib/client";
 import type { ChannelId } from "@/lib/channels/types";
 import { WEEKDAYS, type BusinessHours, type StarterItem, type StartersSettings } from "@/lib/starters";
@@ -83,6 +84,7 @@ export function StartersForm({
   initialStarters,
   initialHours,
   initialModeration,
+  initialCsat,
 }: {
   botId: string;
   channel: ChannelId;
@@ -90,7 +92,9 @@ export function StartersForm({
   initialStarters: StartersSettings;
   initialHours: BusinessHours;
   initialModeration: ModerationSettings;
+  initialCsat: CsatSettings;
 }) {
+  const [csat, setCsat] = useState(initialCsat);
   const [starters, setStarters] = useState(initialStarters);
   const [hours, setHours] = useState(initialHours);
   const [saving, setSaving] = useState(false);
@@ -106,6 +110,7 @@ export function StartersForm({
         body: JSON.stringify({
           starters,
           hours,
+          csat,
           moderation: { ...moderation, words: wordsText.split(/[,\n]+/).map((word) => word.trim()).filter(Boolean) },
         }),
       });
@@ -224,6 +229,16 @@ export function StartersForm({
           </label>
         </Panel>
       ) : null}
+
+      <Panel tone="input" icon={Smile} label="Satisfaction survey" title="Ask how it went when a chat is done">
+        <label className="flex items-center gap-2 text-[13px]">
+          <input type="checkbox" checked={csat.enabled} onChange={(event) => setCsat({ ...csat, enabled: event.target.checked })} />
+          When a teammate marks a conversation Done, send a rating request (😀 / 😐 / 🙁)
+        </label>
+        <Textarea rows={2} value={csat.question} onChange={(event) => setCsat({ ...csat, question: event.target.value })} />
+        <Textarea rows={1} value={csat.thanks} placeholder="Thank-you reply" onChange={(event) => setCsat({ ...csat, thanks: event.target.value })} />
+        <p className="text-[12px] text-[#6b7280]">Only sent when a teammate replied in the last 7 days. Scores show per teammate on Overview.</p>
+      </Panel>
 
       <Button onClick={() => void save()} disabled={saving}>
         {saving ? "Saving…" : metaCapable ? "Save and sync" : "Save"}

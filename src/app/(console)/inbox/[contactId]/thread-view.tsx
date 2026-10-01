@@ -69,6 +69,16 @@ function Bubble({
   const outbound = message.direction === "outbound";
   const event = message.body.match(EVENT_PREFIX);
   const time = new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (message.body.startsWith("[rating] ")) {
+    return (
+      <div className="flex justify-start">
+        <span className="rounded-full bg-[#f5f3ff] px-3 py-1 text-[12px] text-[#1b1f24] ring-1 ring-[#7b61ff]/30">
+          <span className="text-[#6b7280]">Rated the chat</span> {message.body.slice("[rating] ".length)}
+          <span className="ml-2 text-[10px] text-[#8b95a1]">{time}</span>
+        </span>
+      </div>
+    );
+  }
   if (message.body.startsWith("[button] ")) {
     return (
       <div className="flex justify-start">
@@ -268,11 +278,12 @@ export function ThreadView({
 
   const patchContact = async (patch: Record<string, unknown>) => {
     try {
-      const data = await api<{ contact: ContactRecord }>(`/api/contacts/${contact.id}`, {
+      const data = await api<{ contact: ContactRecord; surveyed?: boolean }>(`/api/contacts/${contact.id}`, {
         method: "PATCH",
         body: JSON.stringify(patch),
       });
       setContact(data.contact);
+      if (data.surveyed) toast.success("Done — rating request sent");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Update failed");
     }

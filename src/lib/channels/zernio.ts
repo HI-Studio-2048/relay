@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { renderForChannel } from "@/lib/channels/format";
 import { ChannelApiError, absoluteMediaUrl } from "@/lib/channels/meta";
-import { CHANNELS, type ChannelAccount, type ChannelTarget, type NormalizedInbound, type SentMessage } from "@/lib/channels/types";
+import { CHANNELS, isRelayPayload, type ChannelAccount, type ChannelTarget, type NormalizedInbound, type SentMessage } from "@/lib/channels/types";
 import { log } from "@/lib/logger";
 import type { FlowMedia, OutboundReply } from "@/lib/types";
 
@@ -321,7 +321,7 @@ export function parseZernioWebhook(payload: ZernioWebhookPayload, accountFilter:
     const ref = meta.referral?.ref ?? null;
     let text = message.text ?? null;
     let callbackData: string | null = null;
-    if (payloadValue?.startsWith("n:") || payloadValue?.startsWith("flow:")) {
+    if (isRelayPayload(payloadValue)) {
       callbackData = payloadValue;
       text = null;
     } else if (payloadValue?.startsWith("qr:")) {

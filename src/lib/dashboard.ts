@@ -91,7 +91,14 @@ export type Dashboard = Awaited<ReturnType<typeof loadDashboard>>;
 export async function loadTeamReport(botId: string, days = 30) {
   const db = await getDb();
   const rows = await db
-    .select({ contactId: messages.contactId, direction: messages.direction, source: messages.source, author: messages.author, createdAt: messages.createdAt })
+    .select({
+      contactId: messages.contactId,
+      direction: messages.direction,
+      source: messages.source,
+      author: messages.author,
+      createdAt: messages.createdAt,
+      body: sql<string>`case when ${messages.body} like '[rating]%' then ${messages.body} else '' end`,
+    })
     .from(messages)
     .where(and(eq(messages.botId, botId), gte(messages.createdAt, new Date(Date.now() - days * DAY))))
     .orderBy(messages.createdAt)

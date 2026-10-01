@@ -2,8 +2,10 @@ import { eq } from "drizzle-orm";
 import {
   accountFromRow,
   ackChannelCallback,
+  channelTarget,
   lookupChannelProfile,
   parseChannelUpdate,
+  sendChannelReply,
   type ChannelAccount,
   type NormalizedInbound,
 } from "@/lib/channels";
@@ -32,6 +34,7 @@ import {
   recordGrowthStart,
 } from "@/lib/growth-links";
 import { log } from "@/lib/logger";
+import { parseCsatPayload, ratingBody, readCsat } from "@/lib/csat";
 import {
   findContactByTelegram,
   isBotPaused,
@@ -89,6 +92,20 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
   // A takeover pause that has run out resumes the flow it paused (Live Chat "Resume" does the same by hand).
   if (existing && session?.status === "paused" && existing.botPausedUntil && !isBotPaused({ botPausedUntil: existing.botPausedUntil })) {
     session = await resumeContactAutomation(existing.id);
+  }
+
+  // CSAT rating tap: log it for the team report and say thanks; it never starts automation.
+  const rating = parseCsatPayload(inbound.callbackData);
+  if (existing && rating !== null) {
+    await saveMessage({ botId, contactId: existing.id, direction: "inbound", source: "user", body: ratingBody(rating) });
+    try {
+      const thanks = readCsat(bot.settings).thanks;
+      await sendChannelReply(account, channelTarget(existing), { text: thanks, source: "flow" });
+      await saveMessage({ botId, contactId: existing.id, direction: "outbound", source: "flow", body: thanks });
+    } catch (error) {
+      log.warn("CSAT thanks failed", error instanceof Error ? error.message : error);
+    }
+    return;
   }
 
   let text = inbound.text ?? null;

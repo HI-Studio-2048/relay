@@ -173,6 +173,11 @@ export type ChannelTarget = {
   platform?: string | null;
 };
 
+/** Button payloads Relay itself sends: a flow step (n:), a whole flow (flow:), or a CSAT rating (csat:). */
+export function isRelayPayload(value: string | null | undefined): boolean {
+  return Boolean(value && (value.startsWith("n:") || value.startsWith("flow:") || /^csat:[1-3]$/.test(value)));
+}
+
 export function channelTarget(contact: {
   telegramUserId: string;
   threadId?: string | null;
