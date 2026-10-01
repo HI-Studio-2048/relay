@@ -292,6 +292,7 @@ export type OutboundReply = {
 export type BroadcastStatus =
   | "draft"
   | "awaiting_confirm"
+  | "scheduled"
   | "queued"
   | "sending"
   | "sent"

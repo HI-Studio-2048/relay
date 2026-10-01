@@ -1,27 +1,32 @@
 import { eq } from "drizzle-orm";
-import { canDispatchBroadcast, nextBroadcastStatusAfterConfirm } from "@/lib/broadcast";
+import { canDispatchBroadcast } from "@/lib/broadcast";
+import { EmptyAudienceError, materializeBroadcast } from "@/lib/broadcast-dispatch";
 import { getDb } from "@/lib/db";
-import { broadcastRecipients, broadcasts } from "@/lib/db/schema";
+import { broadcasts } from "@/lib/db/schema";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
-import { enqueueBroadcast, shouldRunWorker } from "@/lib/queue";
-import { broadcastAudience } from "@/lib/store";
+import { shouldRunWorker } from "@/lib/queue";
 import type { BroadcastStatus } from "@/lib/types";
 import { drainJobs } from "@/lib/worker";
 
-async function readConfirm(request: Request): Promise<{ confirm: unknown; viaForm: boolean }> {
+async function readConfirm(request: Request): Promise<{ confirm: unknown; viaForm: boolean; scheduledAt: Date | null }> {
   const contentType = request.headers.get("content-type") ?? "";
+  const parseWhen = (value: unknown) => {
+    if (typeof value !== "string" || !value.trim()) return null;
+    const when = new Date(value);
+    return Number.isFinite(when.getTime()) && when.getTime() > Date.now() + 30_000 ? when : null;
+  };
   if (contentType.includes("application/json")) {
-    const body = await readJson<{ confirm?: unknown }>(request);
-    return { confirm: body.confirm, viaForm: false };
+    const body = await readJson<{ confirm?: unknown; scheduledAt?: unknown }>(request);
+    return { confirm: body.confirm, viaForm: false, scheduledAt: parseWhen(body.scheduledAt) };
   }
   const form = await request.formData();
-  return { confirm: form.get("phrase") === "CONFIRM", viaForm: true };
+  return { confirm: form.get("phrase") === "CONFIRM", viaForm: true, scheduledAt: parseWhen(form.get("scheduledAt")) };
 }
 
 export async function POST(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
-    const { confirm, viaForm } = await readConfirm(request);
+    const { confirm, viaForm, scheduledAt } = await readConfirm(request);
     const origin = new URL(request.url).origin;
     const redirectTo = (query: string) =>
       Response.redirect(`${origin}/broadcasts/${id}${query}`, 303);
@@ -41,39 +46,25 @@ export async function POST(request: Request, context: RouteParams<{ id: string }
         : json({ error: gate.error, code: gate.code }, 409);
     }
 
-    const audience = await broadcastAudience(broadcast.botId, broadcast.tagId);
-    if (audience.length === 0) {
-      return viaForm
-        ? redirectTo("?error=empty")
-        : json(
-            { error: broadcast.tagId ? "No contacts have this tag. Nothing to send." : "No subscribed contacts yet." },
-            400,
-          );
+    if (scheduledAt) {
+      const [scheduled] = await db
+        .update(broadcasts)
+        .set({ status: "scheduled", confirmedAt: new Date(), scheduledAt })
+        .where(eq(broadcasts.id, id))
+        .returning();
+      return viaForm ? redirectTo("?scheduled=1") : json({ broadcast: scheduled });
     }
 
-    await db.delete(broadcastRecipients).where(eq(broadcastRecipients.broadcastId, id));
-    await db.insert(broadcastRecipients).values(
-      audience.map((contact) => ({
-        id: crypto.randomUUID(),
-        broadcastId: id,
-        contactId: contact.id,
-        status: "pending",
-      })),
-    );
-
-    const [updated] = await db
-      .update(broadcasts)
-      .set({
-        status: nextBroadcastStatusAfterConfirm(),
-        confirmedAt: new Date(),
-        totalCount: audience.length,
-        sentCount: 0,
-        failedCount: 0,
-      })
-      .where(eq(broadcasts.id, id))
-      .returning();
-
-    await enqueueBroadcast({ kind: "broadcast", broadcastId: id });
+    let updated;
+    try {
+      await db.update(broadcasts).set({ confirmedAt: new Date() }).where(eq(broadcasts.id, id));
+      updated = await materializeBroadcast(id);
+    } catch (error) {
+      if (error instanceof EmptyAudienceError) {
+        return viaForm ? redirectTo("?error=empty") : json({ error: error.message }, 400);
+      }
+      throw error;
+    }
     if (shouldRunWorker()) void drainJobs(5);
     return viaForm ? redirectTo("?queued=1") : json({ broadcast: updated });
   } catch (error) {

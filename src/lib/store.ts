@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, isNotNull, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, isNotNull, lte, notLike, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import {
   bots,
@@ -14,6 +14,7 @@ import {
   tags,
 } from "@/lib/db/schema";
 import { isBroadcastable } from "@/lib/broadcast";
+import { matchesSegment, type Segment, type SegmentSubject } from "@/lib/segments";
 import { fireContactRules } from "@/lib/rules";
 import { syncContactSequences } from "@/lib/sequences";
 import { EXAMPLE_GROWTH_LINK_FLOW, EXAMPLE_LEAD_CAPTURE_FLOW } from "@/lib/example-flow";
@@ -433,12 +434,92 @@ export async function contactsWithTag(botId: string, tagId: string) {
   return rows.map((row) => row.contact).filter((contact) => isBroadcastable(contact));
 }
 
-/** Broadcast audience: one tag, or everyone who has not unsubscribed when tagId is null. */
-export async function broadcastAudience(botId: string, tagId: string | null | undefined) {
-  if (tagId) return contactsWithTag(botId, tagId);
+export type AudienceMember = typeof contacts.$inferSelect & { subject: SegmentSubject };
+
+/**
+ * Every contact of an account with what segments look at (tags, fields, lists, last inbound),
+ * loaded in four queries instead of one per contact.
+ */
+export async function loadAudienceMembers(botId: string): Promise<AudienceMember[]> {
   const db = await getDb();
-  const rows = await db.select().from(contacts).where(eq(contacts.botId, botId));
-  return rows.filter((contact) => isBroadcastable(contact));
+  const [rows, tagRows, fieldRows, inboundRows] = await Promise.all([
+    db.select().from(contacts).where(eq(contacts.botId, botId)),
+    db
+      .select({ contactId: contactTags.contactId, name: tags.name })
+      .from(contactTags)
+      .innerJoin(tags, eq(tags.id, contactTags.tagId))
+      .where(eq(tags.botId, botId)),
+    db
+      .select({ contactId: contactFieldValues.contactId, key: customFields.key, value: contactFieldValues.value })
+      .from(contactFieldValues)
+      .innerJoin(customFields, eq(customFields.id, contactFieldValues.fieldId))
+      .where(eq(customFields.botId, botId)),
+    db
+      .select({ contactId: messages.contactId, lastAt: sql<Date>`max(${messages.createdAt})` })
+      .from(messages)
+      // Comments are public and do not open a DM window, so they do not count as activity.
+      .where(and(eq(messages.botId, botId), eq(messages.direction, "inbound"), notLike(messages.body, "[comment]%")))
+      .groupBy(messages.contactId),
+  ]);
+  const tagsBy = new Map<string, string[]>();
+  for (const row of tagRows) tagsBy.set(row.contactId, [...(tagsBy.get(row.contactId) ?? []), row.name]);
+  const fieldsBy = new Map<string, Record<string, string>>();
+  for (const row of fieldRows) fieldsBy.set(row.contactId, { ...(fieldsBy.get(row.contactId) ?? {}), [row.key]: row.value });
+  const inboundBy = new Map(inboundRows.map((row) => [row.contactId, row.lastAt]));
+  return rows.map((row) => ({
+    ...row,
+    subject: {
+      tags: tagsBy.get(row.id) ?? [],
+      email: row.email,
+      phone: row.phone,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      customFields: fieldsBy.get(row.id) ?? {},
+      subscriptions: row.subscriptions ?? [],
+      platform: row.platform,
+      createdAt: row.createdAt,
+      lastInboundAt: inboundBy.get(row.id) ?? null,
+    },
+  }));
+}
+
+/**
+ * Broadcast audience: subscribed contacts, narrowed to one tag (when tagId is set) and to a segment.
+ * Unsubscribed contacts are never included.
+ */
+export async function broadcastAudience(botId: string, tagId: string | null | undefined, segment?: Segment | null) {
+  const db = await getDb();
+  let tagName: string | null = null;
+  if (tagId) {
+    const [tag] = await db.select().from(tags).where(eq(tags.id, tagId)).limit(1);
+    if (!tag) return [];
+    tagName = tag.name;
+  }
+  const members = await loadAudienceMembers(botId);
+  const now = Date.now();
+  return members.filter(
+    (member) =>
+      isBroadcastable(member) &&
+      (!tagName || member.subject.tags.includes(tagName)) &&
+      matchesSegment(member.subject, segment, now),
+  );
+}
+
+/** Choices for segment builders: tags, custom fields, lists and platforms that exist on this account. */
+export async function segmentOptions(botId: string) {
+  const db = await getDb();
+  const [tagRows, fieldRows, contactRows] = await Promise.all([
+    db.select({ name: tags.name }).from(tags).where(eq(tags.botId, botId)),
+    db.select({ key: customFields.key }).from(customFields).where(eq(customFields.botId, botId)),
+    db.select({ subscriptions: contacts.subscriptions, platform: contacts.platform }).from(contacts).where(eq(contacts.botId, botId)),
+  ]);
+  const sorted = (values: Iterable<string>) => [...new Set(values)].filter(Boolean).sort((a, b) => a.localeCompare(b));
+  return {
+    tags: sorted(tagRows.map((row) => row.name)),
+    fields: sorted(fieldRows.map((row) => row.key).filter((key) => !key.startsWith("_"))),
+    lists: sorted(contactRows.flatMap((row) => row.subscriptions ?? [])),
+    platforms: sorted(contactRows.map((row) => row.platform ?? "")),
+  };
 }
 
 export async function seedBotDefaults(botId: string) {

@@ -7,6 +7,8 @@ import { interpolateTemplate } from "@/lib/flow-effects";
 import { log } from "@/lib/logger";
 import { resumeDueDelays } from "@/lib/flow-resume";
 import { resumeDueSequences } from "@/lib/sequence-resume";
+import { releaseDueBroadcasts } from "@/lib/broadcast-dispatch";
+import { startFlowForContact } from "@/lib/flow-dispatch";
 import { dequeueJob, shouldRunWorker, type Job } from "@/lib/queue";
 import { acquireSendSlot } from "@/lib/rate-limit";
 import { loadContactRecord, saveMessage } from "@/lib/store";
@@ -48,6 +50,17 @@ async function handleBroadcast(broadcastId: string) {
           .update(broadcastRecipients)
           .set({ status: "failed", error: "Unsubscribed" })
           .where(eq(broadcastRecipients.id, recipient.id));
+        continue;
+      }
+      if (broadcast.flowId) {
+        // Flow broadcast: each recipient starts the flow fresh (replacing any session they were in).
+        await startFlowForContact({ contactId: contact.id, flowId: broadcast.flowId });
+        await db
+          .update(broadcastRecipients)
+          .set({ status: "sent", sentAt: new Date(), error: null })
+          .where(eq(broadcastRecipients.id, recipient.id));
+        sentCount += 1;
+        await db.update(broadcasts).set({ sentCount, failedCount }).where(eq(broadcasts.id, broadcastId));
         continue;
       }
       await acquireSendSlot(broadcast.botId, contact.telegramUserId);
@@ -122,6 +135,7 @@ export function startWorker() {
   log.info("Worker loop started");
   const tick = async () => {
     try {
+      await releaseDueBroadcasts();
       await drainJobs();
       await resumeDueDelays();
       await resumeDueSequences();

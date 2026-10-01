@@ -226,4 +226,8 @@ CREATE TABLE IF NOT EXISTS flow_events (
 );
 CREATE INDEX IF NOT EXISTS flow_events_flow_idx ON flow_events(flow_id, kind);
 CREATE INDEX IF NOT EXISTS flow_events_bot_idx ON flow_events(bot_id, created_at);
+
+ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS segment jsonb;
+ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS flow_id text REFERENCES flows(id) ON DELETE SET NULL;
+ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS scheduled_at timestamptz;
 `;

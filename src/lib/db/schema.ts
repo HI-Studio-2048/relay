@@ -178,6 +178,12 @@ export const broadcasts = pgTable("broadcasts", {
   body: text("body").notNull(),
   /** Null means "everyone" (all subscribed contacts of the bot). */
   tagId: text("tag_id").references(() => tags.id, { onDelete: "restrict" }),
+  /** Extra audience conditions (segments.ts). Applied on top of tagId. */
+  segment: jsonb("segment").$type<Record<string, unknown>>(),
+  /** Send this flow to each recipient instead of the text body. */
+  flowId: text("flow_id").references(() => flows.id, { onDelete: "set null" }),
+  /** Confirmed broadcasts wait in "scheduled" until this time. */
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
   status: text("status").notNull().default("draft"),
   confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
   totalCount: integer("total_count").notNull().default(0),
