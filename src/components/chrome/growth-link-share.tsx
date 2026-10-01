@@ -16,6 +16,11 @@ export async function copyGrowthText(value: string, label: string) {
   }
 }
 
+function widgetSnippet(link: GrowthLinkView) {
+  const origin = link.shortUrl.startsWith("http") ? new URL(link.shortUrl).origin : "";
+  return `<script src="${origin}/widget/${link.slug}.js?text=Chat%20with%20us" async></script>`;
+}
+
 export function growthLinkSubtitle(link: GrowthLinkView) {
   return `ref ${link.slug} · ${link.clickCount} click${link.clickCount === 1 ? "" : "s"} · ${link.startCount} start${link.startCount === 1 ? "" : "s"}${link.tagName ? ` · tag ${link.tagName}` : ""}${link.flowName ? ` · ${link.flowName}` : ""}`;
 }
@@ -83,6 +88,17 @@ export function GrowthLinkShareActions({
           </Button>
         ) : null}
       </div>
+      <details className="mt-2 text-[12px] text-[#6b7280]">
+        <summary className="cursor-pointer font-medium text-[#1b1f24]">Website chat widget</summary>
+        <p className="mt-1">Paste before &lt;/body&gt; on your site. Clicks count on this link.</p>
+        <button
+          type="button"
+          className="mt-1 block w-full rounded-lg bg-[#0f172a] p-2 text-left font-mono text-[11px] break-all text-[#e2e8f0]"
+          onClick={() => void copyGrowthText(widgetSnippet(link), "widget snippet")}
+        >
+          {widgetSnippet(link)}
+        </button>
+      </details>
       {showQr ? (
         <img
           src={link.qrUrl}

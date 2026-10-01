@@ -12,6 +12,7 @@ const PUBLIC_PREFIXES = [
   "/api/zernio/webhook",
   "/api/v1",
   "/go",
+  "/widget",
 ];
 
 /** Uploaded flow media must be fetchable by Meta / Zernio to deliver it; uploads themselves stay private. */
