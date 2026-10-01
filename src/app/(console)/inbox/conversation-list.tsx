@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Bell, BellOff, Search } from "lucide-react";
 import { useBot } from "@/components/bot-provider";
 import { ContactAvatar } from "@/components/chrome/avatar";
 import { PlatformBadge } from "@/components/chrome/platform-badge";
@@ -36,6 +36,26 @@ const FILTERS: { value: Filter; label: string; team?: boolean }[] = [
   { value: "all", label: "All" },
 ];
 
+const NOTIFY_KEY = "relay.inbox.notify";
+
+function readNotifyPref() {
+  try {
+    return localStorage.getItem(NOTIFY_KEY) === "on" && typeof Notification !== "undefined" && Notification.permission === "granted";
+  } catch {
+    return false;
+  }
+}
+
+/** Threads whose newest message is a fresh inbound one since the previous poll. */
+function freshInbound(previous: Map<string, string | null>, threads: Thread[]) {
+  return threads.filter(
+    (thread) =>
+      thread.lastDirection === "inbound" &&
+      thread.lastAt &&
+      (previous.get(thread.contactId) ?? "") < thread.lastAt,
+  );
+}
+
 function relativeTime(iso: string | null) {
   if (!iso) return "";
   const diff = Date.now() - new Date(iso).getTime();
@@ -57,6 +77,31 @@ export function ConversationList() {
   const [filter, setFilter] = useState<Filter>("open");
   const [query, setQuery] = useState("");
   const { team, me, setMe, byId } = useTeam();
+  const router = useRouter();
+  const searchRef = useRef<HTMLInputElement>(null);
+  const seen = useRef<Map<string, string | null> | null>(null);
+  const [notify, setNotify] = useState(false);
+  const notifyRef = useRef(false);
+  const activeRef = useRef(activeId);
+  useEffect(() => {
+    notifyRef.current = notify;
+    activeRef.current = activeId;
+  }, [notify, activeId]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setNotify(readNotifyPref()), 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  async function toggleNotify() {
+    if (typeof Notification === "undefined") return;
+    let next = !notify;
+    if (next && Notification.permission !== "granted") next = (await Notification.requestPermission()) === "granted";
+    setNotify(next);
+    try {
+      localStorage.setItem(NOTIFY_KEY, next ? "on" : "off");
+    } catch {}
+  }
 
   useEffect(() => {
     if (!botId) return;
@@ -64,7 +109,23 @@ export function ConversationList() {
     const load = () =>
       api<{ threads: Thread[] }>(`/api/inbox?botId=${botId}`)
         .then((data) => {
-          if (!cancelled) setThreads(data.threads);
+          if (cancelled) return;
+          const previous = seen.current;
+          seen.current = new Map(data.threads.map((thread) => [thread.contactId, thread.lastAt]));
+          setThreads(data.threads);
+          if (!previous) return;
+          const fresh = freshInbound(previous, data.threads).filter(
+            (thread) => document.hidden || thread.contactId !== activeRef.current,
+          );
+          if (!notifyRef.current || typeof Notification === "undefined") return;
+          for (const thread of fresh.slice(0, 3)) {
+            const note = new Notification(thread.name, { body: thread.lastBody, tag: thread.contactId, icon: "/icon.svg" });
+            note.onclick = () => {
+              window.focus();
+              router.push(`/inbox/${thread.contactId}`);
+              note.close();
+            };
+          }
         })
         .catch(() => undefined);
     const first = setTimeout(load, 0);
@@ -74,7 +135,7 @@ export function ConversationList() {
       clearTimeout(first);
       clearInterval(timer);
     };
-  }, [botId]);
+  }, [botId, router]);
 
   const counts = useMemo(() => {
     const list = threads ?? [];
@@ -105,6 +166,38 @@ export function ConversationList() {
     });
   }, [threads, filter, query, me]);
 
+  useEffect(() => {
+    const waiting = counts.unanswered;
+    const base = document.title.replace(/^\(\d+\) /, "");
+    document.title = waiting > 0 ? `(${waiting}) ${base}` : base;
+  }, [counts.unanswered]);
+
+  // Keyboard: j/k move through conversations, / searches.
+  const visibleRef = useRef(visible);
+  useEffect(() => {
+    visibleRef.current = visible;
+  }, [visible]);
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      if (event.key === "/") {
+        event.preventDefault();
+        searchRef.current?.focus();
+        return;
+      }
+      if (event.key !== "j" && event.key !== "k") return;
+      const list = visibleRef.current;
+      if (list.length === 0) return;
+      const index = list.findIndex((thread) => thread.contactId === activeRef.current);
+      const nextIndex = index === -1 ? 0 : Math.max(0, Math.min(list.length - 1, index + (event.key === "j" ? 1 : -1)));
+      router.push(`/inbox/${list[nextIndex]!.contactId}`);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [router]);
+
   return (
     <aside
       className={cn(
@@ -134,11 +227,21 @@ export function ConversationList() {
         <div className="flex items-center gap-2 rounded-xl bg-[#f4f6f8] px-2.5 py-1.5">
           <Search className="size-3.5 text-[#8b95a1]" />
           <input
+            ref={searchRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search people and messages"
+            placeholder="Search people and messages  /"
             className="w-full bg-transparent text-[13px] outline-none placeholder:text-[#8b95a1]"
           />
+          <button
+            type="button"
+            onClick={() => void toggleNotify()}
+            title={notify ? "Desktop notifications on" : "Get desktop notifications for new messages"}
+            aria-label="Toggle desktop notifications"
+            className={cn("shrink-0 rounded-md p-0.5", notify ? "text-[#0084ff]" : "text-[#8b95a1] hover:text-[#1b1f24]")}
+          >
+            {notify ? <Bell className="size-3.5" /> : <BellOff className="size-3.5" />}
+          </button>
         </div>
         <div className="flex gap-1 overflow-x-auto">
           {FILTERS.filter((item) => !item.team || team.length > 0).map((item) => (
