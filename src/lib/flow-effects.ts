@@ -53,6 +53,14 @@ export async function applyFlowEffects(input: {
         continue;
       }
 
+      if (effect.type === "goal") {
+        const { recordFlowEvents } = await import("@/lib/analytics");
+        await recordFlowEvents([
+          { botId: input.botId, flowId: effect.flowId, stepId: effect.stepId, contactId: input.contact.id, kind: "goal", name: effect.name, value: effect.value ?? null },
+        ]);
+        continue;
+      }
+
       if (effect.type === "ai_turn") {
         // Lazy import: the AI runtime re-enters the engine and dispatcher, which import this file.
         const { runAiTurn } = await import("@/lib/ai-runtime");

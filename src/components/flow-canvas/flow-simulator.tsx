@@ -42,6 +42,7 @@ function describeEffect(effect: FlowEffect, definition: FlowDefinition): Line | 
   if (effect.type === "typing") return null;
   if (effect.type === "http") return { id: newId(), kind: "note", text: `Would ${effect.method} ${effect.url}`, tone: "info" };
   if (effect.type === "notify") return { id: newId(), kind: "note", text: `Would notify your team: ${effect.text}`, tone: "info" };
+  if (effect.type === "goal") return { id: newId(), kind: "note", text: `🏆 Goal reached: ${effect.name}${effect.value !== undefined ? ` (${effect.value})` : ""}`, tone: "info" };
   const step = definition.steps.find((item) => item.id === effect.stepId);
   return {
     id: newId(),

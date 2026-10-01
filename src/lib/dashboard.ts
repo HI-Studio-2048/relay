@@ -78,6 +78,8 @@ export async function loadDashboard(botId: string, days = 30) {
     openThreads: threads.filter((thread) => thread.status === "open").length,
     recentThreads: threads.slice(0, 6),
     topFlows,
+    conversions: Object.values(flowStats).reduce((sum, stats) => sum + (stats?.conversions ?? 0), 0),
+    revenue: Object.values(flowStats).reduce((sum, stats) => sum + (stats?.revenue ?? 0), 0),
   };
 }
 

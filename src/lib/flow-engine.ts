@@ -440,6 +440,21 @@ export function executeFrom(
       return { session: null, replies, contact: nextContact, effects };
     }
 
+    if (step.type === "goal") {
+      effects.push({
+        type: "goal",
+        flowId: current.flowId,
+        stepId: step.id,
+        name: step.name.trim() || "Goal",
+        ...(typeof step.value === "number" && Number.isFinite(step.value) ? { value: step.value } : {}),
+      });
+      if (!step.next) {
+        return { session: { ...current, status: "completed", awaitingInput: false, resumeAt: null }, replies, contact: nextContact, effects, completedFlowIds: [current.flowId] };
+      }
+      current = { ...current, stepId: step.next, awaitingInput: false, resumeAt: null };
+      continue;
+    }
+
     if (step.type === "ai") {
       // The AI answers asynchronously (see ai-runtime). The session parks here and every
       // message the contact sends is routed back to this step until the goal is complete.

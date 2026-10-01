@@ -17,6 +17,7 @@ import {
   Sparkles,
   Square,
   Timer,
+  Trophy,
   UserRound,
 } from "lucide-react";
 import { useNodeStats } from "@/components/flow-canvas/flow-stats-context";
@@ -536,6 +537,19 @@ export function AiNode({ id, selected, data }: NodeProps<FlowNode<"ai">>) {
   );
 }
 
+export function GoalNode({ id, selected, data }: NodeProps<FlowNode<"goal">>) {
+  return (
+    <NodeFrame id={id} selected={selected} kind="goal" icon={Trophy} title="Goal">
+      <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("goal")} />
+      <Preview>
+        {data.name || "Conversion"}
+        {data.value.trim() ? ` · ${data.value}` : ""}
+      </Preview>
+      <Handle type="source" position={Position.Right} id="next" className={handleClass()} style={handleStyle("goal")} />
+    </NodeFrame>
+  );
+}
+
 export function EndNode({ id, selected, data }: NodeProps<FlowNode<"end">>) {
   return (
     <NodeFrame id={id} selected={selected} kind="end" icon={Square} title="Stop">
@@ -563,5 +577,6 @@ export const flowNodeTypes = {
   http: HttpNode,
   notify: NotifyNode,
   ai: AiNode,
+  goal: GoalNode,
   end: EndNode,
 };

@@ -32,6 +32,7 @@ export type CanvasNodeKind =
   | "notify"
   | "randomizer"
   | "ai"
+  | "goal"
   | "end";
 
 export type CanvasButton = {
@@ -100,6 +101,7 @@ export type CanvasNodeData =
   | { kind: "http"; url: string; method: HttpMethod; body: string }
   | { kind: "notify"; text: string }
   | { kind: "ai"; goal: string; collect: string }
+  | { kind: "goal"; name: string; value: string }
   | { kind: "end"; text?: string };
 
 export type CanvasNode = {
@@ -441,6 +443,14 @@ function nodeFromStep(step: FlowStep, position: { x: number; y: number }): Canva
       type: "notify",
       position,
       data: { kind: "notify", text: step.text },
+    };
+  }
+  if (step.type === "goal") {
+    return {
+      id: step.id,
+      type: "goal",
+      position,
+      data: { kind: "goal", name: step.name, value: step.value !== undefined ? String(step.value) : "" },
     };
   }
   if (step.type === "ai") {
@@ -831,6 +841,19 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
       continue;
     }
 
+    if (node.data.kind === "goal") {
+      const next = nextFromHandle(graph.edges, node.id, "next");
+      const value = Number(node.data.value);
+      steps.push({
+        id: node.id,
+        type: "goal",
+        name: node.data.name,
+        ...(node.data.value.trim() && Number.isFinite(value) ? { value } : {}),
+        ...(next ? { next } : {}),
+      });
+      continue;
+    }
+
     if (node.data.kind === "ai") {
       const next = nextFromHandle(graph.edges, node.id, "next");
       const collect = parseCollectList(node.data.collect);
@@ -998,6 +1021,15 @@ export function engineDefinition(definition: FlowDefinition): FlowDefinition {
       if (step.type === "notify") {
         return { id: step.id, type: "notify", text: step.text, next: step.next };
       }
+      if (step.type === "goal") {
+        return {
+          id: step.id,
+          type: "goal",
+          name: step.name,
+          ...(typeof step.value === "number" ? { value: step.value } : {}),
+          ...(step.next ? { next: step.next } : {}),
+        };
+      }
       if (step.type === "ai") {
         return {
           id: step.id,
@@ -1136,6 +1168,8 @@ export function createCanvasNode(
         position,
         data: { kind: "notify", text: "New lead: {{name}} {{email}}" },
       };
+    case "goal":
+      return { id, type: "goal", position, data: { kind: "goal", name: "Booked a call", value: "" } };
     case "ai":
       return {
         id,
@@ -1329,6 +1363,12 @@ export function validateCanvas(graph: CanvasGraph, channel?: ChannelLimits): Can
     }
     if (node.data.kind === "notify" && !node.data.text.trim()) {
       warnings.push("A Notify admin step has no message.");
+    }
+    if (node.data.kind === "goal" && !node.data.name.trim()) {
+      warnings.push("A Goal step has no name.");
+    }
+    if (node.data.kind === "goal" && node.data.value.trim() && !Number.isFinite(Number(node.data.value))) {
+      errors.push("A Goal value must be a number.");
     }
     if (node.data.kind === "ai" && !node.data.goal.trim()) {
       errors.push("An AI step needs a goal.");

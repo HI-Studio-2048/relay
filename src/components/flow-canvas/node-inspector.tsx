@@ -480,6 +480,28 @@ export function NodeInspector({
         </div>
       ) : null}
 
+      {data.kind === "goal" ? (
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label>Goal name</Label>
+            <Input value={data.name} onChange={(event) => onDataChange(selectedId, { ...data, name: event.target.value })} placeholder="Booked a call" />
+          </div>
+          <div className="space-y-1">
+            <Label>Value (optional)</Label>
+            <Input
+              inputMode="decimal"
+              value={data.value}
+              onChange={(event) => onDataChange(selectedId, { ...data, value: event.target.value })}
+              placeholder="49.00"
+            />
+          </div>
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Counts a conversion each time someone reaches this step. Values add up to revenue on the Flows page and
+            dashboard. Purchases from your store can also be reported with the API.
+          </p>
+        </div>
+      ) : null}
+
       {data.kind === "ai" ? (
         <div className="space-y-3">
           <div className="space-y-1">

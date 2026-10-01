@@ -1,10 +1,10 @@
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { flowEvents, flows } from "@/lib/db/schema";
 import { log } from "@/lib/logger";
 import type { FlowDefinition } from "@/lib/types";
 
-export type FlowEventKind = "start" | "sent" | "click" | "complete";
+export type FlowEventKind = "start" | "sent" | "click" | "complete" | "goal";
 
 export type FlowEventInput = {
   botId: string;
@@ -12,6 +12,8 @@ export type FlowEventInput = {
   stepId?: string | null;
   contactId?: string | null;
   kind: FlowEventKind;
+  name?: string | null;
+  value?: number | null;
 };
 
 /** Best effort: analytics never block or fail a conversation. */
@@ -27,6 +29,8 @@ export async function recordFlowEvents(events: FlowEventInput[]) {
         stepId: event.stepId ?? null,
         contactId: event.contactId ?? null,
         kind: event.kind,
+        name: event.name ?? null,
+        value: event.value ?? null,
       })),
     );
   } catch (error) {
@@ -53,11 +57,14 @@ export type FlowStats = {
   /** Clicks per message that carried buttons, 0–1. */
   ctr: number;
   completionRate: number;
+  /** Goal events (conversions) and their summed value. */
+  conversions: number;
+  revenue: number;
 };
 
-const EMPTY: FlowStats = { runs: 0, people: 0, sent: 0, clicks: 0, completed: 0, ctr: 0, completionRate: 0 };
+const EMPTY: FlowStats = { runs: 0, people: 0, sent: 0, clicks: 0, completed: 0, ctr: 0, completionRate: 0, conversions: 0, revenue: 0 };
 
-type Row = { flowId: string; stepId: string | null; kind: string; count: number; people: number };
+type Row = { flowId: string; stepId: string | null; kind: string; count: number; people: number; value: number };
 
 function summarize(rows: Row[], buttonSteps: Set<string>): FlowStats {
   const total = (kind: string) => rows.filter((row) => row.kind === kind).reduce((sum, row) => sum + row.count, 0);
@@ -67,7 +74,10 @@ function summarize(rows: Row[], buttonSteps: Set<string>): FlowStats {
     .reduce((sum, row) => sum + row.count, 0);
   const clicks = total("click");
   const completed = total("complete");
+  const goals = rows.filter((row) => row.kind === "goal");
   return {
+    conversions: goals.reduce((sum, row) => sum + row.count, 0),
+    revenue: goals.reduce((sum, row) => sum + row.value, 0),
     runs,
     people: Math.max(0, ...rows.filter((row) => row.kind === "start").map((row) => row.people)),
     sent: total("sent"),
@@ -95,11 +105,12 @@ async function groupedRows(filter: ReturnType<typeof and>, byStep: boolean): Pro
       kind: flowEvents.kind,
       count: sql<number>`count(*)::int`,
       people: sql<number>`count(distinct ${flowEvents.contactId})::int`,
+      value: sql<number>`coalesce(sum(${flowEvents.value}), 0)::float8`,
     })
     .from(flowEvents)
     .where(filter)
     .groupBy(flowEvents.flowId, ...(byStep ? [flowEvents.stepId] : []), flowEvents.kind);
-  return rows.map((row) => ({ ...row, count: Number(row.count), people: Number(row.people) }));
+  return rows.map((row) => ({ ...row, count: Number(row.count), people: Number(row.people), value: Number(row.value) }));
 }
 
 /** Per-flow totals for the Flows list (optionally only the last `days`). */
@@ -142,4 +153,16 @@ export async function statsByStep(flowId: string): Promise<{ flow: FlowStats; st
   }
   for (const entry of Object.values(steps)) entry.ctr = entry.sent ? Math.min(1, entry.clicks / entry.sent) : 0;
   return { flow: flowStats, steps };
+}
+
+/** Last flow this contact started within `days`, for crediting conversions reported from outside (API). */
+export async function lastTouchFlow(contactId: string, days = 7) {
+  const db = await getDb();
+  const [row] = await db
+    .select({ flowId: flowEvents.flowId })
+    .from(flowEvents)
+    .where(and(eq(flowEvents.contactId, contactId), eq(flowEvents.kind, "start"), gte(flowEvents.createdAt, new Date(Date.now() - days * 86_400_000))))
+    .orderBy(desc(flowEvents.createdAt))
+    .limit(1);
+  return row?.flowId ?? null;
 }

@@ -49,6 +49,7 @@ function emptyStep(type: FlowStep["type"]): FlowStep {
   if (type === "start_flow") return { id, type, flowId: "", next: "" };
   if (type === "http") return { id, type, url: "https://", method: "POST", body: "", next: "" };
   if (type === "notify") return { id, type, text: "New lead: {{name}} {{email}}", next: "" };
+  if (type === "goal") return { id, type, name: "Booked a call" };
   if (type === "ai") return { id, type, goal: "Answer their questions and find out what they need", collect: ["email"] };
   if (type === "end") return { id, type, text: "Done." };
   return { id, type: "text", text: "Hello.", buttons: [], next: "" };
@@ -550,6 +551,17 @@ export function FlowListEditor({
                 />
               </>
             ) : null}
+            {step.type === "goal" ? (
+              <>
+                <Input placeholder="Goal name" value={step.name} onChange={(event) => updateStep(index, { ...step, name: event.target.value })} />
+                <Input
+                  placeholder="Value (optional)"
+                  value={step.value ?? ""}
+                  onChange={(event) => updateStep(index, { ...step, value: event.target.value === "" || !Number.isFinite(Number(event.target.value)) ? undefined : Number(event.target.value) })}
+                />
+                <Input placeholder="Next step id" value={step.next ?? ""} onChange={(event) => updateStep(index, { ...step, next: event.target.value || undefined })} />
+              </>
+            ) : null}
             {step.type === "ai" ? (
               <>
                 <Textarea
@@ -595,6 +607,7 @@ export function FlowListEditor({
             "http",
             "notify",
             "ai",
+            "goal",
             "end",
           ] as const
         ).map((type) => (

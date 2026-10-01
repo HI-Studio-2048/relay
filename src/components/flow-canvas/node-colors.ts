@@ -26,6 +26,7 @@ export const NODE_TONE: Record<CanvasNodeKind, NodeTone> = {
   notify: { hex: RELAY.notify, family: "action" },
   randomizer: { hex: RELAY.randomizer, family: "action" },
   ai: { hex: RELAY.ai, family: "input" },
+  goal: { hex: RELAY.goal, family: "action" },
   end: { hex: RELAY.stop, family: "stop" },
 };
 

@@ -103,3 +103,32 @@ describe("AI flow builder", () => {
     expect(built.definition.steps[0]).toMatchObject({ field: "custom:budget_range", next: "ab_1" });
   });
 });
+
+describe("Goal step", () => {
+  const flow: FlowRecord = {
+    id: "g",
+    triggerType: "keyword",
+    triggerValue: "book",
+    isActive: true,
+    definition: {
+      startStepId: "hi",
+      steps: [
+        { id: "hi", type: "text", text: "Booked!", next: "goal" },
+        { id: "goal", type: "goal", name: "Booked a call", value: 49.5, next: "bye" },
+        { id: "bye", type: "end", text: "See you" },
+      ],
+    },
+  };
+
+  it("records a conversion with its value and keeps going", () => {
+    const result = processInboundEvent({ contact: null, session: null, flows: [flow], event: { telegramUserId: "u", text: "book" } });
+    expect(result.effects).toEqual([{ type: "goal", flowId: "g", stepId: "goal", name: "Booked a call", value: 49.5 }]);
+    expect(result.replies.map((reply) => reply.text)).toEqual(["Booked!", "See you"]);
+    expect(result.completedFlowIds).toEqual(["g"]);
+  });
+
+  it("round-trips on the canvas", () => {
+    const back = canvasToDefinition(definitionToCanvas(flow.definition));
+    expect(back.steps.find((step) => step.id === "goal")).toEqual({ id: "goal", type: "goal", name: "Booked a call", value: 49.5, next: "bye" });
+  });
+});

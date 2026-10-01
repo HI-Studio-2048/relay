@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowDownRight, ArrowUpRight, Bot, Inbox, LayoutDashboard, MessagesSquare, TriangleAlert, Users, Workflow } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Bot, Inbox, LayoutDashboard, MessagesSquare, TriangleAlert, Trophy, Users, Workflow } from "lucide-react";
 import { DailyColumns, PlatformBars } from "@/components/charts";
 import { ContactAvatar } from "@/components/chrome/avatar";
 import { ConnectPrompt } from "@/components/chrome/connect-prompt";
@@ -103,7 +103,7 @@ export default async function OverviewPage() {
         </Panel>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatTile
           label="Contacts"
           value={data.totalContacts.toLocaleString()}
@@ -130,11 +130,19 @@ export default async function OverviewPage() {
           href="/inbox"
         />
         <StatTile
+          label="Conversions · 30 days"
+          value={data.conversions.toLocaleString()}
+          detail={data.revenue ? `${data.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })} attributed to flows` : "Add a Goal step to a flow"}
+          icon={Trophy}
+          tone="start"
+          href="/flows"
+        />
+        <StatTile
           label="Handled by automation"
           value={`${automatedShare}%`}
           detail={`${data.week.ai} AI replies · ${data.week.human} by your team`}
           icon={Bot}
-          tone="start"
+          tone="action"
           href="/flows"
         />
       </div>

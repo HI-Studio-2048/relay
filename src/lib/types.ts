@@ -37,7 +37,9 @@ export type FlowEffect =
   /** Show Telegram's "typing…" indicator while a Send Message typing delay runs. */
   | { type: "typing" }
   /** AI Step: generate the next reply with Claude (async, outside the pure engine). */
-  | { type: "ai_turn"; flowId: string; stepId: string };
+  | { type: "ai_turn"; flowId: string; stepId: string }
+  /** Goal step reached: record a conversion (and its value) for analytics. */
+  | { type: "goal"; flowId: string; stepId: string; name: string; value?: number };
 
 export type CaptureField = "name" | "email" | "phone" | `custom:${string}`;
 
@@ -192,6 +194,14 @@ export type FlowStep =
       /** Field keys to pick up along the way: name, email, phone, or custom keys. */
       collect?: string[];
       /** Where the flow continues once the goal is complete. */
+      next?: string;
+    }
+  | {
+      id: string;
+      /** Conversion goal: counts when a contact reaches it. Optional value (revenue) for ROI. */
+      type: "goal";
+      name: string;
+      value?: number;
       next?: string;
     }
   | {

@@ -264,4 +264,6 @@ CREATE TABLE IF NOT EXISTS team_members (
 );
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS assigned_to text;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS author text;
+ALTER TABLE flow_events ADD COLUMN IF NOT EXISTS name text;
+ALTER TABLE flow_events ADD COLUMN IF NOT EXISTS value double precision;
 `;

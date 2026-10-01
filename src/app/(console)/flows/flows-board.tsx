@@ -13,7 +13,17 @@ import { FLOW_TEMPLATES, type FlowTemplate } from "@/lib/flow-templates";
 import { TRIGGER_OPTIONS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-type FlowStats = { runs: number; people: number; sent: number; clicks: number; completed: number; ctr: number; completionRate: number };
+type FlowStats = {
+  runs: number;
+  people: number;
+  sent: number;
+  clicks: number;
+  completed: number;
+  ctr: number;
+  completionRate: number;
+  conversions: number;
+  revenue: number;
+};
 
 type FlowRow = {
   id: string;
@@ -89,9 +99,11 @@ export function FlowsBoard({ botId, flows }: { botId: string; flows: FlowRow[] }
           runs: sum.runs + (flow.stats?.runs ?? 0),
           clicks: sum.clicks + (flow.stats?.clicks ?? 0),
           completed: sum.completed + (flow.stats?.completed ?? 0),
+          conversions: sum.conversions + (flow.stats?.conversions ?? 0),
+          revenue: sum.revenue + (flow.stats?.revenue ?? 0),
           active: sum.active + (flow.isActive ? 1 : 0),
         }),
-        { runs: 0, clicks: 0, completed: 0, active: 0 },
+        { runs: 0, clicks: 0, completed: 0, active: 0, conversions: 0, revenue: 0 },
       ),
     [rows],
   );
@@ -166,7 +178,12 @@ export function FlowsBoard({ botId, flows }: { botId: string; flows: FlowRow[] }
           { label: "Active flows", value: `${totals.active}/${rows.length}` },
           { label: "Runs", value: totals.runs.toLocaleString() },
           { label: "Button clicks", value: totals.clicks.toLocaleString() },
-          { label: "Completed", value: totals.completed.toLocaleString() },
+          {
+            label: "Conversions",
+            value: totals.revenue
+              ? `${totals.conversions.toLocaleString()} · ${totals.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+              : totals.conversions.toLocaleString(),
+          },
         ].map((tile) => (
           <div key={tile.label} className="rounded-2xl bg-white px-4 py-3 shadow-[0_1px_3px_rgba(16,24,40,0.10)] ring-1 ring-[#e5e7eb]">
             <p className="text-[11px] font-medium text-[#6b7280]">{tile.label}</p>
@@ -226,6 +243,7 @@ export function FlowsBoard({ botId, flows }: { botId: string; flows: FlowRow[] }
                 <th className="px-3 py-2.5 text-right">Runs</th>
                 <th className="px-3 py-2.5 text-right">CTR</th>
                 <th className="px-3 py-2.5 text-right">Completed</th>
+                <th className="px-3 py-2.5 text-right">Goals</th>
                 <th className="px-4 py-2.5 text-right">On</th>
               </tr>
             </thead>
@@ -241,6 +259,16 @@ export function FlowsBoard({ botId, flows }: { botId: string; flows: FlowRow[] }
                   <td className="px-3 py-2.5 text-right tabular-nums">{flow.stats?.runs ?? 0}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{flow.stats?.clicks ? pct(flow.stats.ctr) : "—"}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{flow.stats?.runs ? pct(flow.stats.completionRate) : "—"}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    {flow.stats?.conversions ? (
+                      <>
+                        {flow.stats.conversions}
+                        {flow.stats.revenue ? <span className="block text-[11px] text-[#6b7280]">{flow.stats.revenue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span> : null}
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="px-4 py-2.5 text-right">
                     <button
                       type="button"
