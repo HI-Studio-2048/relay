@@ -1,7 +1,8 @@
 import { and, eq, gte, sql } from "drizzle-orm";
 import { statsByFlow } from "@/lib/analytics";
 import { getDb } from "@/lib/db";
-import { contacts, flows, messages } from "@/lib/db/schema";
+import { bots, contacts, flowEvents, flows, growthLinks, messages, teamMembers } from "@/lib/db/schema";
+import { readAiSettings } from "@/lib/ai";
 import { listInboxThreads } from "@/lib/store";
 
 const DAY = 86_400_000;
@@ -84,3 +85,32 @@ export async function loadDashboard(botId: string, days = 30) {
 }
 
 export type Dashboard = Awaited<ReturnType<typeof loadDashboard>>;
+
+export type ChecklistItem = { id: string; label: string; done: boolean; href: string; hint: string };
+
+/** Getting-started steps, each checked off from real data. */
+export async function loadChecklist(botId: string): Promise<ChecklistItem[]> {
+  const db = await getDb();
+  const [[bot], flowRows, links, team, events] = await Promise.all([
+    db.select().from(bots).where(eq(bots.id, botId)).limit(1),
+    db.select({ isActive: flows.isActive, triggerType: flows.triggerType }).from(flows).where(eq(flows.botId, botId)),
+    db.select({ id: growthLinks.id }).from(growthLinks).where(eq(growthLinks.botId, botId)).limit(1),
+    db.select({ id: teamMembers.id }).from(teamMembers).limit(1),
+    db.select({ id: flowEvents.id }).from(flowEvents).where(eq(flowEvents.botId, botId)).limit(1),
+  ]);
+  const ai = readAiSettings(bot?.settings);
+  return [
+    { id: "connect", label: "Connect your accounts", done: bot?.status === "connected", href: "/setup", hint: "Zernio brings every network in at once." },
+    { id: "ai", label: "Teach the AI your business", done: Boolean(ai.knowledge?.trim()), href: "/ai", hint: "Paste prices, links and FAQs." },
+    {
+      id: "comment",
+      label: "Turn on a comment-to-DM flow",
+      done: flowRows.some((flow) => flow.isActive && flow.triggerType === "comment"),
+      href: "/flows",
+      hint: "Start from the lead magnet template.",
+    },
+    { id: "live", label: "See your first automation run", done: events.length > 0, href: "/flows", hint: "Use Test in the editor, then go live." },
+    { id: "link", label: "Share a growth link or website widget", done: links.length > 0, href: "/growth", hint: "One link, every network." },
+    { id: "team", label: "Add your team", done: team.length > 0, href: "/setup", hint: "Assign conversations in Live Chat." },
+  ];
+}

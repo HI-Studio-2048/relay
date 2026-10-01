@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowDownRight, ArrowUpRight, Bot, Inbox, LayoutDashboard, MessagesSquare, TriangleAlert, Trophy, Users, Workflow } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Bot, CheckCircle2, Circle, Inbox, LayoutDashboard, MessagesSquare, TriangleAlert, Trophy, Users, Workflow } from "lucide-react";
 import { DailyColumns, PlatformBars } from "@/components/charts";
 import { ContactAvatar } from "@/components/chrome/avatar";
 import { ConnectPrompt } from "@/components/chrome/connect-prompt";
@@ -10,8 +10,9 @@ import { CanvasCard, ToneChip, type ToneName } from "@/components/chrome/tone";
 import { Button } from "@/components/ui/button";
 import { CHANNELS } from "@/lib/channels/types";
 import { currentBot } from "@/lib/current-bot";
-import { loadDashboard } from "@/lib/dashboard";
+import { loadChecklist, loadDashboard } from "@/lib/dashboard";
 import type { LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -80,7 +81,8 @@ export default async function OverviewPage() {
     );
   }
 
-  const data = await loadDashboard(bot.id);
+  const [data, checklist] = await Promise.all([loadDashboard(bot.id), loadChecklist(bot.id)]);
+  const remaining = checklist.filter((item) => !item.done);
   const weekDelta = data.newPreviousWeek > 0 ? Math.round(((data.newThisWeek - data.newPreviousWeek) / data.newPreviousWeek) * 100) : null;
   const automatedShare = data.week.outbound ? Math.round((data.week.automated / data.week.outbound) * 100) : 0;
 
@@ -101,6 +103,43 @@ export default async function OverviewPage() {
             Open Settings
           </Button>
         </Panel>
+      ) : null}
+
+      {remaining.length > 0 ? (
+        <CanvasCard className="space-y-3 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-heading text-[15px] text-[#1b1f24]">Get set up</p>
+            <p className="text-[12px] text-[#6b7280]">
+              {checklist.length - remaining.length} of {checklist.length} done
+            </p>
+          </div>
+          <div className="h-1.5 rounded-full bg-[#f1f3f5]">
+            <div className="h-full rounded-full bg-[#00c853]" style={{ width: `${((checklist.length - remaining.length) / checklist.length) * 100}%` }} />
+          </div>
+          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {checklist.map((item) => (
+              <li key={item.id}>
+                <Link
+                  href={item.href}
+                  className={cn(
+                    "flex items-start gap-2 rounded-xl p-2.5 ring-1",
+                    item.done ? "ring-[#e5e7eb] opacity-60" : "ring-[#e5e7eb] hover:bg-[#f9fafb]",
+                  )}
+                >
+                  {item.done ? (
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#00c853]" />
+                  ) : (
+                    <Circle className="mt-0.5 size-4 shrink-0 text-[#c5cdd6]" />
+                  )}
+                  <span>
+                    <span className={cn("block text-[13px] font-medium text-[#1b1f24]", item.done && "line-through")}>{item.label}</span>
+                    <span className="block text-[12px] text-[#6b7280]">{item.hint}</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </CanvasCard>
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
