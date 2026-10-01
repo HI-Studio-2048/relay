@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { PlatformBadge } from "@/components/chrome/platform-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -106,9 +107,9 @@ export function ContactEditor({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="font-heading text-3xl tracking-tight">{displayName(contact)}</h1>
-          <p className="text-sm text-muted-foreground">
-            tg {contact.telegramUserId}
-            {contact.username ? ` · @${contact.username}` : ""}
+          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <PlatformBadge platform={contact.platform} />
+            {contact.username ? `@${contact.username}` : `ID ${contact.telegramUserId}`}
           </p>
         </div>
         <Button nativeButton={false} render={<Link href={`/inbox/${contact.id}`} />} variant="outline">
