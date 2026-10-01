@@ -256,6 +256,8 @@ export const sequenceSteps = pgTable("sequence_steps", {
   position: integer("position").notNull(),
   delaySeconds: integer("delay_seconds").notNull().default(0),
   body: text("body").notNull(),
+  /** Send this flow instead of the body text. */
+  flowId: text("flow_id").references(() => flows.id, { onDelete: "set null" }),
 });
 
 export const sequenceSubscriptions = pgTable(

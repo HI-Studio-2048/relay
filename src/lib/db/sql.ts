@@ -266,4 +266,5 @@ ALTER TABLE contacts ADD COLUMN IF NOT EXISTS assigned_to text;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS author text;
 ALTER TABLE flow_events ADD COLUMN IF NOT EXISTS name text;
 ALTER TABLE flow_events ADD COLUMN IF NOT EXISTS value double precision;
+ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS flow_id text REFERENCES flows(id) ON DELETE SET NULL;
 `;

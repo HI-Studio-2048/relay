@@ -7,7 +7,7 @@ import { loadContactRecord } from "@/lib/store";
 export async function createSequence(input: {
   botId: string;
   name: string;
-  steps: { delaySeconds: number; body: string }[];
+  steps: { delaySeconds: number; body: string; flowId?: string | null }[];
 }) {
   const db = await getDb();
   const id = crypto.randomUUID();
@@ -18,13 +18,14 @@ export async function createSequence(input: {
     isActive: true,
   });
   for (const [index, step] of input.steps.entries()) {
-    if (!step.body.trim()) continue;
+    if (!step.body.trim() && !step.flowId) continue;
     await db.insert(sequenceSteps).values({
       id: crypto.randomUUID(),
       sequenceId: id,
       position: index,
       delaySeconds: Math.max(0, Math.floor(step.delaySeconds || 0)),
       body: step.body.trim(),
+      flowId: step.flowId || null,
     });
   }
   return id;

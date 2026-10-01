@@ -8,6 +8,7 @@ import { loadContactRecord, saveMessage } from "@/lib/store";
 import { listDueSequenceSends, loadSequenceStep } from "@/lib/sequences";
 import { accountFromRow, channelTarget, sendChannelReply } from "@/lib/channels";
 import { isBroadcastable } from "@/lib/broadcast";
+import { botFieldValues } from "@/lib/template";
 
 export async function resumeDueSequences() {
   const due = await listDueSequenceSends();
@@ -30,18 +31,24 @@ export async function resumeDueSequences() {
         continue;
       }
 
-      const contact = await loadContactRecord(contactRow.id);
-      const body = contact ? interpolateTemplate(step.body, contact) : step.body;
-      await acquireSendSlot(contactRow.botId, contactRow.telegramUserId);
-      const sent = await sendChannelReply(accountFromRow(bot), channelTarget(contactRow), { text: body, source: "flow" });
-      await saveMessage({
-        botId: contactRow.botId,
-        contactId: contactRow.id,
-        direction: "outbound",
-        source: "flow",
-        body,
-        telegramMessageId: sent.message_id || null,
-      });
+      if (step.flowId) {
+        // Flow step: the contact starts that flow (buttons, questions and delays included).
+        const { startFlowForContact } = await import("@/lib/flow-dispatch");
+        await startFlowForContact({ contactId: contactRow.id, flowId: step.flowId });
+      } else {
+        const contact = await loadContactRecord(contactRow.id);
+        const body = contact ? interpolateTemplate(step.body, contact, botFieldValues(bot.settings)) : step.body;
+        await acquireSendSlot(contactRow.botId, contactRow.telegramUserId);
+        const sent = await sendChannelReply(accountFromRow(bot), channelTarget(contactRow), { text: body, source: "flow" });
+        await saveMessage({
+          botId: contactRow.botId,
+          contactId: contactRow.id,
+          direction: "outbound",
+          source: "flow",
+          body,
+          telegramMessageId: sent.message_id || null,
+        });
+      }
 
       const nextIndex = sub.nextIndex + 1;
       if (nextIndex >= total) {

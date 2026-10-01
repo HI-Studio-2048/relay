@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { sequences } from "@/lib/db/schema";
+import { flows, sequences } from "@/lib/db/schema";
 import { fail, json, readJson } from "@/lib/http";
 import { createSequence, listSequences } from "@/lib/sequences";
 
@@ -19,15 +19,18 @@ export async function POST(request: Request) {
     const body = await readJson<{
       botId?: string;
       name?: string;
-      steps?: { delaySeconds?: number; body?: string }[];
+      steps?: { delaySeconds?: number; body?: string; flowId?: string | null }[];
     }>(request);
     if (!body.botId || !body.name?.trim()) return json({ error: "botId and name are required" }, 400);
+    const db = await getDb();
+    const owned = new Set((await db.select({ id: flows.id }).from(flows).where(eq(flows.botId, body.botId))).map((flow) => flow.id));
     const steps = (body.steps ?? []).map((step) => ({
       delaySeconds: step.delaySeconds ?? 0,
       body: step.body ?? "",
+      flowId: step.flowId && owned.has(step.flowId) ? step.flowId : null,
     }));
-    if (steps.filter((step) => step.body.trim()).length === 0) {
-      return json({ error: "Add at least one message" }, 400);
+    if (steps.filter((step) => step.body.trim() || step.flowId).length === 0) {
+      return json({ error: "Add at least one message or flow" }, 400);
     }
     const id = await createSequence({ botId: body.botId, name: body.name, steps });
     return json({ ok: true, id });
