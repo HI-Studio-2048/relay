@@ -1,3 +1,4 @@
+import { stepButtons } from "@/lib/types";
 import type {
   CaptureField,
   ConditionCheck,
@@ -17,6 +18,7 @@ export const TRIGGER_NODE_ID = "__trigger";
 export type CanvasNodeKind =
   | "trigger"
   | "send_message"
+  | "gallery"
   | "message"
   | "media"
   | "buttons"
@@ -65,6 +67,18 @@ export function mediaBlockTypeFor(kind: FlowMedia["kind"] | undefined): MediaBlo
   return "image";
 }
 
+/** One card in a Gallery node. Button ids are handle ids unique across the whole node. */
+export type CanvasCard = {
+  id: string;
+  title: string;
+  subtitle: string;
+  imageUrl: string;
+  url: string;
+  buttons: CanvasButton[];
+};
+
+export const MAX_GALLERY_CARDS = 10;
+
 export type CanvasQuickReply = {
   id: string;
   text: string;
@@ -79,6 +93,7 @@ export type SendMessageData = {
 export type CanvasNodeData =
   | { kind: "trigger" }
   | SendMessageData
+  | { kind: "gallery"; text: string; cards: CanvasCard[] }
   | { kind: "message"; text: string; media?: FlowMedia }
   | { kind: "media"; text: string; media?: FlowMedia }
   | { kind: "buttons"; text: string; buttons: CanvasButton[]; media?: FlowMedia }
@@ -189,6 +204,10 @@ export function canvasEdgeLabel(nodes: CanvasNode[], edge: CanvasEdge): string |
     const reply = source.data.quickReplies.find((item) => item.id === edge.sourceHandle);
     return reply?.text.trim() || undefined;
   }
+  if (source?.data.kind === "gallery") {
+    if (edge.sourceHandle === "next") return undefined;
+    return source.data.cards.flatMap((card) => card.buttons).find((item) => item.id === edge.sourceHandle)?.text.trim() || undefined;
+  }
   if (source?.data.kind !== "buttons") return undefined;
   const label = source.data.buttons.find((button) => button.id === edge.sourceHandle)?.text.trim();
   return label || undefined;
@@ -205,6 +224,9 @@ function childrenOf(definition: FlowDefinition, id: string): string[] {
   if (step.type === "end") return [];
   if (step.type === "condition") return unique([step.nextTrue, step.nextFalse]);
   if (step.type === "randomizer") return unique(step.paths.map((path) => path.next ?? ""));
+  if (step.type === "gallery") {
+    return unique([...stepButtons(step).map((button) => button.next ?? ""), step.next ?? ""]);
+  }
   if (step.type === "text") {
     return unique([
       ...(step.buttons ?? []).map((button) => button.next ?? ""),
@@ -453,6 +475,30 @@ function nodeFromStep(step: FlowStep, position: { x: number; y: number }): Canva
       data: { kind: "goal", name: step.name, value: step.value !== undefined ? String(step.value) : "" },
     };
   }
+  if (step.type === "gallery") {
+    let buttonIndex = 0;
+    return {
+      id: step.id,
+      type: "gallery",
+      position,
+      data: {
+        kind: "gallery",
+        text: step.text ?? "",
+        cards: step.cards.map((card, index) => ({
+          id: `card-${index}`,
+          title: card.title,
+          subtitle: card.subtitle ?? "",
+          imageUrl: card.imageUrl ?? "",
+          url: card.url ?? "",
+          buttons: (card.buttons ?? []).map((button) => ({
+            id: buttonHandleId(buttonIndex++),
+            text: button.text,
+            ...(button.url ? { url: button.url } : {}),
+          })),
+        })),
+      },
+    };
+  }
   if (step.type === "ai") {
     return {
       id: step.id,
@@ -516,6 +562,16 @@ function outgoingEdgesForChain(chain: ChainStep[]): CanvasEdge[] {
 function outgoingEdgesForStep(step: FlowStep): CanvasEdge[] {
   if (step.type === "text") {
     return outgoingEdgesForChain([step]);
+  }
+  if (step.type === "gallery") {
+    const edges: CanvasEdge[] = [];
+    stepButtons(step).forEach((button, index) => {
+      if (!button.next) return;
+      const handle = buttonHandleId(index);
+      edges.push({ id: edgeId(step.id, handle, button.next), source: step.id, target: button.next, sourceHandle: handle, targetHandle: "in" });
+    });
+    if (step.next) edges.push({ id: edgeId(step.id, "next", step.next), source: step.id, target: step.next, sourceHandle: "next", targetHandle: "in" });
+    return edges;
   }
   if (step.type === "randomizer") {
     return step.paths.flatMap((path) => {
@@ -678,6 +734,26 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
 
     if (node.data.kind === "send_message") {
       steps.push(...compileSendMessage(node.id, node.data, graph.edges));
+      continue;
+    }
+
+    if (node.data.kind === "gallery") {
+      const next = nextFromHandle(graph.edges, node.id, "next");
+      steps.push({
+        id: node.id,
+        type: "gallery",
+        ...(node.data.text.trim() ? { text: node.data.text } : {}),
+        cards: node.data.cards.map((card) => ({
+          title: card.title,
+          ...(card.subtitle.trim() ? { subtitle: card.subtitle } : {}),
+          ...(card.imageUrl.trim() ? { imageUrl: card.imageUrl.trim() } : {}),
+          ...(card.url.trim() ? { url: card.url.trim() } : {}),
+          ...(card.buttons.length
+            ? { buttons: card.buttons.map((button) => (button.url ? { text: button.text, url: button.url } : { text: button.text, next: nextFromHandle(graph.edges, node.id, button.id) ?? "" })) }
+            : {}),
+        })),
+        ...(next ? { next } : {}),
+      });
       continue;
     }
 
@@ -1030,6 +1106,9 @@ export function engineDefinition(definition: FlowDefinition): FlowDefinition {
           ...(step.next ? { next: step.next } : {}),
         };
       }
+      if (step.type === "gallery") {
+        return { id: step.id, type: "gallery", ...(step.text ? { text: step.text } : {}), cards: step.cards, ...(step.next ? { next: step.next } : {}) };
+      }
       if (step.type === "ai") {
         return {
           id: step.id,
@@ -1071,6 +1150,20 @@ export function createCanvasNode(
           kind: "send_message",
           blocks: [{ id: newBlockId(), type: "text", text: "Hello.", buttons: [] }],
           quickReplies: [],
+        },
+      };
+    case "gallery":
+      return {
+        id,
+        type: "gallery",
+        position,
+        data: {
+          kind: "gallery",
+          text: "",
+          cards: [
+            { id: "card-0", title: "Starter", subtitle: "$29 · for getting going", imageUrl: "", url: "", buttons: [{ id: buttonHandleId(0), text: "Choose Starter" }] },
+            { id: "card-1", title: "Pro", subtitle: "$79 · for growing teams", imageUrl: "", url: "", buttons: [{ id: buttonHandleId(1), text: "Choose Pro" }] },
+          ],
         },
       };
     case "message":
@@ -1282,6 +1375,20 @@ export function validateCanvas(graph: CanvasGraph, channel?: ChannelLimits): Can
         const dest = nextFromHandle(graph.edges, node.id, reply.id);
         if (!dest) warnings.push(`Quick reply “${reply.text || "untitled"}” is not connected.`);
         else if (!stepIds.has(dest)) errors.push(`Quick reply “${reply.text}” points at a missing step.`);
+      }
+    }
+    if (node.data.kind === "gallery") {
+      if (node.data.cards.length === 0) warnings.push("A gallery has no cards.");
+      for (const card of node.data.cards) {
+        if (!card.title.trim()) warnings.push("A gallery card is missing a title.");
+        if (card.buttons.length > 3) warnings.push(`Card “${card.title || "untitled"}” has more than 3 buttons; extras are dropped.`);
+        for (const button of card.buttons) {
+          if (!button.text.trim()) warnings.push("A card button is missing a label.");
+          if (button.url) continue;
+          const dest = nextFromHandle(graph.edges, node.id, button.id);
+          if (!dest) warnings.push(`Card button “${button.text || "untitled"}” is not connected.`);
+          else if (!stepIds.has(dest)) errors.push(`Card button “${button.text}” points at a missing step.`);
+        }
       }
     }
     if (node.data.kind === "buttons") {

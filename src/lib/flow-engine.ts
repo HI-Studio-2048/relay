@@ -8,10 +8,12 @@ import {
 import { chooseRandomizerPath, nextResumeAt } from "@/lib/smart-delay";
 import { flowIdFromPayload } from "@/lib/starters";
 import { alreadyAnswered, markAnswered, matchSocialFlow, pickPublicReply } from "@/lib/social-triggers";
+import { stepButtons } from "@/lib/types";
 import type {
   CaptureField,
   ConditionOp,
   ContactRecord,
+  FlowButton,
   FlowDefinition,
   FlowEffect,
   FlowSessionState,
@@ -294,6 +296,33 @@ export function executeFrom(
       return { session: null, replies, contact: nextContact, effects };
     }
 
+    if (step.type === "gallery") {
+      const toOutbound = (button: FlowButton) =>
+        button.url ? { text: button.text, url: button.url } : { text: button.text, data: `n:${button.next ?? ""}` };
+      replies.push({
+        text: step.text ?? "",
+        cards: step.cards.slice(0, 10).map((card) => ({
+          title: card.title,
+          ...(card.subtitle ? { subtitle: card.subtitle } : {}),
+          ...(card.imageUrl ? { imageUrl: card.imageUrl } : {}),
+          ...(card.url ? { url: card.url } : {}),
+          ...(card.buttons?.length ? { buttons: card.buttons.slice(0, 3).map(toOutbound) } : {}),
+        })),
+        source: "flow",
+        flowId: current.flowId,
+        stepId: step.id,
+      });
+      if (step.next) {
+        current = { ...current, stepId: step.next, awaitingInput: false, resumeAt: null };
+        continue;
+      }
+      if (stepButtons(step).some((button) => !button.url && button.next)) {
+        current = { ...current, awaitingInput: false, resumeAt: null };
+        return { session: current, replies, contact: nextContact, effects };
+      }
+      return { session: null, replies, contact: nextContact, effects };
+    }
+
     if (step.type === "capture") {
       replies.push({
         text: step.prompt,
@@ -546,9 +575,10 @@ export function typedButton(
   const typedText = (text ?? "").trim();
   if (!session || !typedText) return null;
   const step = flows.get(session.flowId)?.definition.steps.find((item) => item.id === session.stepId);
-  if (step?.type !== "text" || !step.buttons?.length) return null;
-  const index = /^\d{1,2}$/.test(typedText) ? Number(typedText) - 1 : step.buttons.findIndex((button) => button.text.trim().toLowerCase() === typedText.toLowerCase());
-  const button = index >= 0 ? step.buttons[index] : undefined;
+  const buttons = stepButtons(step);
+  if (!step || buttons.length === 0) return null;
+  const index = /^\d{1,2}$/.test(typedText) ? Number(typedText) - 1 : buttons.findIndex((button) => button.text.trim().toLowerCase() === typedText.toLowerCase());
+  const button = index >= 0 ? buttons[index] : undefined;
   if (!button || button.url || !button.next) return null;
   return { stepId: step.id, next: button.next };
 }

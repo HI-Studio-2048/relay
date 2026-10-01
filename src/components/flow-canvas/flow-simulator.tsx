@@ -240,6 +240,41 @@ export function FlowSimulator({
                   )}
                 </div>
               ) : null}
+              {reply.cards?.length ? (
+                <div className="flex w-full snap-x gap-2 overflow-x-auto pb-1">
+                  {reply.cards.map((card, cardIndex) => (
+                    <div key={cardIndex} className="w-44 shrink-0 snap-start overflow-hidden rounded-2xl bg-white ring-1 ring-[#e5e7eb]">
+                      {card.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={card.imageUrl} alt="" className="h-24 w-full object-cover" />
+                      ) : (
+                        <div className="h-24 w-full bg-[#eef1f4]" />
+                      )}
+                      <div className="space-y-0.5 px-2.5 py-2">
+                        <p className="truncate text-[13px] font-medium text-[#1b1f24]">{card.title}</p>
+                        {card.subtitle ? <p className="line-clamp-2 text-[11px] text-[#6b7280]">{card.subtitle}</p> : null}
+                      </div>
+                      {(card.buttons ?? []).map((button, index) =>
+                        button.url ? (
+                          <a key={index} href={button.url} target="_blank" rel="noreferrer" className="block border-t border-[#f0f2f4] px-2 py-1.5 text-center text-[12px] text-[#0084ff]">
+                            {button.text} ↗
+                          </a>
+                        ) : (
+                          <button
+                            key={index}
+                            type="button"
+                            disabled={!line.live}
+                            onClick={() => send({ callbackData: button.data, label: button.text })}
+                            className="block w-full border-t border-[#f0f2f4] px-2 py-1.5 text-[12px] text-[#0084ff] enabled:hover:bg-[#eef6ff] disabled:opacity-50"
+                          >
+                            {button.text}
+                          </button>
+                        ),
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
               {reply.keyboard?.length && line.live ? (
                 <div className="flex flex-wrap gap-1">
                   {reply.keyboard.map((option) => (

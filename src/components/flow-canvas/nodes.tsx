@@ -8,6 +8,7 @@ import {
   Dices,
   Filter,
   Flag,
+  GalleryHorizontal,
   GitBranch,
   Globe,
   Hash,
@@ -128,7 +129,7 @@ export function TriggerNode({ id, selected }: NodeProps<FlowNode<"trigger">>) {
   );
 }
 
-function BlockButtons({ buttons }: { buttons: { id: string; text: string; url?: string }[] }) {
+function BlockButtons({ buttons, handleOffset = "!right-[-15px]" }: { buttons: { id: string; text: string; url?: string }[]; handleOffset?: string }) {
   if (buttons.length === 0) return null;
   return (
     <div className="space-y-1 pt-1">
@@ -148,7 +149,7 @@ function BlockButtons({ buttons }: { buttons: { id: string; text: string; url?: 
               type="source"
               position={Position.Right}
               id={button.id}
-              className={cn(handleClass(), "!right-[-15px]")}
+              className={cn(handleClass(), handleOffset)}
               style={handleStyle("send_message")}
             />
           )}
@@ -304,6 +305,47 @@ export function ButtonsNode({ id, selected, data }: NodeProps<FlowNode<"buttons"
           ))
         )}
       </div>
+    </NodeFrame>
+  );
+}
+
+export function GalleryNode({ id, selected, data }: NodeProps<FlowNode<"gallery">>) {
+  return (
+    <NodeFrame id={id} selected={selected} kind="gallery" icon={GalleryHorizontal} title="Gallery">
+      <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("gallery")} />
+      {data.text ? <Preview>{data.text}</Preview> : null}
+      <div className="space-y-1.5 pt-1">
+        {data.cards.length === 0 ? (
+          <p className="text-[11px]" style={{ color: MANYCHAT.muted }}>
+            No cards yet
+          </p>
+        ) : (
+          data.cards.map((card) => (
+            <div key={card.id} className="rounded-md border p-1.5" style={{ borderColor: `${MANYCHAT.content}33` }}>
+              <div className="flex items-center gap-1.5">
+                {card.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={card.imageUrl} alt="" className="size-7 shrink-0 rounded object-cover" />
+                ) : (
+                  <span className="size-7 shrink-0 rounded" style={{ background: MANYCHAT.wash }} />
+                )}
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-medium" style={{ color: MANYCHAT.ink }}>
+                    {card.title || "Untitled card"}
+                  </p>
+                  {card.subtitle ? (
+                    <p className="truncate text-[10px]" style={{ color: MANYCHAT.muted }}>
+                      {card.subtitle}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+              <BlockButtons buttons={card.buttons} handleOffset="!right-[-22px]" />
+            </div>
+          ))
+        )}
+      </div>
+      <Handle type="source" position={Position.Right} id="next" className={handleClass()} style={handleStyle("gallery")} />
     </NodeFrame>
   );
 }
@@ -565,6 +607,7 @@ export const flowNodeTypes = {
   message: MessageNode,
   media: MediaNode,
   buttons: ButtonsNode,
+  gallery: GalleryNode,
   capture: CaptureNode,
   form: FormNode,
   tag: TagNode,

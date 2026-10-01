@@ -43,7 +43,7 @@ import {
   saveMessage,
 } from "@/lib/store";
 import type { TelegramUpdate } from "@/lib/telegram";
-import type { ContactRecord, FlowSessionState, OutboundReply } from "@/lib/types";
+import { stepButtons, type ContactRecord, type FlowSessionState, type FlowStep, type OutboundReply } from "@/lib/types";
 
 type BotRow = typeof bots.$inferSelect;
 
@@ -417,13 +417,13 @@ async function answerComment(
 }
 
 /** Telegram does not echo the button text, so read it back from the flow that drew the button. */
-function buttonLabel(flows: { id: string; definition: { steps: { type: string; buttons?: { text: string; next?: string }[] }[] } }[], session: { flowId: string } | null, data: string | null | undefined) {
+function buttonLabel(flows: { id: string; definition: { steps: FlowStep[] } }[], session: { flowId: string } | null, data: string | null | undefined) {
   const next = data?.startsWith("n:") ? data.slice(2) : null;
   if (!next) return data ?? "";
   const ordered = session ? [...flows].sort((a) => (a.id === session.flowId ? -1 : 1)) : flows;
   for (const flow of ordered) {
     for (const step of flow.definition.steps) {
-      const hit = step.buttons?.find((button) => button.next === next);
+      const hit = stepButtons(step).find((button) => button.next === next);
       if (hit) return hit.text;
     }
   }

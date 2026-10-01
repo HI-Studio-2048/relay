@@ -2,7 +2,7 @@ import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { flowEvents, flows } from "@/lib/db/schema";
 import { log } from "@/lib/logger";
-import type { FlowDefinition } from "@/lib/types";
+import { stepButtons, type FlowDefinition } from "@/lib/types";
 
 export type FlowEventKind = "start" | "sent" | "click" | "complete" | "goal";
 
@@ -41,9 +41,8 @@ export async function recordFlowEvents(events: FlowEventInput[]) {
 /** The step that drew the button whose callback leads to `nextStepId`. */
 export function buttonSourceStep(definition: FlowDefinition, nextStepId: string) {
   for (const step of definition.steps) {
-    if (step.type !== "text") continue;
-    if ((step.buttons ?? []).some((button) => button.next === nextStepId)) return step.id;
-    if ((step.quickReplies ?? []).some((reply) => reply.next === nextStepId)) return step.id;
+    if (stepButtons(step).some((button) => button.next === nextStepId)) return step.id;
+    if (step.type === "text" && (step.quickReplies ?? []).some((reply) => reply.next === nextStepId)) return step.id;
   }
   return null;
 }
@@ -91,7 +90,7 @@ function summarize(rows: Row[], buttonSteps: Set<string>): FlowStats {
 function buttonStepIds(definition: FlowDefinition) {
   return new Set(
     definition.steps
-      .filter((step) => step.type === "text" && ((step.buttons ?? []).some((b) => !b.url) || (step.quickReplies ?? []).length > 0))
+      .filter((step) => stepButtons(step).some((b) => !b.url) || (step.type === "text" && (step.quickReplies ?? []).length > 0))
       .map((step) => step.id),
   );
 }

@@ -36,14 +36,23 @@ export async function deliverReplies(input: {
   const botValues = input.replies.length ? await loadBotFieldValues(input.botId) : {};
   for (const reply of input.replies) {
     await acquireSendSlot(input.botId, input.contact.telegramUserId);
-    const personalized = { ...reply, text: interpolateTemplate(reply.text, input.contact, botValues) };
+    const fill = (value: string) => interpolateTemplate(value, input.contact, botValues);
+    const personalized = {
+      ...reply,
+      text: fill(reply.text),
+      ...(reply.cards
+        ? { cards: reply.cards.map((card) => ({ ...card, title: fill(card.title), ...(card.subtitle ? { subtitle: fill(card.subtitle) } : {}) })) }
+        : {}),
+    };
     const sent = await sendChannelReply(input.account, channelTarget(input.contact), personalized);
     await saveMessage({
       botId: input.botId,
       contactId: input.contact.id,
       direction: "outbound",
       source: input.source ?? "flow",
-      body: outboundPreview(personalized.text, reply.media),
+      body: personalized.cards?.length
+        ? [personalized.text, `[gallery] ${personalized.cards.map((card) => card.title).join(" · ")}`].filter(Boolean).join("\n")
+        : outboundPreview(personalized.text, reply.media),
       telegramMessageId: sent.message_id || null,
     });
     if (reply.flowId) {

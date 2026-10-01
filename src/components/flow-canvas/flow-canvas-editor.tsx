@@ -286,6 +286,13 @@ function CanvasStage({
         current.filter((edge) => edge.source !== id || !edge.sourceHandle?.startsWith("btn-") || handles.has(edge.sourceHandle)),
       );
     }
+    if (data.kind === "gallery") {
+      const handles = new Set<string>([
+        "next",
+        ...data.cards.flatMap((card) => card.buttons).filter((button) => !button.url).map((button) => button.id),
+      ]);
+      setEdges((current) => current.filter((edge) => edge.source !== id || handles.has(edge.sourceHandle ?? "")));
+    }
     if (data.kind === "send_message") {
       const handles = new Set<string>([
         "next",

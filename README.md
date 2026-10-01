@@ -9,14 +9,14 @@ Origin is the source of truth for this project.
 ## What it does
 
 1. **Channels** — paste a Zernio API key (Relay registers its own signed webhook and routes every linked account), or a BotFather token / Meta token. Credentials are encrypted at rest (`ENCRYPTION_KEY`).
-2. **Comment → DM** — keyword + post filters, random public replies, a private-reply opening DM, once per person per post. Story reply and story mention triggers.
-3. **Flows** — a drag-and-drop canvas: Send Message (text, media, buttons, quick replies, typing), User input, Lead form, Tag, Set field, Subscribe, Condition, Smart Delay, A/B split, Start flow, HTTP request, Notify admin, **AI Step**, Stop. Triggers: welcome, keywords, commands, growth links, comments, stories, default reply. Ten starter **templates** (including follow-to-unlock), an **in-browser simulator** to test before publishing, and per-node sent/click stats.
+2. **Comment → DM** — keyword + post filters, random public replies, a private-reply opening DM, once per person per post, optional hide-after-reply. Story reply and story mention triggers. Account-wide **comment moderation** hides comments with blocked words or links before any automation runs.
+3. **Flows** — a drag-and-drop canvas: Send Message (text, media, buttons, quick replies, typing), **Gallery** (swipeable product cards; native carousel on Instagram/Messenger, one message per card elsewhere), User input, Lead form, Tag, Set field, Subscribe, Condition, Smart Delay, A/B split, Start flow, HTTP request, Notify admin, **AI Step**, **Goal** (conversions + revenue), Stop. Triggers: welcome, keywords, commands, growth links, comments, stories, **AI intent** (Claude matches what someone means, in any wording or language), default reply. Starter **templates** (follow-to-unlock, product gallery, AI qualifier…), an **in-browser simulator**, **version history** with one-click restore, and per-node sent/click/conversion stats. `{{bot.key}}` bot fields hold shared values (prices, links) for every flow.
 4. **AI (Claude)** — AI Step (chats toward a goal, collects fields, continues the flow or hands off), AI auto-reply from your knowledge base, Live Chat reply suggestions + summaries, and "describe a flow, get a draft".
-5. **Live Chat** — three-pane inbox across every network: filters (open / needs reply / closed), saved replies (`/`), tags, notes, automation pause/resume, AI copilot. A human reply or AI hand-off pauses the bot for that person.
+5. **Live Chat** — three-pane inbox across every network: filters (open / needs reply / mine / unassigned / closed), team assignment with round-robin AI hand-offs, saved replies (`/`), tags, notes, automation pause/resume, AI copilot, the 24-hour messaging window, desktop notifications, an unread count in the tab title, and `j`/`k` keyboard navigation. A human reply or AI hand-off pauses the bot for that person.
 6. **Contacts & CRM** — tags, custom fields, lists; segment filters, bulk actions, CSV import/export.
 7. **Broadcasts** — segments (tag, field, platform, list, last message within N hours, join date), send a message or a whole flow, schedule, and an explicit confirm before anything queues.
 8. **Growth** — trackable links (`/go/<slug>`), QR codes, attribution; Instagram ice breakers, Messenger menu, business hours with an away message.
-9. **Analytics** — overview dashboard, per-flow runs / CTR / completion.
+9. **Analytics** — overview dashboard with a getting-started checklist, per-flow runs / CTR / completion / conversions / revenue, AI conversation insights.
 10. **API & webhooks** — `/api/v1` with API keys; signed outgoing webhooks for Zapier, Make or your backend.
 
 One process serves the web UI, the webhook, and the worker (`WORKER_MODE=all`).

@@ -73,6 +73,28 @@ export function buildMetaMessages(reply: OutboundReply, channel: "instagram" | "
   const messages: MetaMessage[] = [];
   const text = renderForChannel(reply.text ?? "", meta).trim();
 
+  if (reply.cards?.length) {
+    // Gallery: Meta's generic template is a native swipeable carousel (up to 10 cards, 3 buttons each).
+    if (text) messages.push({ text: clip(text, 2000) });
+    const elements = reply.cards.slice(0, 10).map((card) => {
+      const image = card.imageUrl ? absoluteMediaUrl({ url: card.imageUrl, kind: "photo" }) : null;
+      const buttons = (card.buttons ?? []).slice(0, 3).map((button) =>
+        button.url
+          ? { type: "web_url", title: clip(button.text, 20), url: button.url }
+          : { type: "postback", title: clip(button.text, 20), payload: button.data ?? "n:" },
+      );
+      return {
+        title: clip(card.title || "…", 80),
+        ...(card.subtitle ? { subtitle: clip(card.subtitle, 80) } : {}),
+        ...(image ? { image_url: image } : {}),
+        ...(card.url ? { default_action: { type: "web_url", url: card.url } } : {}),
+        ...(buttons.length ? { buttons } : {}),
+      };
+    });
+    messages.push({ attachment: { type: "template", payload: { template_type: "generic", elements } } });
+    return messages;
+  }
+
   if (reply.media) {
     const url = absoluteMediaUrl(reply.media);
     if (url) {

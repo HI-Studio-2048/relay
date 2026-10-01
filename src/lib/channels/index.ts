@@ -1,3 +1,4 @@
+import { cardsAsReplies } from "@/lib/channels/cards";
 import { decryptSecret } from "@/lib/crypto";
 import type { bots } from "@/lib/db/schema";
 import { fetchMetaProfile, parseMetaWebhook, sendMetaReply, sendMetaTyping, type MetaWebhookPayload } from "@/lib/channels/meta";
@@ -42,6 +43,11 @@ export async function sendChannelReply(
 ): Promise<SentMessage> {
   const target = toTarget(recipient);
   const to = target.externalUserId;
+  if (reply.cards?.length && account.channel !== "instagram" && account.channel !== "messenger") {
+    let last: SentMessage = { message_id: "" };
+    for (const part of cardsAsReplies(reply)) last = await sendChannelReply(account, target, part);
+    return last;
+  }
   if (account.channel === "zernio") return sendZernioReply(account, target, reply);
   if (account.channel === "telegram") {
     const sent = await sendFlowReply(account.token, to, reply);

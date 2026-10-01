@@ -14,6 +14,7 @@ export const NODE_TONE: Record<CanvasNodeKind, NodeTone> = {
   message: { hex: RELAY.content, family: "content" },
   media: { hex: RELAY.content, family: "content" },
   buttons: { hex: RELAY.content, family: "content" },
+  gallery: { hex: RELAY.content, family: "content" },
   capture: { hex: RELAY.input, family: "input" },
   form: { hex: RELAY.input, family: "input" },
   tag: { hex: RELAY.action, family: "action" },

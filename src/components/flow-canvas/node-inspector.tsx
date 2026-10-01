@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SplitTrafficEditor } from "@/components/flow-canvas/split-traffic-editor";
 import {
+  MAX_GALLERY_CARDS,
   MAX_MESSAGE_BLOCKS,
   MAX_QUICK_REPLIES,
   MAX_TYPING_DELAY_SECONDS,
@@ -19,6 +20,7 @@ import {
   nextQuickReplyHandleId,
   TRIGGER_NODE_ID,
   type CanvasButton,
+  type CanvasCard,
   type CanvasNodeData,
   type MessageBlock,
   type SendMessageData,
@@ -302,6 +304,10 @@ export function NodeInspector({
             />
           </div>
         </div>
+      ) : null}
+
+      {data.kind === "gallery" ? (
+        <GalleryEditor data={data} onChange={(next) => onDataChange(selectedId, next)} />
       ) : null}
 
       {data.kind === "buttons" ? (
@@ -834,6 +840,84 @@ function SendMessageEditor({
           </Button>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function GalleryEditor({
+  data,
+  onChange,
+}: {
+  data: Extract<CanvasNodeData, { kind: "gallery" }>;
+  onChange: (data: Extract<CanvasNodeData, { kind: "gallery" }>) => void;
+}) {
+  const allButtons = data.cards.flatMap((card) => card.buttons);
+  const updateCard = (index: number, patch: Partial<CanvasCard>) =>
+    onChange({ ...data, cards: data.cards.map((card, i) => (i === index ? { ...card, ...patch } : card)) });
+  const move = (index: number, delta: number) => {
+    const cards = [...data.cards];
+    const [card] = cards.splice(index, 1);
+    cards.splice(Math.max(0, Math.min(cards.length, index + delta)), 0, card!);
+    onChange({ ...data, cards });
+  };
+  const addCard = () => {
+    const used = new Set(data.cards.map((card) => card.id));
+    let n = data.cards.length;
+    while (used.has(`card-${n}`)) n += 1;
+    onChange({
+      ...data,
+      cards: [...data.cards, { id: `card-${n}`, title: "New card", subtitle: "", imageUrl: "", url: "", buttons: [{ id: nextButtonHandleId(allButtons), text: "Choose" }] }],
+    });
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1">
+        <Label>Intro text (optional)</Label>
+        <Textarea rows={2} value={data.text} placeholder="Here are our plans 👇" onChange={(event) => onChange({ ...data, text: event.target.value })} />
+      </div>
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        A swipeable carousel on Instagram and Messenger; one message per card on other networks. Up to {MAX_GALLERY_CARDS} cards, 3 buttons each.
+      </p>
+      {data.cards.map((card, index) => (
+        <div key={card.id} className="space-y-2 rounded-lg border border-border p-2.5">
+          <div className="flex items-center gap-1">
+            <p className="flex-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Card {index + 1}</p>
+            <Button type="button" size="icon-sm" variant="ghost" aria-label="Move card up" disabled={index === 0} onClick={() => move(index, -1)}>
+              ↑
+            </Button>
+            <Button type="button" size="icon-sm" variant="ghost" aria-label="Move card down" disabled={index === data.cards.length - 1} onClick={() => move(index, 1)}>
+              ↓
+            </Button>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Remove card"
+              onClick={() => onChange({ ...data, cards: data.cards.filter((_, i) => i !== index) })}
+            >
+              ×
+            </Button>
+          </div>
+          <MediaPicker
+            value={card.imageUrl ? { url: card.imageUrl, kind: "photo" } : undefined}
+            onChange={(media) => updateCard(index, { imageUrl: media?.url ?? "" })}
+          />
+          <Input value={card.title} placeholder="Title" onChange={(event) => updateCard(index, { title: event.target.value })} />
+          <Input value={card.subtitle} placeholder="Subtitle (price, short pitch)" onChange={(event) => updateCard(index, { subtitle: event.target.value })} />
+          <Input value={card.url} placeholder="Open https:// link when the card is tapped" onChange={(event) => updateCard(index, { url: event.target.value })} />
+          <ButtonListEditor
+            buttons={card.buttons}
+            allButtons={allButtons}
+            onChange={(buttons) => updateCard(index, { buttons: buttons.slice(0, 3) })}
+          />
+        </div>
+      ))}
+      {data.cards.length < MAX_GALLERY_CARDS ? (
+        <Button type="button" size="xs" variant="outline" onClick={addCard}>
+          + Card
+        </Button>
+      ) : null}
     </div>
   );
 }

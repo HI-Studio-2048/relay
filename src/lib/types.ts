@@ -51,6 +51,16 @@ export type FlowButton = {
   url?: string;
 };
 
+/** One card in a ManyChat-style Gallery (a horizontal carousel of cards). */
+export type FlowCard = {
+  title: string;
+  subtitle?: string;
+  imageUrl?: string;
+  /** Opened when the card itself is tapped. */
+  url?: string;
+  buttons?: FlowButton[];
+};
+
 /** ManyChat-style quick reply: shown as a Telegram reply keyboard under the input; tapping sends the text. */
 export type FlowQuickReply = {
   text: string;
@@ -208,6 +218,14 @@ export type FlowStep =
     }
   | {
       id: string;
+      type: "gallery";
+      /** Optional message sent before the cards. */
+      text?: string;
+      cards: FlowCard[];
+      next?: string;
+    }
+  | {
+      id: string;
       type: "end";
       text?: string;
     };
@@ -285,10 +303,20 @@ export type InboundEvent = {
   isReply?: boolean;
 };
 
+export type OutboundCard = {
+  title: string;
+  subtitle?: string;
+  imageUrl?: string;
+  url?: string;
+  buttons?: { text: string; data?: string; url?: string }[];
+};
+
 export type OutboundReply = {
   text: string;
   media?: FlowMedia;
   buttons?: { text: string; data?: string; url?: string }[];
+  /** Gallery cards: native carousels on Messenger/Instagram, one message per card elsewhere. */
+  cards?: OutboundCard[];
   /** Quick replies rendered as a one-time Telegram reply keyboard. Ignored when inline buttons are present. */
   keyboard?: string[];
   /** Clear a previously shown quick-reply keyboard. */
@@ -312,3 +340,10 @@ export type BroadcastStatus =
   | "sent"
   | "failed"
   | "cancelled";
+
+/** Every button a step draws: a message's buttons, or all of a gallery's card buttons in order. */
+export function stepButtons(step: FlowStep | undefined): FlowButton[] {
+  if (step?.type === "text") return step.buttons ?? [];
+  if (step?.type === "gallery") return step.cards.flatMap((card) => card.buttons ?? []);
+  return [];
+}

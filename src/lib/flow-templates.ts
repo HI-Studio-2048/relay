@@ -222,6 +222,49 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
     },
   },
   {
+    id: "product-gallery",
+    name: "Product showcase gallery",
+    description: "DM SHOP to get a swipeable gallery of products. Each card has a buy link and a button that tags the interest.",
+    category: "Sales",
+    channels: ["instagram", "facebook", "whatsapp", "telegram"],
+    triggerType: "keyword_contains",
+    triggerValue: "shop, products, catalog",
+    definition: {
+      startStepId: "gallery",
+      steps: [
+        {
+          id: "gallery",
+          type: "gallery",
+          text: "Here's what's new, {{first_name|friend}} 👇",
+          cards: [
+            {
+              title: "The Classic Tee",
+              subtitle: "$29 · organic cotton, 6 colors",
+              url: "https://example.com/tee",
+              buttons: [{ text: "Buy now", url: "https://example.com/tee" }, { text: "I like this one", next: "tee" }],
+            },
+            {
+              title: "Everyday Hoodie",
+              subtitle: "$59 · brushed fleece",
+              url: "https://example.com/hoodie",
+              buttons: [{ text: "Buy now", url: "https://example.com/hoodie" }, { text: "I like this one", next: "hoodie" }],
+            },
+            {
+              title: "Cap",
+              subtitle: "$19 · one size",
+              url: "https://example.com/cap",
+              buttons: [{ text: "Buy now", url: "https://example.com/cap" }, { text: "I like this one", next: "cap" }],
+            },
+          ],
+        },
+        { id: "tee", type: "tag", tagName: "likes-tee", action: "add", next: "thanks" },
+        { id: "hoodie", type: "tag", tagName: "likes-hoodie", action: "add", next: "thanks" },
+        { id: "cap", type: "tag", tagName: "likes-cap", action: "add", next: "thanks" },
+        { id: "thanks", type: "end", text: "Great pick! Use code WELCOME10 for 10% off 🎁" },
+      ],
+    },
+  },
+  {
     id: "drop-waitlist",
     name: "Product drop waitlist",
     description: "DM DROP to join the waitlist; subscribers get the broadcast when it goes live.",
