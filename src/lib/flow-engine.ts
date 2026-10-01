@@ -6,6 +6,7 @@ import {
   parseKeywordList,
 } from "@/lib/keywords";
 import { chooseRandomizerPath, nextResumeAt } from "@/lib/smart-delay";
+import { alreadyAnswered, commentOnceKey, matchSocialFlow, pickPublicReply } from "@/lib/social-triggers";
 import type {
   CaptureField,
   ConditionOp,
@@ -34,6 +35,12 @@ export type EngineResult = {
   replies: OutboundReply[];
   inboundSaved: boolean;
   effects: FlowEffect[];
+  /** Comment trigger: text to post publicly under the comment. */
+  publicReply?: string | null;
+  /** Comment trigger: the first reply must go out as a private reply to the comment. */
+  privateReply?: boolean;
+  /** Flow that a social trigger matched, for analytics. */
+  matchedFlowId?: string | null;
 };
 
 type ExecuteResult = {
@@ -490,6 +497,47 @@ function toEngineResult(
   };
 }
 
+type InboundInput = {
+  contact: ContactRecord | null;
+  session: FlowSessionState | null;
+  flows: FlowRecord[];
+  event: InboundEvent;
+  now?: number;
+};
+
+function runSocialTrigger(contact: ContactRecord, input: InboundInput, now: number): EngineResult | null {
+  const event = input.event;
+  const kind = event.kind;
+  if (kind !== "comment" && kind !== "story_reply" && kind !== "story_mention") return null;
+  const flow = matchSocialFlow(input.flows, {
+    kind,
+    text: event.text ?? "",
+    postId: event.postId,
+    platformPostId: event.platformPostId,
+    permalink: event.permalink,
+    isReply: event.isReply,
+  });
+  if (!flow) return null;
+  const config = flow.definition.trigger;
+  if (kind === "comment" && (config?.oncePerContact ?? true) && alreadyAnswered(input.contact, flow.id, event.postId)) {
+    return { contact, session: input.session, replies: [], inboundSaved: true, effects: [], matchedFlowId: null };
+  }
+  let marked = contact;
+  if (kind === "comment") {
+    marked = {
+      ...contact,
+      customFields: { ...contact.customFields, [commentOnceKey(flow.id, event.postId)]: new Date(now).toISOString() },
+    };
+  }
+  const executed = executeFrom(flow.definition, startSession(marked.id, flow), marked, now, input.flows);
+  return {
+    ...toEngineResult(executed, true),
+    publicReply: kind === "comment" ? pickPublicReply(config) : null,
+    privateReply: kind === "comment",
+    matchedFlowId: flow.id,
+  };
+}
+
 export function processInboundEvent(input: {
   contact: ContactRecord | null;
   session: FlowSessionState | null;
@@ -504,6 +552,17 @@ export function processInboundEvent(input: {
   const start = parseStartPayload(input.event.text ?? "");
 
   const flowById = new Map(input.flows.map((flow) => [flow.id, flow]));
+
+  const kind = input.event.kind ?? "message";
+  if (kind !== "message") {
+    const social = runSocialTrigger(contact, input, now);
+    if (social) return social;
+    // A comment or story mention with no matching automation is logged but never answered;
+    // a story reply that matched nothing falls through to normal keyword handling.
+    if (kind !== "story_reply") {
+      return { contact, session: input.session, replies: [], inboundSaved, effects: [] };
+    }
+  }
 
   if (input.session?.status === "paused" && !start.isStart) {
     return { contact, session: input.session, replies: [], inboundSaved, effects: [] };

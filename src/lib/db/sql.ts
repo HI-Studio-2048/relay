@@ -198,4 +198,10 @@ ALTER TABLE broadcasts ALTER COLUMN tag_id DROP NOT NULL;
 ALTER TABLE bots ADD COLUMN IF NOT EXISTS channel text NOT NULL DEFAULT 'telegram';
 ALTER TABLE bots ADD COLUMN IF NOT EXISTS external_account_id text;
 ALTER TABLE bots ADD COLUMN IF NOT EXISTS app_secret_encrypted text;
+
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS platform text;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS channel_account_id text;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS thread_id text;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS avatar_url text;
+ALTER TABLE bots ADD COLUMN IF NOT EXISTS settings jsonb NOT NULL DEFAULT '{}'::jsonb;
 `;

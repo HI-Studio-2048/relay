@@ -33,6 +33,7 @@ import type {
   TriggerType,
 } from "@/lib/types";
 import { TRIGGER_OPTIONS } from "@/lib/types";
+import { isSocialTrigger, type SocialTriggerConfig } from "@/lib/social-triggers";
 
 export type InspectorFlowOption = { id: string; name: string };
 
@@ -43,6 +44,7 @@ export type FlowMeta = {
   triggerType: TriggerType;
   triggerValue: string | null;
   isActive: boolean;
+  trigger?: SocialTriggerConfig;
 };
 
 function parseCaptureSelect(value: string, customKey: string): CaptureField {
@@ -58,11 +60,91 @@ function triggerMatchPlaceholder(type: TriggerType) {
   if (type === "keyword_word") return "like";
   if (type === "keyword_starts_with") return "can you";
   if (type === "keyword_not_contains") return "refund";
+  if (isSocialTrigger(type)) return "Any (or: guide, link, price)";
   return "hello, hi";
 }
 
 function triggerNeedsValue(type: TriggerType) {
-  return type !== "start" && type !== "default";
+  return type !== "start" && type !== "default" && type !== "story_mention";
+}
+
+const lines = (value: string) =>
+  value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+/** Comment automation settings: which posts, the public reply pool, and repeat handling. */
+export function SocialTriggerEditor({
+  type,
+  config,
+  onChange,
+}: {
+  type: TriggerType;
+  config: SocialTriggerConfig | undefined;
+  onChange: (next: SocialTriggerConfig) => void;
+}) {
+  const value = config ?? {};
+  if (type === "story_reply") {
+    return (
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        Fires when someone replies to your Instagram story. Leave Match empty for every reply, or list keywords.
+        Unmatched story replies fall through to your keyword rules.
+      </p>
+    );
+  }
+  if (type === "story_mention") {
+    return (
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        Fires when someone mentions your account in their story. Thank them, tag them, or send a reward.
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1">
+        <Label>Posts</Label>
+        <Textarea
+          rows={2}
+          value={(value.postIds ?? []).join("\n")}
+          placeholder={"Every post\n(or one post id / link per line)"}
+          onChange={(event) => onChange({ ...value, postIds: lines(event.target.value) })}
+        />
+      </div>
+      <div className="space-y-1">
+        <Label>Public replies</Label>
+        <Textarea
+          rows={3}
+          value={(value.publicReplies ?? []).join("\n")}
+          placeholder={"Sent you a DM {{first_name}}! 📩\nCheck your inbox 👀"}
+          onChange={(event) => onChange({ ...value, publicReplies: lines(event.target.value) })}
+        />
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          One per line. Relay picks one at random so replies do not look automated.
+        </p>
+      </div>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={value.oncePerContact ?? true}
+          onChange={(event) => onChange({ ...value, oncePerContact: event.target.checked })}
+        />
+        Once per person per post
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={value.excludeReplies ?? false}
+          onChange={(event) => onChange({ ...value, excludeReplies: event.target.checked })}
+        />
+        Ignore replies to other comments
+      </label>
+      <p className="text-[11px] leading-snug text-muted-foreground">
+        The first message goes out as a private reply to the comment — Instagram allows one until the person
+        answers, so give it a button and continue the flow from the tap.
+      </p>
+    </div>
+  );
 }
 
 export function NodeInspector({
@@ -91,7 +173,7 @@ export function NodeInspector({
       <aside className="hidden w-80 shrink-0 overflow-y-auto border-l bg-sidebar/60 p-4 md:block">
         <p className="text-sm font-medium">Properties</p>
         <p className="mt-2 text-sm text-muted-foreground">
-          Select a node to edit it. The trigger sets when Telegram starts this flow.
+          Select a node to edit it. The trigger sets when this flow starts.
         </p>
       </aside>
     );
@@ -146,6 +228,13 @@ export function NodeInspector({
                 placeholder={triggerMatchPlaceholder(meta.triggerType)}
               />
             </div>
+          ) : null}
+          {isSocialTrigger(meta.triggerType) ? (
+            <SocialTriggerEditor
+              type={meta.triggerType}
+              config={meta.trigger}
+              onChange={(trigger) => onMetaChange({ trigger })}
+            />
           ) : null}
           {meta.triggerType === "start" ? (
             <p className="text-[11px] leading-snug text-muted-foreground">

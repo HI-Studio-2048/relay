@@ -9,7 +9,10 @@ import {
 } from "@/lib/channels";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
+import { replyToZernioComment, sendZernioPrivateReply } from "@/lib/channels/zernio";
 import { deliverReplies } from "@/lib/flow-dispatch";
+import { interpolateTemplate } from "@/lib/flow-effects";
+import { outboundPreview } from "@/lib/media";
 import { applyFlowEffects } from "@/lib/flow-effects";
 import { processInboundEvent, type EngineResult } from "@/lib/flow-engine";
 import { SLUG_PATTERN } from "@/lib/growth";
@@ -31,6 +34,7 @@ import {
   saveMessage,
 } from "@/lib/store";
 import type { TelegramUpdate } from "@/lib/telegram";
+import type { ContactRecord, OutboundReply } from "@/lib/types";
 
 type BotRow = typeof bots.$inferSelect;
 
@@ -103,14 +107,20 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
     callbackData: inbound.callbackData ?? null,
     contactPhone: inbound.contactPhone ?? null,
     telegramMessageId: inbound.externalMessageId ?? null,
+    kind: inbound.kind ?? "message",
+    postId: inbound.comment?.postId ?? null,
+    platformPostId: inbound.comment?.platformPostId ?? null,
+    permalink: inbound.comment?.permalink ?? null,
+    isReply: inbound.comment?.isReply ?? false,
   };
+  const kind = inbound.kind ?? "message";
 
   let result: EngineResult = processInboundEvent({ contact: prepared, session, flows, event: { ...baseEvent, text } });
 
   // Meta channels: a brand-new contact whose first message matched nothing still gets the welcome flow,
   // the way ManyChat's Welcome Message fires on the first interaction.
   const untouched = result.replies.length === 0 && !result.session && !inbound.callbackData;
-  if (account.channel !== "telegram" && !existing && untouched && text !== "/start") {
+  if (account.channel !== "telegram" && kind === "message" && !existing && untouched && text !== "/start") {
     const welcome = processInboundEvent({
       contact: result.contact,
       session: null,
@@ -122,6 +132,14 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
 
   let contact = result.contact;
   if (growth) contact = applyGrowthAttribution(contact, growth);
+  // Hub channels: remember where this person lives so later sends (flows, broadcasts, live chat) can reach them.
+  contact = {
+    ...contact,
+    platform: inbound.platform ?? contact.platform ?? null,
+    channelAccountId: inbound.channelAccountId ?? contact.channelAccountId ?? null,
+    threadId: inbound.threadId ?? contact.threadId ?? null,
+    avatarUrl: inbound.avatarUrl ?? contact.avatarUrl ?? null,
+  };
   // WhatsApp identifies people by phone number, so the CRM phone is known from the first message.
   if (account.channel === "whatsapp" && inbound.contactPhone && !contact.phone) {
     contact = { ...contact, phone: inbound.contactPhone };
@@ -138,13 +156,14 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
     }
   }
 
-  if (result.inboundSaved && (text || inbound.callbackData || inbound.contactPhone)) {
+  if (result.inboundSaved && (text || inbound.callbackData || inbound.contactPhone || kind !== "message")) {
     await saveMessage({
       botId,
       contactId: contact.id,
       direction: "inbound",
       source: "user",
       body:
+        inboundLabel(kind, text) ??
         text ??
         (inbound.contactPhone && account.channel === "telegram"
           ? `[shared phone] ${inbound.contactPhone}`
@@ -153,9 +172,73 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
     });
   }
 
-  await deliverReplies({ botId, account, contact, replies: result.replies });
+  let replies = result.replies;
+  if (kind === "comment" && inbound.comment && account.channel === "zernio" && inbound.channelAccountId) {
+    replies = await answerComment(botId, account, contact, inbound, result.publicReply ?? null, replies);
+  }
+  await deliverReplies({ botId, account, contact, replies });
 
   // Effects run after the replies: a typing indicator belongs after the text it follows,
   // and webhooks/notifications should describe a message that has already gone out.
   await applyFlowEffects({ botId, account, contact, effects: result.effects });
+}
+
+function inboundLabel(kind: string, text: string | null) {
+  if (kind === "comment") return `[comment] ${text ?? ""}`.trim();
+  if (kind === "story_reply") return `[story reply] ${text ?? ""}`.trim();
+  if (kind === "story_mention") return "[mentioned you in their story]";
+  return null;
+}
+
+/**
+ * Comment → DM. The public reply goes under the comment; the first flow message goes out as a
+ * private reply (the only DM Instagram/Facebook allow before the person writes back). Anything after
+ * it waits: ManyChat-style flows put a button on the opening message and continue from the tap.
+ * Platforms without private replies (TikTok, YouTube, LinkedIn…) only get the public reply.
+ */
+async function answerComment(
+  botId: string,
+  account: ChannelAccount,
+  contact: ContactRecord,
+  inbound: NormalizedInbound,
+  publicReply: string | null,
+  replies: OutboundReply[],
+) {
+  const ref = {
+    accountId: inbound.channelAccountId!,
+    postId: inbound.comment!.postId,
+    commentId: inbound.comment!.id,
+    platform: inbound.platform ?? null,
+  };
+  if (publicReply) {
+    try {
+      const textReply = interpolateTemplate(publicReply, contact);
+      await replyToZernioComment(account.token, ref, textReply);
+      await saveMessage({ botId, contactId: contact.id, direction: "outbound", source: "flow", body: `[public reply] ${textReply}` });
+    } catch (error) {
+      log.warn("Public comment reply failed", error instanceof Error ? error.message : error);
+    }
+  }
+  const [opening, ...rest] = replies;
+  if (!opening) return [];
+  const supportsPrivate = ref.platform === "instagram" || ref.platform === "facebook";
+  if (!supportsPrivate) return [];
+  try {
+    const personalized = { ...opening, text: interpolateTemplate(opening.text, contact) };
+    const sent = await sendZernioPrivateReply(account.token, ref, personalized);
+    await saveMessage({
+      botId,
+      contactId: contact.id,
+      direction: "outbound",
+      source: "flow",
+      body: outboundPreview(personalized.text, opening.media),
+      telegramMessageId: sent.message_id || null,
+    });
+  } catch (error) {
+    log.warn("Private reply failed", error instanceof Error ? error.message : error);
+  }
+  if (rest.length > 0) {
+    log.info(`Comment flow held ${rest.length} message(s) until the contact replies (one private reply allowed)`);
+  }
+  return [];
 }

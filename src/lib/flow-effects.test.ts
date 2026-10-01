@@ -21,3 +21,25 @@ describe("flow effect templates", () => {
     );
   });
 });
+
+describe("interpolateTemplate", () => {
+  const contact = {
+    id: "c",
+    telegramUserId: "42",
+    username: "ada",
+    firstName: "Ada",
+    lastName: null,
+    email: null,
+    phone: null,
+    customFields: { company: "Acme", _cm: "x" },
+    tags: [],
+  };
+
+  it("supports ManyChat names, bare custom fields and fallbacks", () => {
+    expect(interpolateTemplate("Hi {{first_name}} from {{company}}", contact)).toBe("Hi Ada from Acme");
+    expect(interpolateTemplate("{{ last_name | friend }}!", contact)).toBe("friend!");
+    expect(interpolateTemplate("{{field:company}} {{name}}", contact)).toBe("Acme Ada");
+    expect(interpolateTemplate("{{unknown}} stays", contact)).toBe("{{unknown}} stays");
+    expect(interpolateTemplate("{{unknown|ok}}", contact)).toBe("ok");
+  });
+});

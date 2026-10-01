@@ -6,7 +6,7 @@ import { log } from "@/lib/logger";
 import { acquireSendSlot } from "@/lib/rate-limit";
 import { loadContactRecord, saveMessage } from "@/lib/store";
 import { listDueSequenceSends, loadSequenceStep } from "@/lib/sequences";
-import { accountFromRow, sendChannelReply } from "@/lib/channels";
+import { accountFromRow, channelTarget, sendChannelReply } from "@/lib/channels";
 import { isBroadcastable } from "@/lib/broadcast";
 
 export async function resumeDueSequences() {
@@ -33,7 +33,7 @@ export async function resumeDueSequences() {
       const contact = await loadContactRecord(contactRow.id);
       const body = contact ? interpolateTemplate(step.body, contact) : step.body;
       await acquireSendSlot(contactRow.botId, contactRow.telegramUserId);
-      const sent = await sendChannelReply(accountFromRow(bot), contactRow.telegramUserId, { text: body, source: "flow" });
+      const sent = await sendChannelReply(accountFromRow(bot), channelTarget(contactRow), { text: body, source: "flow" });
       await saveMessage({
         botId: contactRow.botId,
         contactId: contactRow.id,

@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { FlowEditorRecord, FlowStep, HttpMethod, TriggerType } from "@/lib/types";
 import { TRIGGER_OPTIONS } from "@/lib/types";
-import type { InspectorFlowOption } from "@/components/flow-canvas/node-inspector";
+import { SocialTriggerEditor, type InspectorFlowOption } from "@/components/flow-canvas/node-inspector";
+import { isSocialTrigger } from "@/lib/social-triggers";
 
 function emptyStep(type: FlowStep["type"]): FlowStep {
   const id = crypto.randomUUID().slice(0, 8);
@@ -95,7 +96,7 @@ function triggerMatchPlaceholder(type: TriggerType) {
 }
 
 function triggerNeedsValue(type: TriggerType) {
-  return type !== "start" && type !== "default";
+  return type !== "start" && type !== "default" && type !== "story_mention";
 }
 
 export function FlowListEditor({
@@ -148,6 +149,15 @@ export function FlowListEditor({
                 value={flow.triggerValue ?? ""}
                 onChange={(event) => onChange({ ...flow, triggerValue: event.target.value })}
                 placeholder={triggerMatchPlaceholder(flow.triggerType)}
+              />
+            </div>
+          ) : null}
+          {isSocialTrigger(flow.triggerType) ? (
+            <div className="sm:col-span-2">
+              <SocialTriggerEditor
+                type={flow.triggerType}
+                config={definition.trigger}
+                onChange={(trigger) => onChange({ ...flow, definition: { ...definition, trigger } })}
               />
             </div>
           ) : null}

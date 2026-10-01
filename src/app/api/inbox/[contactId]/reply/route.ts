@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { accountFromRow, sendChannelReply } from "@/lib/channels";
+import { accountFromRow, channelTarget, sendChannelReply } from "@/lib/channels";
 import { getDb } from "@/lib/db";
 import { bots, contacts } from "@/lib/db/schema";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
@@ -17,7 +17,7 @@ export async function POST(request: Request, context: RouteParams<{ contactId: s
     const [bot] = await db.select().from(bots).where(eq(bots.id, contact.botId)).limit(1);
     if (!bot) return json({ error: "Bot not found" }, 404);
     await acquireSendSlot(contact.botId, contact.telegramUserId);
-    const sent = await sendChannelReply(accountFromRow(bot), contact.telegramUserId, {
+    const sent = await sendChannelReply(accountFromRow(bot), channelTarget(contact), {
       text: body.text.trim(),
       source: "agent",
     });

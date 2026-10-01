@@ -1,10 +1,12 @@
-import { lpush, rpop } from "@/lib/redis";
+import { incrWithTtl, lpush, rpop } from "@/lib/redis";
 import { workerMode } from "@/lib/env";
 
 export type WebhookJob = {
   kind: "webhook";
   botId: string;
   update: unknown;
+  /** Provider delivery id (X-Zernio-Event-Id). Retries carry the same id and are dropped. */
+  eventId?: string | null;
 };
 
 export type BroadcastJob = {
@@ -18,7 +20,12 @@ const WEBHOOK_KEY = "relay:q:webhook";
 const BROADCAST_KEY = "relay:q:broadcast";
 
 export async function enqueueWebhook(job: WebhookJob) {
+  if (job.eventId) {
+    const seen = await incrWithTtl(`relay:event:${job.botId}:${job.eventId}`, 60 * 60 * 24);
+    if (seen > 1) return false;
+  }
   await lpush(WEBHOOK_KEY, JSON.stringify(job));
+  return true;
 }
 
 export async function enqueueBroadcast(job: BroadcastJob) {

@@ -6,7 +6,7 @@ import { executeFrom, type FlowRecord } from "@/lib/flow-engine";
 import { outboundPreview } from "@/lib/media";
 import { acquireSendSlot } from "@/lib/rate-limit";
 import { loadActiveFlows, loadContactRecord, persistContact, persistSession, saveMessage } from "@/lib/store";
-import { accountFromRow, sendChannelReply, type ChannelAccount } from "@/lib/channels";
+import { accountFromRow, channelTarget, sendChannelReply, type ChannelAccount } from "@/lib/channels";
 import type { ContactRecord, FlowSessionState, OutboundReply } from "@/lib/types";
 
 export class FlowDispatchError extends Error {
@@ -27,7 +27,7 @@ export async function deliverReplies(input: {
   for (const reply of input.replies) {
     await acquireSendSlot(input.botId, input.contact.telegramUserId);
     const personalized = { ...reply, text: interpolateTemplate(reply.text, input.contact) };
-    const sent = await sendChannelReply(input.account, input.contact.telegramUserId, personalized);
+    const sent = await sendChannelReply(input.account, channelTarget(input.contact), personalized);
     await saveMessage({
       botId: input.botId,
       contactId: input.contact.id,

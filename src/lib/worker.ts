@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { isBroadcastable } from "@/lib/broadcast";
-import { accountFromRow, sendChannelReply } from "@/lib/channels";
+import { accountFromRow, channelTarget, sendChannelReply } from "@/lib/channels";
 import { getDb } from "@/lib/db";
 import { bots, broadcastRecipients, broadcasts, contacts } from "@/lib/db/schema";
 import { interpolateTemplate } from "@/lib/flow-effects";
@@ -53,7 +53,7 @@ async function handleBroadcast(broadcastId: string) {
       await acquireSendSlot(broadcast.botId, contact.telegramUserId);
       const record = await loadContactRecord(contact.id);
       const personalized = record ? interpolateTemplate(broadcast.body, record) : broadcast.body;
-      const sent = await sendChannelReply(account, contact.telegramUserId, { text: personalized, source: "broadcast" });
+      const sent = await sendChannelReply(account, channelTarget(contact), { text: personalized, source: "broadcast" });
       await db
         .update(broadcastRecipients)
         .set({ status: "sent", sentAt: new Date(), error: null })

@@ -2,12 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import type { ChannelId } from "@/lib/channels/types";
 import { BOT_STORAGE_KEY, api } from "@/lib/client";
 
 export type PublicBot = {
   id: string;
   name: string;
-  channel: "telegram" | "instagram" | "messenger" | "whatsapp";
+  channel: ChannelId;
   telegramUsername: string | null;
   externalAccountId?: string | null;
   hasAppSecret?: boolean;
@@ -17,6 +18,7 @@ export type PublicBot = {
   lastHealthAt: string | null;
   lastHealthError: string | null;
   createdAt?: string;
+  linkedAccounts?: { id: string; platform: string; username: string | null; picture: string | null }[];
 };
 
 type BotContextValue = {

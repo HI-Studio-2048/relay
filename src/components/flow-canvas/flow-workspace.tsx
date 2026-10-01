@@ -50,8 +50,10 @@ export function FlowWorkspace({
   const router = useRouter();
 
   const pullCanvas = () => {
-    const definition = canvasRef.current?.getDefinition();
-    if (!definition) return flow;
+    const compiled = canvasRef.current?.getDefinition();
+    if (!compiled) return flow;
+    // Comment / story settings live beside the graph, not in it.
+    const definition = flow.definition.trigger ? { ...compiled, trigger: flow.definition.trigger } : compiled;
     const next = { ...flow, definition };
     setFlow(next);
     return next;
@@ -127,10 +129,15 @@ export function FlowWorkspace({
     triggerType: flow.triggerType,
     triggerValue: flow.triggerValue,
     isActive: flow.isActive,
+    trigger: flow.definition.trigger,
   };
 
-  const onMetaChange = (patch: Partial<FlowMeta>) => {
-    setFlow((current) => ({ ...current, ...patch }));
+  const onMetaChange = ({ trigger, ...patch }: Partial<FlowMeta>) => {
+    setFlow((current) => ({
+      ...current,
+      ...patch,
+      ...(trigger !== undefined ? { definition: { ...current.definition, trigger } } : {}),
+    }));
   };
 
   const firstIssue = validation.errors[0] ?? validation.warnings[0];

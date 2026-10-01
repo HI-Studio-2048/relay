@@ -31,6 +31,8 @@ export const bots = pgTable("bots", {
   status: text("status").notNull().default("disconnected"),
   lastHealthAt: timestamp("last_health_at", { withTimezone: true }),
   lastHealthError: text("last_health_error"),
+  /** Per-account settings (provider webhook id, AI persona, ice breakers…). */
+  settings: jsonb("settings").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -54,6 +56,11 @@ export const contacts = pgTable(
     welcomed: boolean("welcomed").notNull().default(false),
     notes: text("notes").notNull().default(""),
     inboxStatus: text("inbox_status").notNull().default("open"),
+    /** Hub channels (Zernio): the network, the hub account, and the conversation to reply into. */
+    platform: text("platform"),
+    channelAccountId: text("channel_account_id"),
+    threadId: text("thread_id"),
+    avatarUrl: text("avatar_url"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

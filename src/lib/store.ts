@@ -53,6 +53,10 @@ export async function loadContactRecord(contactId: string): Promise<ContactRecor
     welcomed: row.welcomed ?? false,
     notes: row.notes ?? "",
     inboxStatus: row.inboxStatus === "closed" ? "closed" : "open",
+    platform: row.platform ?? null,
+    channelAccountId: row.channelAccountId ?? null,
+    threadId: row.threadId ?? null,
+    avatarUrl: row.avatarUrl ?? null,
   };
 }
 
@@ -86,6 +90,11 @@ export async function persistContact(
     welcomed: record.welcomed ?? false,
     notes: record.notes ?? "",
     inboxStatus: record.inboxStatus === "closed" ? "closed" : "open",
+    // Routing only ever fills in: a record built without it (older callers) keeps what is stored.
+    ...(record.platform ? { platform: record.platform } : {}),
+    ...(record.channelAccountId ? { channelAccountId: record.channelAccountId } : {}),
+    ...(record.threadId ? { threadId: record.threadId } : {}),
+    ...(record.avatarUrl ? { avatarUrl: record.avatarUrl } : {}),
     updatedAt: now(),
   };
   if (existing[0]) {

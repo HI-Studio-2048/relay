@@ -9,8 +9,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CHANNELS, CHANNEL_IDS, type ChannelId } from "@/lib/channels/types";
 import { api } from "@/lib/client";
+import { PlatformDot, zernioPlatformLabel } from "@/components/chrome/platform-badge";
 
 const GUIDES: Record<ChannelId, { title: string; steps: string[]; tokenLabel: string; accountLabel?: string }> = {
+  zernio: {
+    title: "Every social account through Zernio",
+    tokenLabel: "Zernio API key",
+    accountLabel: "Only these Zernio account ids (optional, comma-separated)",
+    steps: [
+      "Connect Instagram, Facebook, WhatsApp, TikTok, X, LinkedIn, YouTube, Threads, Bluesky, Reddit and more in Zernio.",
+      "Create an API key in Zernio → Settings → API keys and paste it here. Leave the account filter empty to route every account.",
+      "Relay registers its webhook with Zernio (DMs, comments, referrals) and signs it with its own secret. Comment → DM, story replies and live chat work across all of them.",
+    ],
+  },
   telegram: {
     title: "Telegram bot",
     tokenLabel: "Bot token",
@@ -52,13 +63,14 @@ const GUIDES: Record<ChannelId, { title: string; steps: string[]; tokenLabel: st
 
 export default function SetupPage() {
   const { bot, bots, refresh, setBotId } = useBot();
-  const [channel, setChannel] = useState<ChannelId>("telegram");
+  const [channel, setChannel] = useState<ChannelId>("zernio");
   const [token, setToken] = useState("");
   const [accountId, setAccountId] = useState("");
   const [appSecret, setAppSecret] = useState("");
   const [busy, setBusy] = useState(false);
   const guide = GUIDES[channel];
-  const isMeta = channel !== "telegram";
+  const isZernio = channel === "zernio";
+  const isMeta = channel !== "telegram" && !isZernio;
 
   const connect = async () => {
     setBusy(true);
@@ -113,8 +125,9 @@ export default function SetupPage() {
       <div>
         <h1 className="font-heading text-3xl tracking-tight">Channels</h1>
         <p className="text-sm text-muted-foreground">
-          Connect Telegram, Instagram, Messenger, and WhatsApp. Each account gets its own inbox, contacts, and
-          flows; switch between them in the sidebar. Tokens are encrypted at rest and never written to logs.
+          Connect every social account at once through Zernio, or Telegram, Instagram, Messenger, and WhatsApp
+          directly. Each connection gets its own inbox, contacts, and flows; switch between them in the sidebar.
+          Keys are encrypted at rest and never written to logs.
         </p>
       </div>
 
@@ -151,13 +164,13 @@ export default function SetupPage() {
             </ol>
           </div>
 
-          {isMeta ? (
+          {isMeta || isZernio ? (
             <div className="space-y-2">
               <Label htmlFor="account">{guide.accountLabel}</Label>
               <Input
                 id="account"
                 autoComplete="off"
-                placeholder={channel === "whatsapp" ? "1234567890123456" : "Page ID"}
+                placeholder={channel === "whatsapp" ? "1234567890123456" : isZernio ? "All accounts" : "Page ID"}
                 value={accountId}
                 onChange={(event) => setAccountId(event.target.value)}
               />
@@ -169,7 +182,7 @@ export default function SetupPage() {
               id="token"
               type="password"
               autoComplete="off"
-              placeholder={isMeta ? "EAAG…" : "123456:ABC…"}
+              placeholder={isZernio ? "sk_…" : isMeta ? "EAAG…" : "123456:ABC…"}
               value={token}
               onChange={(event) => setToken(event.target.value)}
             />
@@ -188,7 +201,7 @@ export default function SetupPage() {
             </div>
           ) : null}
           <Button onClick={() => void connect()} disabled={busy || !token.trim() || (isMeta && !accountId.trim())}>
-            {busy ? "Connecting…" : isMeta ? "Connect account" : "Connect and set webhook"}
+            {busy ? "Connecting…" : isMeta ? "Connect account" : isZernio ? "Connect Zernio" : "Connect and set webhook"}
           </Button>
         </CardContent>
       </Card>
@@ -206,7 +219,41 @@ export default function SetupPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {bot.channel !== "telegram" && bot.webhookUrl ? (
+            {bot.channel === "zernio" ? (
+              <div className="space-y-2">
+                {bot.linkedAccounts?.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {bot.linkedAccounts.map((linked) => (
+                      <span
+                        key={linked.id}
+                        className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
+                        title={linked.id}
+                      >
+                        <PlatformDot platform={linked.platform} />
+                        {zernioPlatformLabel(linked.platform)}
+                        {linked.username ? <span className="text-muted-foreground">@{linked.username}</span> : null}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No social accounts in this Zernio workspace yet.</p>
+                )}
+                {bot.webhookUrl ? (
+                  <div className="space-y-1 rounded-lg bg-muted p-3 text-sm">
+                    <p className="font-medium">Zernio webhook</p>
+                    <p className="break-all">
+                      <span className="text-muted-foreground">URL:</span> {bot.webhookUrl}
+                    </p>
+                    <p className="break-all">
+                      <span className="text-muted-foreground">Signing secret:</span> {bot.verifyToken}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Registered automatically. Run a health check to refresh the account list.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : bot.channel !== "telegram" && bot.webhookUrl ? (
               <div className="space-y-1 rounded-lg bg-muted p-3 text-sm">
                 <p className="font-medium">Paste into the Meta App dashboard</p>
                 <p className="break-all">

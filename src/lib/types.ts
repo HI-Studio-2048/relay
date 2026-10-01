@@ -1,3 +1,5 @@
+import type { SocialTriggerConfig } from "@/lib/social-triggers";
+
 export type TriggerType =
   | "start"
   | "keyword"
@@ -7,6 +9,9 @@ export type TriggerType =
   | "keyword_not_contains"
   | "command"
   | "start_param"
+  | "comment"
+  | "story_reply"
+  | "story_mention"
   | "default";
 
 export const TRIGGER_OPTIONS: { value: TriggerType; label: string }[] = [
@@ -18,6 +23,9 @@ export const TRIGGER_OPTIONS: { value: TriggerType; label: string }[] = [
   { value: "keyword_word", label: "Message contains a whole word" },
   { value: "keyword_starts_with", label: "Message begins with" },
   { value: "keyword_not_contains", label: "Message doesn't contain" },
+  { value: "comment", label: "Comments on a post (comment → DM)" },
+  { value: "story_reply", label: "Replies to your story" },
+  { value: "story_mention", label: "Mentions you in a story" },
   { value: "default", label: "Default reply" },
 ];
 
@@ -184,6 +192,8 @@ export type FlowDefinition = {
   startStepId: string;
   steps: FlowStep[];
   canvas?: FlowCanvasLayout;
+  /** Comment / story trigger settings (post filter, public replies). See social-triggers.ts. */
+  trigger?: SocialTriggerConfig;
 };
 
 export type FlowEditorRecord = {
@@ -212,6 +222,11 @@ export type ContactRecord = {
   welcomed?: boolean;
   notes?: string;
   inboxStatus?: "open" | "closed";
+  /** Hub routing (Zernio). See contacts.platform / channel_account_id / thread_id. */
+  platform?: string | null;
+  channelAccountId?: string | null;
+  threadId?: string | null;
+  avatarUrl?: string | null;
 };
 
 export type FlowSessionState = {
@@ -236,6 +251,12 @@ export type InboundEvent = {
   /** Phone number from a shared Telegram contact card (reply-keyboard request_contact). */
   contactPhone?: string | null;
   telegramMessageId?: string | null;
+  /** Comment and story events take the social trigger path instead of keyword matching. */
+  kind?: "message" | "comment" | "story_reply" | "story_mention";
+  postId?: string | null;
+  platformPostId?: string | null;
+  permalink?: string | null;
+  isReply?: boolean;
 };
 
 export type OutboundReply = {
