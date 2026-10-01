@@ -1,5 +1,6 @@
 "use client";
 
+import { AiRewrite } from "@/components/flow-canvas/ai-rewrite";
 import { MediaPicker } from "@/components/flow-canvas/media-picker";
 import { NODE_TONE } from "@/components/flow-canvas/node-colors";
 import { Button } from "@/components/ui/button";
@@ -776,6 +777,7 @@ function SendMessageEditor({
                   value={block.text}
                   onChange={(event) => updateBlock(index, { ...block, text: event.target.value })}
                 />
+                <AiRewrite text={block.text} onChange={(text) => updateBlock(index, { ...block, text })} />
                 <p className="text-[11px] leading-snug text-muted-foreground">{FORMATTING_HINT}</p>
                 <div className="space-y-1">
                   <Label className="text-[11px]">Buttons</Label>

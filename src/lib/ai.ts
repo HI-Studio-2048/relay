@@ -264,6 +264,35 @@ export async function translateText(input: { text: string; target: string | null
   return { sourceLanguage: result.source_language, translation: result.translation };
 }
 
+export const REWRITE_STYLES = {
+  shorter: "Make it shorter and punchier. DM-sized.",
+  friendlier: "Make it warmer and friendlier, still professional.",
+  persuasive: "Make it more persuasive with a clear call to action, without being pushy.",
+  emoji: "Add a few fitting emoji. Change nothing else.",
+  fix: "Fix spelling and grammar only. Keep the wording.",
+} as const;
+
+export type RewriteStyle = keyof typeof REWRITE_STYLES;
+
+const RewriteSchema = z.object({ text: z.string() });
+
+/** Flow editor "✨ Rewrite": the same message in the brand voice, one style at a time. */
+export async function rewriteCopy(input: { text: string; style: RewriteStyle; settings: BotAiSettings; brandName: string }) {
+  const result = await parse(RewriteSchema, {
+    system: [
+      `You edit chat messages that ${input.brandName} sends in DMs.`,
+      input.settings.persona?.trim() ? `Brand voice:\n${input.settings.persona.trim()}` : "",
+      "Keep {{variables}}, URLs, @handles and **formatting** markers exactly as they are. Same language as the input.",
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+    effort: "low",
+    maxTokens: 3000,
+    user: `${REWRITE_STYLES[input.style]}\n\n<message>\n${input.text.slice(0, 2000)}\n</message>`,
+  });
+  return result.text.trim();
+}
+
 const GeneratedFlowSchema = z.object({
   name: z.string(),
   trigger: z.object({
