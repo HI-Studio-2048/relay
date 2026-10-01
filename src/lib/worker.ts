@@ -76,7 +76,7 @@ async function handleBroadcast(broadcastId: string) {
         contactId: contact.id,
         direction: "outbound",
         source: "broadcast",
-        body: broadcast.body,
+        body: personalized,
         telegramMessageId: sent.message_id || null,
       });
       sentCount += 1;
