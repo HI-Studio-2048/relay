@@ -1,4 +1,4 @@
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { statsByFlow } from "@/lib/analytics";
 import { getDb } from "@/lib/db";
 import { bots, contacts, flowEvents, flows, growthLinks, messages, teamMembers } from "@/lib/db/schema";
@@ -101,9 +101,10 @@ export async function loadTeamReport(botId: string, days = 30) {
     })
     .from(messages)
     .where(and(eq(messages.botId, botId), gte(messages.createdAt, new Date(Date.now() - days * DAY))))
-    .orderBy(messages.createdAt)
+    // Newest 50k on very busy accounts, put back in time order for the report.
+    .orderBy(desc(messages.createdAt))
     .limit(50_000);
-  return buildTeamReport(rows.map((row) => ({ ...row, createdAt: new Date(row.createdAt) })));
+  return buildTeamReport(rows.reverse().map((row) => ({ ...row, createdAt: new Date(row.createdAt) })));
 }
 
 export type ChecklistItem = { id: string; label: string; done: boolean; href: string; hint: string };

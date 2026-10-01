@@ -334,6 +334,8 @@ export type OutboundReply = {
   buttons?: { text: string; data?: string; url?: string }[];
   /** Gallery cards: native carousels on Messenger/Instagram, one message per card elsewhere. */
   cards?: OutboundCard[];
+  /** Numbered-text buttons start after this many (a gallery card after earlier cards' buttons). */
+  buttonNumberOffset?: number;
   /** Quick replies rendered as a one-time Telegram reply keyboard. Ignored when inline buttons are present. */
   keyboard?: string[];
   /** Clear a previously shown quick-reply keyboard. */
@@ -361,6 +363,7 @@ export type BroadcastStatus =
 /** Every button a step draws: a message's buttons, or all of a gallery's card buttons in order. */
 export function stepButtons(step: FlowStep | undefined): FlowButton[] {
   if (step?.type === "text") return step.buttons ?? [];
-  if (step?.type === "gallery") return step.cards.flatMap((card) => card.buttons ?? []);
+  // Same limits the engine sends (10 cards, 3 buttons each), so typed numbers line up.
+  if (step?.type === "gallery") return step.cards.slice(0, 10).flatMap((card) => (card.buttons ?? []).slice(0, 3));
   return [];
 }

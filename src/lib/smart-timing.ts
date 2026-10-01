@@ -13,6 +13,17 @@ export function preferredHour(dates: Date[], minSamples = 2): number | null {
   return counts[best]! > 0 ? best : null;
 }
 
+/**
+ * Instagram, Messenger and WhatsApp only allow messages within 24h of the person's last message, so a
+ * smart send never waits past their last message + 23h (and goes now if that is already behind us).
+ */
+export function capToWindow(sendAt: Date, now: Date, lastInbound: Date | null): Date {
+  if (!lastInbound) return sendAt;
+  const cap = lastInbound.getTime() + 23 * 3_600_000;
+  if (cap <= now.getTime()) return now;
+  return sendAt.getTime() > cap ? now : sendAt;
+}
+
 /** The first moment at or after `start` that falls in `hour` (UTC); `start` itself when unknown. */
 export function nextSendAt(start: Date, hour: number | null): Date {
   if (hour === null) return start;

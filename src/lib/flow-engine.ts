@@ -602,7 +602,9 @@ export function typedButton(
   const step = flows.get(session.flowId)?.definition.steps.find((item) => item.id === session.stepId);
   const buttons = stepButtons(step);
   if (!step || buttons.length === 0) return null;
-  const index = /^\d{1,2}$/.test(typedText) ? Number(typedText) - 1 : buttons.findIndex((button) => button.text.trim().toLowerCase() === typedText.toLowerCase());
+  const sameLabel = buttons.filter((button) => button.text.trim().toLowerCase() === typedText.toLowerCase());
+  // A label shared by several buttons (a gallery's "Buy now" on every card) is ambiguous: only a number picks one.
+  const index = /^\d{1,2}$/.test(typedText) ? Number(typedText) - 1 : sameLabel.length === 1 ? buttons.indexOf(sameLabel[0]!) : -1;
   const button = index >= 0 ? buttons[index] : undefined;
   if (!button || button.url || !button.next) return null;
   return { stepId: step.id, next: button.next };

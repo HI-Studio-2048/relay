@@ -45,6 +45,7 @@ import {
   persistSession,
   saveMessage,
   wakeSnoozed,
+  hasOpenCsatRequest,
 } from "@/lib/store";
 import type { TelegramUpdate } from "@/lib/telegram";
 import { stepButtons, type ContactRecord, type FlowSessionState, type FlowStep, type OutboundReply } from "@/lib/types";
@@ -97,6 +98,8 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
   // CSAT rating tap: log it for the team report and say thanks; it never starts automation.
   const rating = parseCsatPayload(inbound.callbackData);
   if (existing && rating !== null) {
+    // Only the first tap on the latest survey counts; repeat taps and stale buttons are ignored.
+    if (!(await hasOpenCsatRequest(existing.id))) return;
     await saveMessage({ botId, contactId: existing.id, direction: "inbound", source: "user", body: ratingBody(rating) });
     try {
       const thanks = readCsat(bot.settings).thanks;
@@ -397,8 +400,13 @@ async function answerComment(
       log.warn("Public comment reply failed", error instanceof Error ? error.message : error);
     }
   }
-  const [opening, ...rest] = replies;
-  if (!opening) return { session: undefined };
+  const [first, ...rest] = replies;
+  if (!first) return { session: undefined };
+  // A private reply cannot carry a carousel: open with a button that shows the gallery as a normal DM.
+  const galleryStep = first.cards?.length && first.stepId && first.flowId ? first.stepId : null;
+  const opening: OutboundReply = galleryStep
+    ? { ...first, cards: undefined, text: first.text.trim() || "Here you go 👇", buttons: [{ text: "Show me", data: `n:${galleryStep}` }] }
+    : first;
   const supportsPrivate = ref.platform === "instagram" || ref.platform === "facebook";
   // TikTok, YouTube, LinkedIn…: only the public reply is possible, so do not leave a flow running.
   if (!supportsPrivate) return { session: null };
@@ -411,7 +419,9 @@ async function answerComment(
       ? { ...opening, buttons: [...(opening.buttons ?? []), { text: "Continue", data: `n:${held.stepId}` }] }
       : opening;
   let session: FlowSessionState | null | undefined;
-  if (!hasCallback && held?.stepId && opening.flowId) {
+  if (galleryStep) {
+    session = { id: crypto.randomUUID(), contactId: contact.id, flowId: opening.flowId!, stepId: galleryStep, awaitingInput: false, status: "active" };
+  } else if (!hasCallback && held?.stepId && opening.flowId) {
     session = { id: crypto.randomUUID(), contactId: contact.id, flowId: opening.flowId, stepId: held.stepId, awaitingInput: false, status: "active" };
   }
   try {

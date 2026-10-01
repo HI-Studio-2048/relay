@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, isNotNull, lte, notInArray, notLike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, isNotNull, like, lte, notInArray, notLike, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import {
   contactFieldValues,
@@ -352,6 +352,18 @@ export type InboxThread = {
 };
 
 /** Live Chat list: one row per conversation with its latest message, newest first. */
+/** True when the newest survey message for this contact has not been answered yet. */
+export async function hasOpenCsatRequest(contactId: string) {
+  const db = await getDb();
+  const [latest] = await db
+    .select({ body: messages.body })
+    .from(messages)
+    .where(and(eq(messages.contactId, contactId), or(like(messages.body, "%[rating request]"), like(messages.body, "[rating] %"))))
+    .orderBy(desc(messages.createdAt))
+    .limit(1);
+  return Boolean(latest?.body.endsWith("[rating request]"));
+}
+
 /** Snooze a conversation until a time, or wake it (null). */
 export async function snoozeContact(contactId: string, until: Date | null) {
   const db = await getDb();

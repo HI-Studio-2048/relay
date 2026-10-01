@@ -151,7 +151,9 @@ export function buildZernioMessages(reply: OutboundReply, platform: string | nul
     message = [
       message,
       // Numbered by position in the full list, so a typed number maps back to the same button.
-      ...overflow.map((button, index) => (button.url ? `${button.text}: ${button.url}` : `${native.length + index + 1}. ${button.text}`)),
+      ...overflow.map((button, index) =>
+        button.url ? `${button.text}: ${button.url}` : `${(reply.buttonNumberOffset ?? 0) + native.length + index + 1}. ${button.text}`,
+      ),
     ]
       .filter(Boolean)
       .join("\n");

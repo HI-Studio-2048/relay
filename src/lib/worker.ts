@@ -1,4 +1,4 @@
-import { and, eq, lte } from "drizzle-orm";
+import { and, eq, inArray, lte, sql } from "drizzle-orm";
 import { isBroadcastable } from "@/lib/broadcast";
 import { accountFromRow, channelTarget, sendChannelReply } from "@/lib/channels";
 import { getDb } from "@/lib/db";
@@ -15,10 +15,11 @@ import { acquireSendSlot } from "@/lib/rate-limit";
 import { loadContactRecord, saveMessage } from "@/lib/store";
 import { processChannelUpdate } from "@/lib/webhook";
 
-type GlobalWorker = { relayWorkerStarted?: boolean };
+type GlobalWorker = { relayWorkerStarted?: boolean; relayBroadcastsInFlight?: Set<string> };
 const globalForWorker = globalThis as unknown as GlobalWorker;
 
-const inFlight = new Set<string>();
+/** Shared across route bundles in this process, so a confirm request and the worker loop do not overlap. */
+const inFlight = (globalForWorker.relayBroadcastsInFlight ??= new Set<string>());
 
 async function handleBroadcast(broadcastId: string) {
   if (inFlight.has(broadcastId)) return;
@@ -28,6 +29,14 @@ async function handleBroadcast(broadcastId: string) {
   } finally {
     inFlight.delete(broadcastId);
   }
+}
+
+async function bumpCounts(broadcastId: string, sent: number, failed: number) {
+  const db = await getDb();
+  await db
+    .update(broadcasts)
+    .set({ sentCount: sql`${broadcasts.sentCount} + ${sent}`, failedCount: sql`${broadcasts.failedCount} + ${failed}` })
+    .where(eq(broadcasts.id, broadcastId));
 }
 
 async function sendBroadcast(broadcastId: string) {
@@ -48,19 +57,18 @@ async function sendBroadcast(broadcastId: string) {
   const recipients = await db
     .select()
     .from(broadcastRecipients)
-    .where(eq(broadcastRecipients.broadcastId, broadcastId));
-
-  let sentCount = broadcast.sentCount;
-  let failedCount = broadcast.failedCount;
-  let waiting = 0;
+    .where(and(eq(broadcastRecipients.broadcastId, broadcastId), eq(broadcastRecipients.status, "pending")));
 
   for (const recipient of recipients) {
-    if (recipient.status !== "pending") continue;
-    if (recipient.sendAt && recipient.sendAt.getTime() > Date.now()) {
-      // Smart timing: their usual hour has not come yet; a later tick picks them up.
-      waiting += 1;
-      continue;
-    }
+    // Smart timing: their usual hour has not come yet; a later tick picks them up.
+    if (recipient.sendAt && recipient.sendAt.getTime() > Date.now()) continue;
+    // Claim the row first: another worker (or the confirm request) may be sending this broadcast too.
+    const [claimed] = await db
+      .update(broadcastRecipients)
+      .set({ status: "sending" })
+      .where(and(eq(broadcastRecipients.id, recipient.id), eq(broadcastRecipients.status, "pending")))
+      .returning();
+    if (!claimed) continue;
     try {
       const [contact] = await db.select().from(contacts).where(eq(contacts.id, recipient.contactId)).limit(1);
       if (!contact) throw new Error("Contact missing");
@@ -78,8 +86,7 @@ async function sendBroadcast(broadcastId: string) {
           .update(broadcastRecipients)
           .set({ status: "sent", sentAt: new Date(), error: null })
           .where(eq(broadcastRecipients.id, recipient.id));
-        sentCount += 1;
-        await db.update(broadcasts).set({ sentCount, failedCount }).where(eq(broadcasts.id, broadcastId));
+        await bumpCounts(broadcastId, 1, 0);
         continue;
       }
       await acquireSendSlot(broadcast.botId, contact.telegramUserId);
@@ -98,9 +105,8 @@ async function sendBroadcast(broadcastId: string) {
         body: personalized,
         telegramMessageId: sent.message_id || null,
       });
-      sentCount += 1;
+      await bumpCounts(broadcastId, 1, 0);
     } catch (error) {
-      failedCount += 1;
       await db
         .update(broadcastRecipients)
         .set({
@@ -108,15 +114,19 @@ async function sendBroadcast(broadcastId: string) {
           error: error instanceof Error ? error.message : "Send failed",
         })
         .where(eq(broadcastRecipients.id, recipient.id));
+      await bumpCounts(broadcastId, 0, 1);
     }
-    await db
-      .update(broadcasts)
-      .set({ sentCount, failedCount })
-      .where(eq(broadcasts.id, broadcastId));
   }
 
-  if (waiting > 0) return;
-  const status = failedCount > 0 && sentCount === 0 ? "failed" : "sent";
+  // Finish only when nobody is left waiting (smart timing) or mid-send elsewhere.
+  const [open] = await db
+    .select({ id: broadcastRecipients.id })
+    .from(broadcastRecipients)
+    .where(and(eq(broadcastRecipients.broadcastId, broadcastId), inArray(broadcastRecipients.status, ["pending", "sending"])))
+    .limit(1);
+  if (open) return;
+  const [totals] = await db.select({ sent: broadcasts.sentCount, failed: broadcasts.failedCount }).from(broadcasts).where(eq(broadcasts.id, broadcastId));
+  const status = (totals?.failed ?? 0) > 0 && (totals?.sent ?? 0) === 0 ? "failed" : "sent";
   await db
     .update(broadcasts)
     .set({
@@ -124,7 +134,7 @@ async function sendBroadcast(broadcastId: string) {
       finishedAt: new Date(),
       lastError: status === "failed" ? "All recipients failed" : null,
     })
-    .where(eq(broadcasts.id, broadcastId));
+    .where(and(eq(broadcasts.id, broadcastId), eq(broadcasts.status, "sending")));
 }
 
 async function handleJob(job: Job) {

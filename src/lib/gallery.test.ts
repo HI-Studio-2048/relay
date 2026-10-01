@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cardsAsReplies } from "@/lib/channels/cards";
 import { buildMetaMessages } from "@/lib/channels/meta";
+import { buildZernioMessages } from "@/lib/channels/zernio";
 import { canvasToDefinition, createCanvasNode, definitionToCanvas, engineDefinition } from "@/lib/flow-canvas";
 import { processInboundEvent, typedButton, type FlowRecord } from "@/lib/flow-engine";
 import type { ContactRecord, FlowDefinition } from "@/lib/types";
@@ -56,6 +57,15 @@ describe("gallery step", () => {
     const session = { id: "s", contactId: "c1", flowId: "f", stepId: "g", awaitingInput: false, status: "active" as const };
     expect(typedButton(session, map, "2")).toEqual({ stepId: "g", next: "pro" });
     expect(typedButton(session, map, "3")).toBeNull(); // URL button
+    expect(typedButton(session, map, "choose pro")).toEqual({ stepId: "g", next: "pro" });
+  });
+
+  it("numbers card buttons across the gallery on networks without buttons", () => {
+    const reply = processInboundEvent({ contact, session: null, flows, event: { telegramUserId: "u1", text: "plans" } }).replies[0]!;
+    const parts = cardsAsReplies(reply);
+    expect(parts.map((part) => part.buttonNumberOffset)).toEqual([undefined, 0, 1]);
+    const pro = buildZernioMessages(parts[2]!, "twitter")[0]!;
+    expect(pro.message).toContain("2. Choose Pro");
   });
 
   it("round-trips through the canvas", () => {

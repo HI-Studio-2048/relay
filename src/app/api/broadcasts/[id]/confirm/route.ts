@@ -63,7 +63,11 @@ export async function POST(request: Request, context: RouteParams<{ id: string }
 
     let updated;
     try {
-      await db.update(broadcasts).set({ confirmedAt: new Date(), smartTiming }).where(eq(broadcasts.id, id));
+      // Only an unconfirmed broadcast takes the flag; a retried confirm must not flip a running one.
+      await db
+        .update(broadcasts)
+        .set({ confirmedAt: new Date(), smartTiming })
+        .where(and(eq(broadcasts.id, id), inArray(broadcasts.status, ["draft", "awaiting_confirm"])));
       updated = await materializeBroadcast(id, ["draft", "awaiting_confirm"]);
       if (!updated) return viaForm ? redirectTo("?queued=1") : json({ error: "Already confirmed" }, 409);
     } catch (error) {

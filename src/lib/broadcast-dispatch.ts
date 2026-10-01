@@ -1,7 +1,7 @@
-import { and, desc, eq, inArray, lte } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { broadcastRecipients, broadcasts, messages } from "@/lib/db/schema";
-import { nextSendAt, preferredHour } from "@/lib/smart-timing";
+import { capToWindow, nextSendAt, preferredHour } from "@/lib/smart-timing";
 import { log } from "@/lib/logger";
 import { enqueueBroadcast } from "@/lib/queue";
 import { sanitizeSegment } from "@/lib/segments";
@@ -53,7 +53,10 @@ export async function materializeBroadcast(broadcastId: string, from: string[] =
   return updated!;
 }
 
-/** Each contact's next usual active hour (from their last 50 inbound messages); now when unknown. */
+/**
+ * Each contact's next usual active hour (from their last 50 inbound messages in 60 days), capped to
+ * the 24h messaging window; now when unknown.
+ */
 async function smartSendTimes(contactIds: string[]) {
   const db = await getDb();
   const now = new Date();
@@ -63,7 +66,13 @@ async function smartSendTimes(contactIds: string[]) {
     const rows = await db
       .select({ contactId: messages.contactId, createdAt: messages.createdAt })
       .from(messages)
-      .where(and(inArray(messages.contactId, chunk), eq(messages.direction, "inbound")))
+      .where(
+        and(
+          inArray(messages.contactId, chunk),
+          eq(messages.direction, "inbound"),
+          gte(messages.createdAt, new Date(now.getTime() - 60 * 86_400_000)),
+        ),
+      )
       .orderBy(desc(messages.createdAt));
     const byContact = new Map<string, Date[]>();
     for (const row of rows) {
@@ -71,7 +80,10 @@ async function smartSendTimes(contactIds: string[]) {
       if (list.length < 50) list.push(new Date(row.createdAt));
       byContact.set(row.contactId, list);
     }
-    for (const id of chunk) result.set(id, nextSendAt(now, preferredHour(byContact.get(id) ?? [])));
+    for (const id of chunk) {
+      const history = byContact.get(id) ?? [];
+      result.set(id, capToWindow(nextSendAt(now, preferredHour(history)), now, history[0] ?? null));
+    }
   }
   return result;
 }
