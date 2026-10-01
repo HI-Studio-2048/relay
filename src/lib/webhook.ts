@@ -9,7 +9,8 @@ import {
 } from "@/lib/channels";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
-import { readAiSettings } from "@/lib/ai";
+import { aiConfigured, classifyIntent, readAiSettings } from "@/lib/ai";
+import { intentFlows, routeToIntent, shouldCheckIntents } from "@/lib/intents";
 import { isWithinHours, readHours } from "@/lib/starters";
 import { emitWebhookSoon, publicContact } from "@/lib/developer";
 import { buttonSourceStep, recordFlowEvents } from "@/lib/analytics";
@@ -187,6 +188,18 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
   // Live Chat takeover: a teammate (or an AI hand-off) is handling this person. Log the message or
   // comment and leave it for them — no flow, keyword, comment automation or AI reply.
   const paused = Boolean(existing?.botPausedUntil && isBotPaused({ botPausedUntil: existing.botPausedUntil }));
+
+  // AI intents: nothing more specific than the default reply matched, so ask Claude which described
+  // intent (if any) this message expresses and let that flow answer it.
+  if (!paused && (kind === "message" || kind === "story_reply") && aiConfigured() && shouldCheckIntents({ flows, session, text, callbackData: inbound.callbackData })) {
+    try {
+      const options = intentFlows(flows).map((flow) => ({ id: flow.id, description: flow.triggerValue!.trim() }));
+      const intentId = await classifyIntent({ text: text!, intents: options, brandName: bot.name });
+      if (intentId) flows = routeToIntent(flows, intentId);
+    } catch (error) {
+      log.warn("Intent check failed", error instanceof Error ? error.message : error);
+    }
+  }
   let result: EngineResult =
     paused && !startParam
       ? { contact: { ...existing!, inboxStatus: "open" }, session, replies: [], inboundSaved: true, effects: [] }

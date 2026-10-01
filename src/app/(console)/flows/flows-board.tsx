@@ -38,7 +38,7 @@ type FlowRow = {
 const GROUPS: { value: string; label: string; match: (type: string) => boolean }[] = [
   { value: "all", label: "All", match: () => true },
   { value: "social", label: "Comments & stories", match: (type) => ["comment", "story_reply", "story_mention"].includes(type) },
-  { value: "keywords", label: "Keywords", match: (type) => type.startsWith("keyword") || type === "command" },
+  { value: "keywords", label: "Keywords", match: (type) => type.startsWith("keyword") || type === "command" || type === "intent" },
   { value: "welcome", label: "Welcome & links", match: (type) => type === "start" || type === "start_param" || type === "default" },
 ];
 

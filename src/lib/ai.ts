@@ -205,6 +205,31 @@ export async function assistInbox(input: {
   return { ...result, suggestions: result.suggestions.map((item) => item.trim()).filter(Boolean).slice(0, 3) };
 }
 
+const IntentSchema = z.object({
+  intent: z.string().describe("The id of the matching intent, or \"none\"."),
+});
+
+export type IntentOption = { id: string; description: string };
+
+/**
+ * ManyChat AI Intents: pick which described intent (if any) a message expresses. Returns the intent id,
+ * or null when nothing fits well. Keywords stay the fast path; this only runs when no keyword matched.
+ */
+export async function classifyIntent(input: { text: string; intents: IntentOption[]; brandName: string }): Promise<string | null> {
+  if (input.intents.length === 0 || !input.text.trim()) return null;
+  const list = input.intents.map((intent) => `- ${intent.id}: ${intent.description}`).join("\n");
+  const result = await parse(IntentSchema, {
+    system: [
+      `You route incoming DMs for ${input.brandName} to the right automation.`,
+      "Pick the intent the message clearly expresses. If none clearly fits, or the message is only a greeting or small talk, answer \"none\".",
+    ].join("\n"),
+    effort: "low",
+    maxTokens: 2000,
+    user: `<intents>\n${list}\n</intents>\n\n<message>\n${input.text.slice(0, 1000)}\n</message>`,
+  });
+  return input.intents.some((intent) => intent.id === result.intent) ? result.intent : null;
+}
+
 const GeneratedFlowSchema = z.object({
   name: z.string(),
   trigger: z.object({

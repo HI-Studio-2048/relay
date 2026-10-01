@@ -12,6 +12,7 @@ export type TriggerType =
   | "comment"
   | "story_reply"
   | "story_mention"
+  | "intent"
   | "default";
 
 export const TRIGGER_OPTIONS: { value: TriggerType; label: string }[] = [
@@ -26,6 +27,7 @@ export const TRIGGER_OPTIONS: { value: TriggerType; label: string }[] = [
   { value: "comment", label: "Comments on a post (comment → DM)" },
   { value: "story_reply", label: "Replies to your story" },
   { value: "story_mention", label: "Mentions you in a story" },
+  { value: "intent", label: "AI intent (understands what they mean)" },
   { value: "default", label: "Default reply" },
 ];
 

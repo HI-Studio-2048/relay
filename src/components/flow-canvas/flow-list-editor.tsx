@@ -92,6 +92,7 @@ function parseQuickReplies(value: string) {
 }
 
 function triggerMatchPlaceholder(type: TriggerType) {
+  if (type === "intent") return "Asking about shipping or delivery times";
   if (type === "command") return "/help";
   if (type === "start_param") return "promo";
   if (type === "keyword_contains") return "price";

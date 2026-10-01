@@ -54,6 +54,7 @@ function parseCaptureSelect(value: string, customKey: string): CaptureField {
 }
 
 function triggerMatchPlaceholder(type: TriggerType) {
+  if (type === "intent") return "Asking about shipping or delivery times";
   if (type === "command") return "/help";
   if (type === "start_param") return "promo";
   if (type === "keyword_contains") return "price, cost";
@@ -229,7 +230,7 @@ export function NodeInspector({
           </div>
           {triggerNeedsValue(meta.triggerType) ? (
             <div className="space-y-1">
-              <Label>{meta.triggerType === "start_param" ? "Start payload" : "Match"}</Label>
+              <Label>{meta.triggerType === "start_param" ? "Start payload" : meta.triggerType === "intent" ? "When someone is…" : "Match"}</Label>
               <Input
                 value={meta.triggerValue ?? ""}
                 onChange={(event) => onMetaChange({ triggerValue: event.target.value })}
@@ -247,6 +248,12 @@ export function NodeInspector({
           {meta.triggerType === "start" ? (
             <p className="text-[11px] leading-snug text-muted-foreground">
               ManyChat Welcome Message: fires on the first /start only. Later /start is ignored. Growth-link payloads still run.
+            </p>
+          ) : null}
+          {meta.triggerType === "intent" ? (
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              Describe what the person wants in plain words. When a message matches no keyword, Claude reads it and starts
+              this flow if it fits — no exact wording needed, any language.
             </p>
           ) : null}
           {meta.triggerType === "default" ? (
