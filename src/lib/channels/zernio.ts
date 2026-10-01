@@ -320,6 +320,7 @@ export function parseZernioWebhook(payload: ZernioWebhookPayload, accountFilter:
         ...splitName(name),
         text: ref && !callbackData ? `/start ${ref}` : text,
         callbackData,
+        callbackTitle: callbackData ? meta.postbackTitle ?? message.text ?? null : null,
         contactPhone: message.sender?.phoneNumber ?? null,
         externalMessageId: message.platformMessageId ?? message.id ?? null,
         referral: ref,

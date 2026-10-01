@@ -131,6 +131,8 @@ export type NormalizedInbound = {
   languageCode?: string | null;
   text?: string | null;
   callbackData?: string | null;
+  /** Label of the tapped button, when the platform sends it (inbox display only). */
+  callbackTitle?: string | null;
   /** Phone from a shared contact card (Telegram) or the WhatsApp sender number. */
   contactPhone?: string | null;
   externalMessageId?: string | null;

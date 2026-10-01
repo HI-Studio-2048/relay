@@ -30,6 +30,8 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
       customFields?: Record<string, string>;
       notes?: string;
       inboxStatus?: "open" | "closed";
+      /** Replace the tag list. Goes through persistContact so tag rules fire. */
+      tags?: string[];
     }>(request);
     const next = {
       ...contact,
@@ -40,6 +42,9 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
       customFields: { ...contact.customFields, ...body.customFields },
       notes: body.notes !== undefined ? body.notes : contact.notes,
       inboxStatus: body.inboxStatus !== undefined ? body.inboxStatus : contact.inboxStatus,
+      tags: Array.isArray(body.tags)
+        ? [...new Set(body.tags.map((tag) => String(tag).trim()).filter(Boolean))]
+        : contact.tags,
     };
     await persistContact(row!.botId, next);
     return json({ contact: await loadContactRecord(id) });

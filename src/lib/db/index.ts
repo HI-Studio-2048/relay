@@ -13,7 +13,8 @@ export type AppDb = PostgresJsDatabase<typeof schema> | PgliteDatabase<typeof sc
 
 type GlobalDb = {
   relayDb?: AppDb;
-  relayMigrated?: boolean;
+  /** The migration script last applied in this process; dev hot reloads re-apply a changed one. */
+  relayMigrated?: string;
   relayPg?: ReturnType<typeof postgres>;
   relayPglite?: PGlite;
 };
@@ -29,15 +30,23 @@ function splitStatements(sql: string): string[] {
 }
 
 async function runMigrations(exec: (sql: string) => Promise<unknown>) {
-  if (globalForDb.relayMigrated) return;
+  if (globalForDb.relayMigrated === MIGRATION_SQL) return;
   for (const statement of splitStatements(MIGRATION_SQL)) {
     await exec(statement);
   }
-  globalForDb.relayMigrated = true;
+  globalForDb.relayMigrated = MIGRATION_SQL;
 }
 
 export async function getDb(): Promise<AppDb> {
-  if (globalForDb.relayDb) return globalForDb.relayDb;
+  if (globalForDb.relayDb) {
+    if (globalForDb.relayMigrated !== MIGRATION_SQL) {
+      const pg = globalForDb.relayPg;
+      const lite = globalForDb.relayPglite;
+      if (pg) await runMigrations((sql) => pg.unsafe(sql));
+      else if (lite) await runMigrations((sql) => lite.exec(sql));
+    }
+    return globalForDb.relayDb;
+  }
 
   if (hasDatabaseUrl()) {
     const client = postgres(process.env.DATABASE_URL!, { max: 8, idle_timeout: 20 });

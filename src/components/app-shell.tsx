@@ -89,7 +89,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
       {compact ? null : (
         <span>
           <span className="block font-heading text-[15px] leading-none tracking-tight text-[#1b1f24]">Relay</span>
-          <span className="mt-0.5 block text-[11px] text-[#6b7280]">HI Studio · Telegram</span>
+          <span className="mt-0.5 block text-[11px] text-[#6b7280]">HI Studio · Social automation</span>
         </span>
       )}
     </Link>
@@ -233,6 +233,9 @@ export function AppShell({
   const { bot } = useBot();
   const [open, setOpen] = useState(false);
   const flowCanvas = /^\/flows\/[^/]+$/.test(pathname);
+  // Live Chat fills the viewport like the canvas, but keeps the top bar.
+  const liveChat = pathname === "/inbox" || pathname.startsWith("/inbox/");
+  const immersive = flowCanvas || liveChat;
   const title = sectionTitle(pathname);
 
   useEffect(() => {
@@ -245,12 +248,12 @@ export function AppShell({
   }, [open]);
 
   return (
-    <div className={cn("flex bg-[#f4f6f8]", flowCanvas ? "h-dvh overflow-hidden" : "min-h-full")}>
+    <div className={cn("flex bg-[#f4f6f8]", immersive ? "h-dvh overflow-hidden" : "min-h-full")}>
       <aside className="hidden w-64 shrink-0 border-r border-[#e5e7eb] bg-white p-4 md:flex md:flex-col">
         <Sidebar inboxCount={inboxCount} confirmCount={confirmCount} />
       </aside>
 
-      <div className={cn("flex min-w-0 flex-1 flex-col", flowCanvas && "min-h-0")}>
+      <div className={cn("flex min-w-0 flex-1 flex-col", immersive && "min-h-0")}>
         <header className="flex items-center justify-between border-b border-[#e5e7eb] bg-white px-4 py-3 md:hidden">
           <div className="flex min-w-0 items-center gap-2">
             <Brand compact />
@@ -275,7 +278,7 @@ export function AppShell({
           <header className="relay-topbar hidden items-center justify-between border-b border-[#e5e7eb] bg-white px-6 py-3 md:flex">
             <div>
               <p className="text-[11px] font-semibold tracking-[0.14em] text-[#8b95a1] uppercase">
-                HI Studio · Telegram
+                HI Studio · {bot ? CHANNELS[bot.channel ?? "telegram"].label : "Relay"}
               </p>
               <p className="font-heading text-[15px] tracking-tight text-[#1b1f24]">{title}</p>
             </div>
@@ -314,7 +317,7 @@ export function AppShell({
 
         <main
           className={
-            flowCanvas
+            immersive
               ? "flex min-h-0 flex-1 flex-col overflow-hidden"
               : "relay-chrome-page mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8 md:py-7"
           }

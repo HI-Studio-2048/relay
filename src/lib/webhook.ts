@@ -167,7 +167,7 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
         text ??
         (inbound.contactPhone && account.channel === "telegram"
           ? `[shared phone] ${inbound.contactPhone}`
-          : `[button] ${inbound.callbackData}`),
+          : `[button] ${inbound.callbackTitle ?? buttonLabel(flows, session, inbound.callbackData)}`),
       telegramMessageId: inbound.externalMessageId ?? null,
     });
   }
@@ -241,4 +241,18 @@ async function answerComment(
     log.info(`Comment flow held ${rest.length} message(s) until the contact replies (one private reply allowed)`);
   }
   return [];
+}
+
+/** Telegram does not echo the button text, so read it back from the flow that drew the button. */
+function buttonLabel(flows: { id: string; definition: { steps: { type: string; buttons?: { text: string; next?: string }[] }[] } }[], session: { flowId: string } | null, data: string | null | undefined) {
+  const next = data?.startsWith("n:") ? data.slice(2) : null;
+  if (!next) return data ?? "";
+  const ordered = session ? [...flows].sort((a) => (a.id === session.flowId ? -1 : 1)) : flows;
+  for (const flow of ordered) {
+    for (const step of flow.definition.steps) {
+      const hit = step.buttons?.find((button) => button.next === next);
+      if (hit) return hit.text;
+    }
+  }
+  return data ?? "";
 }

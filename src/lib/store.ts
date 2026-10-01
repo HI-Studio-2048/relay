@@ -311,6 +311,57 @@ export async function listInbox(botId: string) {
     .orderBy(desc(latest.lastAt));
 }
 
+export type InboxThread = {
+  contactId: string;
+  name: string;
+  username: string | null;
+  avatarUrl: string | null;
+  platform: string | null;
+  status: "open" | "closed";
+  lastAt: string | null;
+  lastBody: string;
+  lastDirection: "inbound" | "outbound";
+  /** The contact spoke last: someone should answer. */
+  needsReply: boolean;
+};
+
+/** Live Chat list: one row per conversation with its latest message, newest first. */
+export async function listInboxThreads(botId: string): Promise<InboxThread[]> {
+  const db = await getDb();
+  const latest = await db
+    .select()
+    .from(messages)
+    .where(
+      and(
+        eq(messages.botId, botId),
+        sql`${messages.createdAt} = (select max(m2.created_at) from messages m2 where m2.contact_id = ${messages.contactId})`,
+      ),
+    );
+  const byContact = new Map<string, (typeof latest)[number]>();
+  for (const message of latest) if (!byContact.has(message.contactId)) byContact.set(message.contactId, message);
+  if (byContact.size === 0) return [];
+  const rows = await db.select().from(contacts).where(eq(contacts.botId, botId));
+  return rows
+    .filter((row) => byContact.has(row.id))
+    .map((row) => {
+      const last = byContact.get(row.id)!;
+      const name = [row.firstName, row.lastName].filter(Boolean).join(" ").trim() || (row.username ? `@${row.username}` : row.telegramUserId);
+      return {
+        contactId: row.id,
+        name,
+        username: row.username,
+        avatarUrl: row.avatarUrl ?? null,
+        platform: row.platform ?? null,
+        status: row.inboxStatus === "closed" ? ("closed" as const) : ("open" as const),
+        lastAt: last.createdAt ? new Date(last.createdAt).toISOString() : null,
+        lastBody: last.body,
+        lastDirection: last.direction === "outbound" ? ("outbound" as const) : ("inbound" as const),
+        needsReply: last.direction === "inbound" && row.inboxStatus !== "closed",
+      };
+    })
+    .sort((a, b) => (b.lastAt ?? "").localeCompare(a.lastAt ?? ""));
+}
+
 export async function listMessages(contactId: string) {
   const db = await getDb();
   return db

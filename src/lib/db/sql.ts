@@ -204,4 +204,13 @@ ALTER TABLE contacts ADD COLUMN IF NOT EXISTS channel_account_id text;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS thread_id text;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS avatar_url text;
 ALTER TABLE bots ADD COLUMN IF NOT EXISTS settings jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+CREATE TABLE IF NOT EXISTS saved_replies (
+  id text PRIMARY KEY,
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  body text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS messages_contact_created_idx ON messages(contact_id, created_at);
 `;

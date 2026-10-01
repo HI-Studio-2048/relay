@@ -286,6 +286,17 @@ export const growthLinkEvents = pgTable("growth_link_events", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Live Chat canned responses. ManyChat calls them Saved Replies; "/" in the composer searches them. */
+export const savedReplies = pgTable("saved_replies", {
+  id: text("id").primaryKey(),
+  botId: text("bot_id")
+    .notNull()
+    .references(() => bots.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const botsRelations = relations(bots, ({ many }) => ({
   contacts: many(contacts),
   tags: many(tags),
