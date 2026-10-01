@@ -17,7 +17,7 @@ export function ConnectPrompt({
       hex={MANYCHAT.start}
       title={title}
       description={description}
-      action={<Button render={<Link href="/setup" />}>Open Settings</Button>}
+      action={<Button nativeButton={false} render={<Link href="/setup" />}>Open Settings</Button>}
     />
   );
 }

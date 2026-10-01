@@ -299,6 +299,21 @@ export const savedReplies = pgTable("saved_replies", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Flow analytics: one row per start, message sent, button click, and completion. */
+export const flowEvents = pgTable("flow_events", {
+  id: text("id").primaryKey(),
+  botId: text("bot_id")
+    .notNull()
+    .references(() => bots.id, { onDelete: "cascade" }),
+  flowId: text("flow_id")
+    .notNull()
+    .references(() => flows.id, { onDelete: "cascade" }),
+  stepId: text("step_id"),
+  contactId: text("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+  kind: text("kind").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const botsRelations = relations(bots, ({ many }) => ({
   contacts: many(contacts),
   tags: many(tags),

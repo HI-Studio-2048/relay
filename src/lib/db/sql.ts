@@ -214,4 +214,16 @@ CREATE TABLE IF NOT EXISTS saved_replies (
 );
 CREATE INDEX IF NOT EXISTS messages_contact_created_idx ON messages(contact_id, created_at);
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS bot_paused_until timestamptz;
+
+CREATE TABLE IF NOT EXISTS flow_events (
+  id text PRIMARY KEY,
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  flow_id text NOT NULL REFERENCES flows(id) ON DELETE CASCADE,
+  step_id text,
+  contact_id text REFERENCES contacts(id) ON DELETE SET NULL,
+  kind text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS flow_events_flow_idx ON flow_events(flow_id, kind);
+CREATE INDEX IF NOT EXISTS flow_events_bot_idx ON flow_events(bot_id, created_at);
 `;

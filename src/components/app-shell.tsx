@@ -251,7 +251,7 @@ export function AppShell({
   }, [open]);
 
   return (
-    <div className={cn("flex bg-[#f4f6f8]", immersive ? "h-dvh overflow-hidden" : "min-h-full")}>
+    <div className={cn("flex bg-[#f4f6f8]", immersive ? "h-dvh overflow-hidden" : "min-h-dvh")}>
       <aside className="hidden w-64 shrink-0 border-r border-[#e5e7eb] bg-white p-4 md:flex md:flex-col">
         <Sidebar inboxCount={inboxCount} confirmCount={confirmCount} />
       </aside>

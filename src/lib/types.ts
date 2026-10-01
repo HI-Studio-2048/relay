@@ -284,6 +284,9 @@ export type OutboundReply = {
   /** Add a Telegram "share my phone number" button to the reply keyboard. */
   requestContact?: boolean;
   source: "flow" | "agent" | "broadcast";
+  /** Analytics: which flow step produced this message. */
+  flowId?: string;
+  stepId?: string;
 };
 
 export type BroadcastStatus =

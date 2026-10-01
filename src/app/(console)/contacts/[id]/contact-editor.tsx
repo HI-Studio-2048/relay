@@ -111,7 +111,7 @@ export function ContactEditor({
             {contact.username ? ` · @${contact.username}` : ""}
           </p>
         </div>
-        <Button render={<Link href={`/inbox/${contact.id}`} />} variant="outline">
+        <Button nativeButton={false} render={<Link href={`/inbox/${contact.id}`} />} variant="outline">
           Open thread
         </Button>
       </div>

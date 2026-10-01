@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { bots, contacts } from "@/lib/db/schema";
+import { recordFlowEvents } from "@/lib/analytics";
 import { applyFlowEffects, interpolateTemplate } from "@/lib/flow-effects";
 import { executeFrom, type FlowRecord } from "@/lib/flow-engine";
 import { outboundPreview } from "@/lib/media";
@@ -36,6 +37,11 @@ export async function deliverReplies(input: {
       body: outboundPreview(personalized.text, reply.media),
       telegramMessageId: sent.message_id || null,
     });
+    if (reply.flowId) {
+      await recordFlowEvents([
+        { botId: input.botId, flowId: reply.flowId, stepId: reply.stepId, contactId: input.contact.id, kind: "sent" },
+      ]);
+    }
   }
 }
 
@@ -65,6 +71,10 @@ export async function startFlowForContact(input: { contactId: string; flowId: st
     status: "active",
   };
   const executed = executeFrom(flow.definition, session, contact, input.now ?? Date.now(), flows);
+  await recordFlowEvents([
+    { botId: row.botId, flowId: flow.id, contactId: contact.id, kind: "start" },
+    ...(executed.completedFlowIds ?? []).map((id) => ({ botId: row.botId, flowId: id, contactId: contact.id, kind: "complete" as const })),
+  ]);
 
   await persistContact(row.botId, executed.contact);
   await persistSession(contact.id, executed.session?.status === "completed" ? null : executed.session);

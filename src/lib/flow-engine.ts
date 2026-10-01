@@ -41,6 +41,12 @@ export type EngineResult = {
   privateReply?: boolean;
   /** Flow that a social trigger matched, for analytics. */
   matchedFlowId?: string | null;
+  /** Analytics: a flow run that started on this event. */
+  startedFlowId?: string | null;
+  /** Analytics: flows whose run reached a Stop step on this event. */
+  completedFlowIds?: string[];
+  /** Analytics: a quick reply the contact tapped (typed), attributed to the step that offered it. */
+  clicked?: { flowId: string; stepId: string } | null;
 };
 
 type ExecuteResult = {
@@ -48,6 +54,7 @@ type ExecuteResult = {
   replies: OutboundReply[];
   contact: ContactRecord;
   effects: FlowEffect[];
+  completedFlowIds?: string[];
 };
 
 const MAX_FLOW_HOPS = 5;
@@ -265,6 +272,8 @@ export function executeFrom(
         buttons,
         ...(keyboard ? { keyboard } : {}),
         source: "flow",
+        flowId: current.flowId,
+        stepId: step.id,
       });
       if (quickReplies.length > 0) {
         // Quick replies wait for the contact's tap; each one is its own exit.
@@ -288,6 +297,8 @@ export function executeFrom(
       replies.push({
         text: step.prompt,
         source: "flow",
+        flowId: current.flowId,
+        stepId: step.id,
         ...(step.field === "phone" ? { requestContact: true } : {}),
         ...(step.skippable ? { keyboard: [SKIP_LABEL] } : {}),
       });
@@ -303,10 +314,10 @@ export function executeFrom(
       }
       const index = current.formIndex ?? 0;
       if (index === 0 && step.intro?.trim()) {
-        replies.push({ text: step.intro, source: "flow" });
+        replies.push({ text: step.intro, source: "flow", flowId: current.flowId, stepId: step.id });
       }
       const field = fields[Math.min(index, fields.length - 1)]!;
-      replies.push({ text: field.prompt, source: "flow" });
+      replies.push({ text: field.prompt, source: "flow", flowId: current.flowId, stepId: step.id });
       current = { ...current, awaitingInput: true, formIndex: index, resumeAt: null };
       return { session: current, replies, contact: nextContact, effects };
     }
@@ -418,6 +429,7 @@ export function executeFrom(
           replies: [...replies, ...hopped.replies],
           contact: hopped.contact,
           effects: [...effects, ...hopped.effects],
+          completedFlowIds: hopped.completedFlowIds,
         };
       }
       if (step.next) {
@@ -436,12 +448,13 @@ export function executeFrom(
     }
 
     if (step.type === "end") {
-      if (step.text) replies.push({ text: step.text, source: "flow" });
+      if (step.text) replies.push({ text: step.text, source: "flow", flowId: current.flowId, stepId: step.id });
       return {
         session: { ...current, status: "completed", awaitingInput: false, resumeAt: null },
         replies,
         contact: nextContact,
         effects,
+        completedFlowIds: [current.flowId],
       };
     }
   }
@@ -495,6 +508,7 @@ function applySystemKeywords(contact: ContactRecord, text: string | null | undef
 function toEngineResult(
   executed: ExecuteResult,
   inboundSaved: boolean,
+  startedFlowId: string | null = null,
 ): EngineResult {
   return {
     contact: executed.contact,
@@ -502,6 +516,8 @@ function toEngineResult(
     replies: executed.replies,
     inboundSaved,
     effects: executed.effects,
+    ...(startedFlowId ? { startedFlowId } : {}),
+    ...(executed.completedFlowIds?.length ? { completedFlowIds: executed.completedFlowIds } : {}),
   };
 }
 
@@ -539,7 +555,7 @@ function runSocialTrigger(contact: ContactRecord, input: InboundInput, now: numb
   }
   const executed = executeFrom(flow.definition, startSession(marked.id, flow), marked, now, input.flows);
   return {
-    ...toEngineResult(executed, true),
+    ...toEngineResult(executed, true, flow.id),
     publicReply: kind === "comment" ? pickPublicReply(config) : null,
     privateReply: kind === "comment",
     matchedFlowId: flow.id,
@@ -603,21 +619,20 @@ export function processInboundEvent(input: {
     const step = flow ? stepById(flow.definition, input.session.stepId) : undefined;
     const quickReply = flow ? matchQuickReply(step, input.event.text) : null;
     if (flow && quickReply) {
+      const clicked = { flowId: flow.id, stepId: input.session.stepId };
       if (!quickReply.next) {
-        return { contact, session: null, replies: [], inboundSaved, effects: [] };
+        return { contact, session: null, replies: [], inboundSaved, effects: [], clicked };
       }
-      return toEngineResult(
-        withKeyboardCleared(
-          executeFrom(
-            flow.definition,
-            { ...input.session, stepId: quickReply.next, awaitingInput: false, formIndex: undefined, resumeAt: null },
-            contact,
-            now,
-            input.flows,
-          ),
+      const executed = withKeyboardCleared(
+        executeFrom(
+          flow.definition,
+          { ...input.session, stepId: quickReply.next, awaitingInput: false, formIndex: undefined, resumeAt: null },
+          contact,
+          now,
+          input.flows,
         ),
-        inboundSaved,
       );
+      return { ...toEngineResult(executed, inboundSaved), clicked };
     }
     if (flow && step?.type === "ai") {
       return {
@@ -718,6 +733,7 @@ export function processInboundEvent(input: {
     return toEngineResult(
       executeFrom(matched.definition, startSession(nextContact.id, matched), nextContact, now, input.flows),
       inboundSaved,
+      matched.id,
     );
   }
 

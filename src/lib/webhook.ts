@@ -10,6 +10,7 @@ import {
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
 import { readAiSettings } from "@/lib/ai";
+import { buttonSourceStep, recordFlowEvents } from "@/lib/analytics";
 import { runAiAutoReply } from "@/lib/ai-runtime";
 import { replyToZernioComment, sendZernioPrivateReply } from "@/lib/channels/zernio";
 import { deliverReplies } from "@/lib/flow-dispatch";
@@ -181,6 +182,18 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
     });
   }
 
+  const clickedNext = inbound.callbackData?.startsWith("n:") ? inbound.callbackData.slice(2) : null;
+  const clickedFlow = clickedNext && session ? flows.find((flow) => flow.id === session.flowId) : null;
+  await recordFlowEvents([
+    ...(result.startedFlowId ? [{ botId, flowId: result.startedFlowId, contactId: contact.id, kind: "start" as const }] : []),
+    ...(clickedFlow
+      ? [{ botId, flowId: clickedFlow.id, stepId: buttonSourceStep(clickedFlow.definition, clickedNext!), contactId: contact.id, kind: "click" as const }]
+      : result.clicked
+        ? [{ botId, flowId: result.clicked.flowId, stepId: result.clicked.stepId, contactId: contact.id, kind: "click" as const }]
+        : []),
+    ...(result.completedFlowIds ?? []).map((flowId) => ({ botId, flowId, contactId: contact.id, kind: "complete" as const })),
+  ]);
+
   let replies = result.replies;
   if (kind === "comment" && inbound.comment && account.channel === "zernio" && inbound.channelAccountId) {
     replies = await answerComment(botId, account, contact, inbound, result.publicReply ?? null, replies);
@@ -260,6 +273,9 @@ async function answerComment(
       body: outboundPreview(personalized.text, opening.media),
       telegramMessageId: sent.message_id || null,
     });
+    if (opening.flowId) {
+      await recordFlowEvents([{ botId, flowId: opening.flowId, stepId: opening.stepId, contactId: contact.id, kind: "sent" }]);
+    }
   } catch (error) {
     log.warn("Private reply failed", error instanceof Error ? error.message : error);
   }

@@ -82,7 +82,7 @@ export default async function OverviewPage() {
           title="Webhook needs attention"
           description={bot.lastHealthError}
         >
-          <Button render={<Link href="/setup" />} variant="outline">
+          <Button nativeButton={false} render={<Link href="/setup" />} variant="outline">
             Fix connection in Settings
           </Button>
         </Panel>
@@ -109,7 +109,7 @@ export default async function OverviewPage() {
         <Section
           title="Recent conversations"
           action={
-            <Button render={<Link href="/inbox" />} variant="ghost" size="sm">
+            <Button nativeButton={false} render={<Link href="/inbox" />} variant="ghost" size="sm">
               Inbox
             </Button>
           }
@@ -139,7 +139,7 @@ export default async function OverviewPage() {
         <Section
           title="Needs confirm"
           action={
-            <Button render={<Link href="/broadcasts" />} variant="ghost" size="sm">
+            <Button nativeButton={false} render={<Link href="/broadcasts" />} variant="ghost" size="sm">
               Broadcasts
             </Button>
           }
@@ -176,11 +176,11 @@ export default async function OverviewPage() {
           description="Connecting a bot seeds name → email → phone → company, then tags lead. Open it from Flows or message the bot with /start."
         >
           <div className="flex flex-wrap gap-2">
-            <Button render={<Link href="/flows" />} variant="outline">
+            <Button nativeButton={false} render={<Link href="/flows" />} variant="outline">
               <Workflow className="size-4" />
               Open flows
             </Button>
-            <Button render={<Link href="/inbox" />} variant="ghost">
+            <Button nativeButton={false} render={<Link href="/inbox" />} variant="ghost">
               Inbox
             </Button>
           </div>
@@ -192,7 +192,7 @@ export default async function OverviewPage() {
           title="Broadcasts stay gated"
           description="Compose a tag-scoped draft, then type CONFIRM on the detail page. Nothing queues without that phrase."
         >
-          <Button render={<Link href="/broadcasts" />} variant="outline">
+          <Button nativeButton={false} render={<Link href="/broadcasts" />} variant="outline">
             <Megaphone className="size-4" />
             Review broadcasts
           </Button>

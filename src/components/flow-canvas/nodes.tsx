@@ -19,6 +19,7 @@ import {
   Timer,
   UserRound,
 } from "lucide-react";
+import { useNodeStats } from "@/components/flow-canvas/flow-stats-context";
 import { MediaThumb } from "@/components/flow-canvas/media-picker";
 import { MANYCHAT, NODE_TONE } from "@/components/flow-canvas/node-colors";
 import { cn } from "@/lib/utils";
@@ -43,13 +44,32 @@ function formatDelay(seconds: number) {
   return `${Math.floor(value / 60)}m ${value % 60}s`;
 }
 
+function NodeStatsStrip({ id }: { id?: string }) {
+  const stats = useNodeStats(id);
+  if (!stats || stats.sent === 0) return null;
+  return (
+    <div className="flex items-center justify-between border-t border-[#f0f2f4] px-3 py-1.5 text-[10px] text-[#6b7280] tabular-nums">
+      <span>
+        Sent <span className="font-semibold text-[#1b1f24]">{stats.sent}</span>
+      </span>
+      {stats.clicks > 0 ? (
+        <span>
+          Clicked <span className="font-semibold text-[#1b1f24]">{stats.clicks}</span> · {Math.round(stats.ctr * 100)}%
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function NodeFrame({
+  id,
   selected,
   kind,
   icon: Icon,
   title,
   children,
 }: {
+  id?: string;
   selected: boolean;
   kind: CanvasNodeData["kind"];
   icon: typeof Flag;
@@ -79,6 +99,7 @@ function NodeFrame({
       <div className="space-y-1.5 px-3 pt-2 pb-3 text-sm" style={{ color: MANYCHAT.ink }}>
         {children}
       </div>
+      <NodeStatsStrip id={id} />
     </div>
   );
 }
@@ -91,9 +112,9 @@ function Preview({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function TriggerNode({ selected }: NodeProps<FlowNode<"trigger">>) {
+export function TriggerNode({ id, selected }: NodeProps<FlowNode<"trigger">>) {
   return (
-    <NodeFrame selected={selected} kind="trigger" icon={Flag} title="Starting step">
+    <NodeFrame id={id} selected={selected} kind="trigger" icon={Flag} title="Starting step">
       <Preview>Starts this flow</Preview>
       <Handle
         type="source"
@@ -136,9 +157,9 @@ function BlockButtons({ buttons }: { buttons: { id: string; text: string; url?: 
   );
 }
 
-export function SendMessageNode({ selected, data }: NodeProps<FlowNode<"send_message">>) {
+export function SendMessageNode({ id, selected, data }: NodeProps<FlowNode<"send_message">>) {
   return (
-    <NodeFrame selected={selected} kind="send_message" icon={MessageSquare} title="Send Message">
+    <NodeFrame id={id} selected={selected} kind="send_message" icon={MessageSquare} title="Send Message">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("send_message")} />
       {data.blocks.length === 0 ? (
         <p className="text-[11px]" style={{ color: MANYCHAT.muted }}>
@@ -215,9 +236,9 @@ export function SendMessageNode({ selected, data }: NodeProps<FlowNode<"send_mes
   );
 }
 
-export function MessageNode({ selected, data }: NodeProps<FlowNode<"message">>) {
+export function MessageNode({ id, selected, data }: NodeProps<FlowNode<"message">>) {
   return (
-    <NodeFrame selected={selected} kind="message" icon={MessageSquare} title="Content">
+    <NodeFrame id={id} selected={selected} kind="message" icon={MessageSquare} title="Content">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("message")} />
       <MediaThumb media={data.media} className="h-24" />
       <Preview>{data.text || "Empty message"}</Preview>
@@ -226,9 +247,9 @@ export function MessageNode({ selected, data }: NodeProps<FlowNode<"message">>) 
   );
 }
 
-export function MediaNode({ selected, data }: NodeProps<FlowNode<"media">>) {
+export function MediaNode({ id, selected, data }: NodeProps<FlowNode<"media">>) {
   return (
-    <NodeFrame selected={selected} kind="media" icon={ImageIcon} title="Content">
+    <NodeFrame id={id} selected={selected} kind="media" icon={ImageIcon} title="Content">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("media")} />
       {data.media ? (
         <MediaThumb media={data.media} className="h-28" />
@@ -246,9 +267,9 @@ export function MediaNode({ selected, data }: NodeProps<FlowNode<"media">>) {
   );
 }
 
-export function ButtonsNode({ selected, data }: NodeProps<FlowNode<"buttons">>) {
+export function ButtonsNode({ id, selected, data }: NodeProps<FlowNode<"buttons">>) {
   return (
-    <NodeFrame selected={selected} kind="buttons" icon={GitBranch} title="Content">
+    <NodeFrame id={id} selected={selected} kind="buttons" icon={GitBranch} title="Content">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("buttons")} />
       <MediaThumb media={data.media} className="h-20" />
       <Preview>{data.text || "Choose an option"}</Preview>
@@ -286,12 +307,12 @@ export function ButtonsNode({ selected, data }: NodeProps<FlowNode<"buttons">>) 
   );
 }
 
-export function CaptureNode({ selected, data }: NodeProps<FlowNode<"capture">>) {
+export function CaptureNode({ id, selected, data }: NodeProps<FlowNode<"capture">>) {
   const fieldLabel = data.field.startsWith("custom:")
     ? `custom · ${data.field.slice("custom:".length)}`
     : data.field;
   return (
-    <NodeFrame selected={selected} kind="capture" icon={UserRound} title="User input">
+    <NodeFrame id={id} selected={selected} kind="capture" icon={UserRound} title="User input">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("capture")} />
       <p className="text-[11px] font-medium tracking-wide uppercase" style={{ color: MANYCHAT.input }}>
         {fieldLabel}
@@ -309,12 +330,12 @@ export function CaptureNode({ selected, data }: NodeProps<FlowNode<"capture">>) 
   );
 }
 
-export function FormNode({ selected, data }: NodeProps<FlowNode<"form">>) {
+export function FormNode({ id, selected, data }: NodeProps<FlowNode<"form">>) {
   const labels = data.fields.map((field) =>
     field.field.startsWith("custom:") ? field.field.slice("custom:".length) : field.field,
   );
   return (
-    <NodeFrame selected={selected} kind="form" icon={ClipboardList} title="User input">
+    <NodeFrame id={id} selected={selected} kind="form" icon={ClipboardList} title="User input">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("form")} />
       <Preview>{data.intro || "Collect a few answers"}</Preview>
       <p className="text-[11px]" style={{ color: MANYCHAT.muted }}>
@@ -325,10 +346,10 @@ export function FormNode({ selected, data }: NodeProps<FlowNode<"form">>) {
   );
 }
 
-export function TagNode({ selected, data }: NodeProps<FlowNode<"tag">>) {
+export function TagNode({ id, selected, data }: NodeProps<FlowNode<"tag">>) {
   const action = data.action === "remove" ? "Remove" : "Add";
   return (
-    <NodeFrame selected={selected} kind="tag" icon={Hash} title="Action">
+    <NodeFrame id={id} selected={selected} kind="tag" icon={Hash} title="Action">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("tag")} />
       <Preview>
         {data.tagName ? `${action} #${data.tagName}` : `${action} tag`}
@@ -338,13 +359,13 @@ export function TagNode({ selected, data }: NodeProps<FlowNode<"tag">>) {
   );
 }
 
-export function SetFieldNode({ selected, data }: NodeProps<FlowNode<"set_field">>) {
+export function SetFieldNode({ id, selected, data }: NodeProps<FlowNode<"set_field">>) {
   const fieldLabel = data.field.startsWith("custom:")
     ? data.field.slice("custom:".length) || "custom"
     : data.field;
   const preview = data.value.trim() ? `${fieldLabel} = ${data.value}` : `Clear ${fieldLabel}`;
   return (
-    <NodeFrame selected={selected} kind="set_field" icon={PenLine} title="Action">
+    <NodeFrame id={id} selected={selected} kind="set_field" icon={PenLine} title="Action">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("set_field")} />
       <Preview>{preview}</Preview>
       <Handle type="source" position={Position.Right} id="next" className={handleClass()} style={handleStyle("set_field")} />
@@ -352,11 +373,11 @@ export function SetFieldNode({ selected, data }: NodeProps<FlowNode<"set_field">
   );
 }
 
-export function SubscribeNode({ selected, data }: NodeProps<FlowNode<"subscribe">>) {
+export function SubscribeNode({ id, selected, data }: NodeProps<FlowNode<"subscribe">>) {
   const action = data.action === "unsubscribe" ? "Unsubscribe" : "Subscribe";
   const list = data.listName.trim();
   return (
-    <NodeFrame selected={selected} kind="subscribe" icon={Bell} title="Action">
+    <NodeFrame id={id} selected={selected} kind="subscribe" icon={Bell} title="Action">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("subscribe")} />
       <Preview>
         {data.action === "unsubscribe" && (!list || list.toLowerCase() === "all")
@@ -368,11 +389,11 @@ export function SubscribeNode({ selected, data }: NodeProps<FlowNode<"subscribe"
   );
 }
 
-export function DelayNode({ selected, data }: NodeProps<FlowNode<"delay">>) {
+export function DelayNode({ id, selected, data }: NodeProps<FlowNode<"delay">>) {
   const window =
     data.sendAfter && data.sendBefore ? ` · ${data.sendAfter}–${data.sendBefore}` : "";
   return (
-    <NodeFrame selected={selected} kind="delay" icon={Timer} title="Smart Delay">
+    <NodeFrame id={id} selected={selected} kind="delay" icon={Timer} title="Smart Delay">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("delay")} />
       <Preview>Wait {formatDelay(data.seconds)}{window}</Preview>
       <Handle type="source" position={Position.Right} id="next" className={handleClass()} style={handleStyle("delay")} />
@@ -380,9 +401,9 @@ export function DelayNode({ selected, data }: NodeProps<FlowNode<"delay">>) {
   );
 }
 
-export function RandomizerNode({ selected, data }: NodeProps<FlowNode<"randomizer">>) {
+export function RandomizerNode({ id, selected, data }: NodeProps<FlowNode<"randomizer">>) {
   return (
-    <NodeFrame selected={selected} kind="randomizer" icon={Dices} title="A/B split">
+    <NodeFrame id={id} selected={selected} kind="randomizer" icon={Dices} title="A/B split">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("randomizer")} />
       <Preview>
         {data.paths.map((path, index) => `${path.percent}% → ${String.fromCharCode(65 + index)}`).join(" · ")}
@@ -426,7 +447,7 @@ export function RandomizerNode({ selected, data }: NodeProps<FlowNode<"randomize
   );
 }
 
-export function ConditionNode({ selected, data }: NodeProps<FlowNode<"condition">>) {
+export function ConditionNode({ id, selected, data }: NodeProps<FlowNode<"condition">>) {
   const summary =
     data.check === "tag"
       ? data.tagName
@@ -440,7 +461,7 @@ export function ConditionNode({ selected, data }: NodeProps<FlowNode<"condition"
             data.op !== "set" && data.value ? ` “${data.value}”` : ""
           }`;
   return (
-    <NodeFrame selected={selected} kind="condition" icon={Filter} title="Action">
+    <NodeFrame id={id} selected={selected} kind="condition" icon={Filter} title="Action">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("condition")} />
       <Preview>{summary}</Preview>
       <div className="relative space-y-1 pt-1">
@@ -469,9 +490,9 @@ export function ConditionNode({ selected, data }: NodeProps<FlowNode<"condition"
   );
 }
 
-export function StartFlowNode({ selected, data }: NodeProps<FlowNode<"start_flow">>) {
+export function StartFlowNode({ id, selected, data }: NodeProps<FlowNode<"start_flow">>) {
   return (
-    <NodeFrame selected={selected} kind="start_flow" icon={CornerUpRight} title="Action">
+    <NodeFrame id={id} selected={selected} kind="start_flow" icon={CornerUpRight} title="Action">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("start_flow")} />
       <Preview>{data.flowId ? "Start another flow" : "Pick a flow"}</Preview>
       <Handle type="source" position={Position.Right} id="next" className={handleClass()} style={handleStyle("start_flow")} />
@@ -479,9 +500,9 @@ export function StartFlowNode({ selected, data }: NodeProps<FlowNode<"start_flow
   );
 }
 
-export function HttpNode({ selected, data }: NodeProps<FlowNode<"http">>) {
+export function HttpNode({ id, selected, data }: NodeProps<FlowNode<"http">>) {
   return (
-    <NodeFrame selected={selected} kind="http" icon={Globe} title="Action">
+    <NodeFrame id={id} selected={selected} kind="http" icon={Globe} title="Action">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("http")} />
       <Preview>
         {data.method} {data.url || "https://"}
@@ -491,9 +512,9 @@ export function HttpNode({ selected, data }: NodeProps<FlowNode<"http">>) {
   );
 }
 
-export function NotifyNode({ selected, data }: NodeProps<FlowNode<"notify">>) {
+export function NotifyNode({ id, selected, data }: NodeProps<FlowNode<"notify">>) {
   return (
-    <NodeFrame selected={selected} kind="notify" icon={Bell} title="Action">
+    <NodeFrame id={id} selected={selected} kind="notify" icon={Bell} title="Action">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("notify")} />
       <Preview>{data.text || "Notify admin"}</Preview>
       <Handle type="source" position={Position.Right} id="next" className={handleClass()} style={handleStyle("notify")} />
@@ -501,9 +522,9 @@ export function NotifyNode({ selected, data }: NodeProps<FlowNode<"notify">>) {
   );
 }
 
-export function AiNode({ selected, data }: NodeProps<FlowNode<"ai">>) {
+export function AiNode({ id, selected, data }: NodeProps<FlowNode<"ai">>) {
   return (
-    <NodeFrame selected={selected} kind="ai" icon={Sparkles} title="AI Step">
+    <NodeFrame id={id} selected={selected} kind="ai" icon={Sparkles} title="AI Step">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("ai")} />
       <Preview>{data.goal || "Describe the goal"}</Preview>
       {data.collect.trim() ? (
@@ -515,9 +536,9 @@ export function AiNode({ selected, data }: NodeProps<FlowNode<"ai">>) {
   );
 }
 
-export function EndNode({ selected, data }: NodeProps<FlowNode<"end">>) {
+export function EndNode({ id, selected, data }: NodeProps<FlowNode<"end">>) {
   return (
-    <NodeFrame selected={selected} kind="end" icon={Square} title="Stop">
+    <NodeFrame id={id} selected={selected} kind="end" icon={Square} title="Stop">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("end")} />
       <Preview>{data.text || "Stop the flow"}</Preview>
     </NodeFrame>

@@ -3,10 +3,11 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { FlowListEditor } from "@/components/flow-canvas/flow-list-editor";
 import { FlowShareButton } from "@/components/flow-canvas/flow-share-dialog";
+import { FlowStatsContext, type NodeStats } from "@/components/flow-canvas/flow-stats-context";
 import type { FlowCanvasHandle } from "@/components/flow-canvas/flow-canvas-editor";
 import type { FlowMeta, InspectorField, InspectorFlowOption } from "@/components/flow-canvas/node-inspector";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,37 @@ export function FlowWorkspace({
   const [validation, setValidation] = useState<CanvasValidation>({ errors: [], warnings: [] });
   const canvasRef = useRef<FlowCanvasHandle>(null);
   const router = useRouter();
+  const [stepStats, setStepStats] = useState<Record<string, { sent: number; clicks: number }>>({});
+  const [flowStats, setFlowStats] = useState<{ runs: number; people: number; ctr: number; completionRate: number; clicks: number } | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(
+      () =>
+        void api<{ flow: typeof flowStats; steps: typeof stepStats }>(`/api/flows/${initialFlow.id}/stats`)
+          .then((data) => {
+            setStepStats(data.steps);
+            setFlowStats(data.flow);
+          })
+          .catch(() => undefined),
+      0,
+    );
+    return () => clearTimeout(timer);
+  }, [initialFlow.id]);
+
+  // Stats are recorded per engine step; a Send Message node is several steps sharing a group id.
+  const nodeStats = useMemo(() => {
+    const byNode: Record<string, NodeStats> = {};
+    for (const step of flow.definition.steps) {
+      const stats = stepStats[step.id];
+      if (!stats) continue;
+      const key = ("group" in step && step.group) || step.id;
+      const entry = (byNode[key] ??= { sent: 0, clicks: 0, ctr: 0 });
+      entry.sent = Math.max(entry.sent, stats.sent);
+      entry.clicks += stats.clicks;
+    }
+    for (const entry of Object.values(byNode)) entry.ctr = entry.sent ? Math.min(1, entry.clicks / entry.sent) : 0;
+    return byNode;
+  }, [flow.definition.steps, stepStats]);
 
   const pullCanvas = () => {
     const compiled = canvasRef.current?.getDefinition();
@@ -205,6 +237,25 @@ export function FlowWorkspace({
         </div>
       </header>
 
+      {flowStats && flowStats.runs > 0 ? (
+        <div className="flex flex-wrap gap-x-5 gap-y-1 border-b bg-white px-4 py-1.5 text-[12px] text-[#6b7280] tabular-nums">
+          <span>
+            Runs <span className="font-semibold text-[#1b1f24]">{flowStats.runs}</span>
+          </span>
+          <span>
+            People <span className="font-semibold text-[#1b1f24]">{flowStats.people}</span>
+          </span>
+          <span>
+            Clicks <span className="font-semibold text-[#1b1f24]">{flowStats.clicks}</span> · CTR{" "}
+            {Math.round(flowStats.ctr * 100)}%
+          </span>
+          <span>
+            Completed <span className="font-semibold text-[#1b1f24]">{Math.round(flowStats.completionRate * 100)}%</span>
+          </span>
+        </div>
+      ) : null}
+
+      <FlowStatsContext.Provider value={nodeStats}>
       {view === "canvas" ? (
         <FlowCanvasEditor
           key={canvasEpoch}
@@ -223,6 +274,7 @@ export function FlowWorkspace({
           <FlowListEditor flow={flow} otherFlows={otherFlows} onChange={setFlow} />
         </div>
       )}
+      </FlowStatsContext.Provider>
     </div>
   );
 }

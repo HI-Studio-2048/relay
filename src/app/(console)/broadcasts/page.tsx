@@ -29,7 +29,7 @@ export default async function BroadcastsPage() {
             Send to everyone or to one tag. Nothing sends until you confirm. Telegram sends are rate-limited.
           </p>
         </div>
-        <Button render={<Link href="/broadcasts/new" />}>Compose</Button>
+        <Button nativeButton={false} render={<Link href="/broadcasts/new" />}>Compose</Button>
       </div>
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No broadcasts yet.</p>
