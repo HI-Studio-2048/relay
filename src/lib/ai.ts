@@ -264,6 +264,26 @@ export async function translateText(input: { text: string; target: string | null
   return { sourceLanguage: result.source_language, translation: result.translation };
 }
 
+const KnowledgeSchema = z.object({
+  knowledge: z.string().describe("Plain-text facts, one per line, grouped under short headings."),
+});
+
+/** "Import from website": distill a page into facts the assistant may quote (prices, hours, policies, FAQs). */
+export async function extractKnowledge(input: { pageText: string; url: string; brandName: string }) {
+  const result = await parse(KnowledgeSchema, {
+    system: [
+      `You prepare the knowledge base a DM assistant for ${input.brandName} will answer from.`,
+      "From the page, keep only concrete facts a customer might ask about: products and prices, plans, hours, locations, shipping, returns and refunds, booking links, contact details, FAQs.",
+      "Skip navigation, marketing fluff, cookie banners and legal boilerplate. Never invent facts. Keep links exactly as written.",
+      "Write short lines under headings like 'Prices:' or 'FAQ:'. At most about 60 lines.",
+    ].join("\n"),
+    effort: "low",
+    maxTokens: 6000,
+    user: `<page url="${input.url.replace(/"/g, "")}">\n${input.pageText}\n</page>`,
+  });
+  return result.knowledge.trim();
+}
+
 export const REWRITE_STYLES = {
   shorter: "Make it shorter and punchier. DM-sized.",
   friendlier: "Make it warmer and friendlier, still professional.",

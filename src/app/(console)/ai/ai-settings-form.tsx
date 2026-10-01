@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Bot, Lightbulb, MessageSquareDashed, Wand2 } from "lucide-react";
+import { BookOpen, Bot, Globe, Lightbulb, MessageSquareDashed, Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Panel } from "@/components/chrome/panel";
@@ -34,6 +34,29 @@ export function AiSettingsForm({
   const [insights, setInsights] = useState<ConversationInsights | null>(null);
   const [analyzed, setAnalyzed] = useState(0);
   const [analyzing, setAnalyzing] = useState(false);
+  const [importUrl, setImportUrl] = useState("");
+  const [importing, setImporting] = useState(false);
+
+  const importFromWebsite = async () => {
+    if (!importUrl.trim()) return;
+    setImporting(true);
+    try {
+      const data = await api<{ knowledge: string; source: string }>(`/api/bots/${botId}/knowledge-import`, {
+        method: "POST",
+        body: JSON.stringify({ url: importUrl }),
+      });
+      setSettings((current) => ({
+        ...current,
+        knowledge: `${(current.knowledge ?? "").trim()}\n\n# From ${data.source}\n${data.knowledge}`.trim(),
+      }));
+      setImportUrl("");
+      toast.success("Imported — review the new facts below, then save");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not import");
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const analyze = async () => {
     setAnalyzing(true);
@@ -217,6 +240,18 @@ export function AiSettingsForm({
         <p className="text-[12px] text-[#6b7280]">
           Paste FAQs, prices, links and policies. If the answer is not here, the AI says it will check and hands off.
         </p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            value={importUrl}
+            onChange={(event) => setImportUrl(event.target.value)}
+            placeholder="https://yourshop.com/faq"
+            aria-label="Import knowledge from a web page"
+          />
+          <Button type="button" variant="outline" disabled={importing || !importUrl.trim() || !configured} onClick={() => void importFromWebsite()}>
+            <Globe className="size-3.5" />
+            {importing ? "Reading…" : "Import from website"}
+          </Button>
+        </div>
       </Panel>
 
       <Panel tone="start" icon={MessageSquareDashed} label="Auto-reply" title="Answer messages no flow or keyword catches">
