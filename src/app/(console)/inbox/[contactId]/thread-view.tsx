@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BookmarkPlus, Languages, Sparkles, CheckCircle2, MessageCircle, PanelRight, Play, RotateCcw, Send, X } from "lucide-react";
+import { AlarmClock, ArrowLeft, BookmarkPlus, Languages, Sparkles, CheckCircle2, MessageCircle, PanelRight, Play, RotateCcw, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { useBot } from "@/components/bot-provider";
 import { ContactAvatar } from "@/components/chrome/avatar";
@@ -136,6 +136,24 @@ function Bubble({
   );
 }
 
+/** Snooze presets in the teammate's local time. */
+function snoozeTime(choice: string): Date | null {
+  const now = new Date();
+  if (choice === "1h") return new Date(now.getTime() + 3_600_000);
+  if (choice === "3h") return new Date(now.getTime() + 3 * 3_600_000);
+  const at = new Date(now);
+  at.setHours(9, 0, 0, 0);
+  if (choice === "tomorrow") {
+    at.setDate(at.getDate() + 1);
+    return at;
+  }
+  if (choice === "week") {
+    at.setDate(at.getDate() + (((8 - at.getDay()) % 7) || 7));
+    return at;
+  }
+  return null;
+}
+
 function dayLabel(iso: string) {
   const date = new Date(iso);
   const today = new Date();
@@ -172,6 +190,7 @@ export function ThreadView({
   const [assist, setAssist] = useState<Assist | null>(null);
   const [assisting, setAssisting] = useState(false);
   const [assignedTo, setAssignedTo] = useState<string | null>(null);
+  const [snoozedUntil, setSnoozedUntil] = useState<string | null>(null);
   const { team } = useTeam();
   const bottom = useRef<HTMLDivElement>(null);
 
@@ -182,7 +201,9 @@ export function ThreadView({
       automation?: Automation;
       flows?: FlowOption[];
       assignedTo?: string | null;
+      snoozedUntil?: string | null;
     }>(`/api/inbox/${contactId}`);
+    setSnoozedUntil(data.snoozedUntil ?? null);
     setContact(data.contact);
     setAssignedTo(data.assignedTo ?? null);
     setMessages(data.messages);
@@ -231,6 +252,19 @@ export function ThreadView({
           ),
     [saved, slashQuery],
   );
+
+  const snooze = async (until: Date | null) => {
+    try {
+      const data = await api<{ snoozedUntil: string | null }>(`/api/inbox/${contactId}/snooze`, {
+        method: "POST",
+        body: JSON.stringify({ until: until ? until.toISOString() : null }),
+      });
+      setSnoozedUntil(data.snoozedUntil);
+      if (until) toast.success(`Snoozed until ${until.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}. A new message wakes it.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not snooze");
+    }
+  };
 
   const patchContact = async (patch: Record<string, unknown>) => {
     try {
@@ -400,6 +434,32 @@ export function ThreadView({
               <Play className="size-3.5" />
               <span className="hidden sm:inline">Resume bot</span>
             </Button>
+          ) : null}
+          {contact.inboxStatus !== "closed" ? (
+            snoozedUntil ? (
+              <Button variant="outline" size="sm" onClick={() => void snooze(null)} title="Wake this conversation now">
+                <AlarmClock className="size-3.5 text-[#6d28d9]" />
+                <span className="hidden sm:inline">
+                  Until {new Date(snoozedUntil).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}
+                </span>
+              </Button>
+            ) : (
+              <select
+                aria-label="Snooze"
+                value=""
+                onChange={(event) => {
+                  const until = snoozeTime(event.target.value);
+                  if (until) void snooze(until);
+                }}
+                className="hidden rounded-lg border border-[#e5e7eb] bg-white px-2 py-1 text-[12px] sm:block"
+              >
+                <option value="">Snooze…</option>
+                <option value="1h">1 hour</option>
+                <option value="3h">3 hours</option>
+                <option value="tomorrow">Tomorrow 9:00</option>
+                <option value="week">Next Monday 9:00</option>
+              </select>
+            )
           ) : null}
           <Button
             variant={contact.inboxStatus === "closed" ? "outline" : "default"}

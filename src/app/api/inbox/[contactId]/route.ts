@@ -18,6 +18,7 @@ export async function GET(_request: Request, context: RouteParams<{ contactId: s
     ]);
     return json({
       assignedTo: row?.assignedTo ?? null,
+      snoozedUntil: row?.snoozedUntil && new Date(row.snoozedUntil).getTime() > Date.now() ? new Date(row.snoozedUntil).toISOString() : null,
       contact,
       messages,
       automation: {

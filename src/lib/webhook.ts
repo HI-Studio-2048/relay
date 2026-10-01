@@ -41,6 +41,7 @@ import {
   persistContact,
   persistSession,
   saveMessage,
+  wakeSnoozed,
 } from "@/lib/store";
 import type { TelegramUpdate } from "@/lib/telegram";
 import { stepButtons, type ContactRecord, type FlowSessionState, type FlowStep, type OutboundReply } from "@/lib/types";
@@ -236,6 +237,7 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
 
   await persistContact(botId, contact);
   await persistSession(contact.id, result.session);
+  if (result.inboundSaved && existing) await wakeSnoozed(contact.id);
 
   if (growth) {
     try {

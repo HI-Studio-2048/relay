@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, BellOff, Search } from "lucide-react";
+import { AlarmClock, Bell, BellOff, Search } from "lucide-react";
 import { useBot } from "@/components/bot-provider";
 import { ContactAvatar } from "@/components/chrome/avatar";
 import { PlatformBadge } from "@/components/chrome/platform-badge";
@@ -17,7 +17,8 @@ type Thread = {
   username: string | null;
   avatarUrl: string | null;
   platform: string | null;
-  status: "open" | "closed";
+  status: "open" | "closed" | "snoozed";
+  snoozedUntil: string | null;
   lastAt: string | null;
   lastBody: string;
   lastDirection: "inbound" | "outbound";
@@ -25,13 +26,14 @@ type Thread = {
   assignedTo: string | null;
 };
 
-type Filter = "open" | "unanswered" | "mine" | "unassigned" | "closed" | "all";
+type Filter = "open" | "unanswered" | "mine" | "unassigned" | "snoozed" | "closed" | "all";
 
 const FILTERS: { value: Filter; label: string; team?: boolean }[] = [
   { value: "open", label: "Open" },
   { value: "unanswered", label: "Needs reply" },
   { value: "mine", label: "Mine", team: true },
   { value: "unassigned", label: "Unassigned", team: true },
+  { value: "snoozed", label: "Snoozed" },
   { value: "closed", label: "Closed" },
   { value: "all", label: "All" },
 ];
@@ -144,6 +146,7 @@ export function ConversationList() {
       unanswered: list.filter((thread) => thread.needsReply).length,
       mine: list.filter((thread) => thread.status === "open" && me && thread.assignedTo === me).length,
       unassigned: list.filter((thread) => thread.status === "open" && !thread.assignedTo).length,
+      snoozed: list.filter((thread) => thread.status === "snoozed").length,
       closed: list.filter((thread) => thread.status === "closed").length,
       all: list.length,
     };
@@ -154,6 +157,7 @@ export function ConversationList() {
     return (threads ?? []).filter((thread) => {
       if (filter === "open" && thread.status !== "open") return false;
       if (filter === "closed" && thread.status !== "closed") return false;
+      if (filter === "snoozed" && thread.status !== "snoozed") return false;
       if (filter === "unanswered" && !thread.needsReply) return false;
       if (filter === "mine" && !(thread.status === "open" && me && thread.assignedTo === me)) return false;
       if (filter === "unassigned" && !(thread.status === "open" && !thread.assignedTo)) return false;
@@ -294,6 +298,12 @@ export function ConversationList() {
                 </div>
                 <div className="mt-1 flex items-center gap-1.5">
                   {thread.platform ? <PlatformBadge platform={thread.platform} /> : null}
+                  {thread.snoozedUntil ? (
+                    <span className="flex items-center gap-0.5 rounded-full bg-[#f5f3ff] px-1.5 py-0.5 text-[10px] font-medium text-[#6d28d9]">
+                      <AlarmClock className="size-2.5" />
+                      {new Date(thread.snoozedUntil).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}
+                    </span>
+                  ) : null}
                   {byId(thread.assignedTo) ? (
                     <span
                       className="rounded-full px-1.5 py-0.5 text-[10px] font-medium text-white"

@@ -341,7 +341,8 @@ export type InboxThread = {
   username: string | null;
   avatarUrl: string | null;
   platform: string | null;
-  status: "open" | "closed";
+  status: "open" | "closed" | "snoozed";
+  snoozedUntil: string | null;
   lastAt: string | null;
   lastBody: string;
   lastDirection: "inbound" | "outbound";
@@ -351,6 +352,18 @@ export type InboxThread = {
 };
 
 /** Live Chat list: one row per conversation with its latest message, newest first. */
+/** Snooze a conversation until a time, or wake it (null). */
+export async function snoozeContact(contactId: string, until: Date | null) {
+  const db = await getDb();
+  await db.update(contacts).set({ snoozedUntil: until, ...(until ? { inboxStatus: "open" } : {}) }).where(eq(contacts.id, contactId));
+}
+
+/** A new message from them ends any snooze. */
+export async function wakeSnoozed(contactId: string) {
+  const db = await getDb();
+  await db.update(contacts).set({ snoozedUntil: null }).where(and(eq(contacts.id, contactId), isNotNull(contacts.snoozedUntil)));
+}
+
 export async function listInboxThreads(botId: string): Promise<InboxThread[]> {
   const db = await getDb();
   const latest = await db
@@ -377,11 +390,18 @@ export async function listInboxThreads(botId: string): Promise<InboxThread[]> {
         username: row.username,
         avatarUrl: row.avatarUrl ?? null,
         platform: row.platform ?? null,
-        status: row.inboxStatus === "closed" ? ("closed" as const) : ("open" as const),
+        status:
+          row.inboxStatus === "closed"
+            ? ("closed" as const)
+            : row.snoozedUntil && new Date(row.snoozedUntil).getTime() > Date.now()
+              ? ("snoozed" as const)
+              : ("open" as const),
+        snoozedUntil: row.snoozedUntil && new Date(row.snoozedUntil).getTime() > Date.now() ? new Date(row.snoozedUntil).toISOString() : null,
         lastAt: last.createdAt ? new Date(last.createdAt).toISOString() : null,
         lastBody: last.body,
         lastDirection: last.direction === "outbound" ? ("outbound" as const) : ("inbound" as const),
-        needsReply: last.direction === "inbound" && row.inboxStatus !== "closed",
+        needsReply:
+          last.direction === "inbound" && row.inboxStatus !== "closed" && !(row.snoozedUntil && new Date(row.snoozedUntil).getTime() > Date.now()),
         assignedTo: row.assignedTo ?? null,
       };
     })
