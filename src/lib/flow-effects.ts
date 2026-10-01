@@ -8,36 +8,9 @@ import { saveMessage } from "@/lib/store";
 import { sendMessage } from "@/lib/telegram";
 import type { ContactRecord, FlowEffect } from "@/lib/types";
 
-/**
- * Personalization. ManyChat names ({{first_name}}, {{last_name}}, {{full_name}}) plus Relay's
- * {{name}} / {{field:key}}, any custom field by bare key ({{company}}), and a fallback after a pipe
- * for empty values: {{first_name|there}}.
- */
-export function interpolateTemplate(template: string, contact: ContactRecord, extra: Record<string, string> = {}): string {
-  const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim();
-  const builtins: Record<string, string> = {
-    name,
-    full_name: name,
-    first_name: contact.firstName ?? "",
-    last_name: contact.lastName ?? "",
-    email: contact.email ?? "",
-    phone: contact.phone ?? "",
-    username: contact.username ?? "",
-    telegram_id: contact.telegramUserId,
-    user_id: contact.telegramUserId,
-    platform: contact.platform ?? "",
-    ...extra,
-  };
-  return template.replace(/\{\{\s*([a-z0-9_:.]+)\s*(?:\|([^}]*))?\}\}/gi, (match, rawKey: string, fallback?: string) => {
-    const key = rawKey.toLowerCase();
-    let value: string | undefined;
-    if (key.startsWith("field:")) value = contact.customFields[rawKey.slice("field:".length)] ?? "";
-    else if (key in builtins) value = builtins[key];
-    else if (rawKey in contact.customFields) value = contact.customFields[rawKey];
-    else if (fallback === undefined) return match;
-    return value?.trim() ? value : (fallback ?? "").trim();
-  });
-}
+import { interpolateTemplate } from "@/lib/template";
+
+export { interpolateTemplate };
 
 /** Admin alerts always go out over Telegram: the first connected Telegram bot delivers them. */
 export async function notifyAdmin(text: string) {

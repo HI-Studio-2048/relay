@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { FlowListEditor } from "@/components/flow-canvas/flow-list-editor";
 import { FlowShareButton } from "@/components/flow-canvas/flow-share-dialog";
+import { FlowSimulator } from "@/components/flow-canvas/flow-simulator";
 import { FlowStatsContext, type NodeStats } from "@/components/flow-canvas/flow-stats-context";
 import type { FlowCanvasHandle } from "@/components/flow-canvas/flow-canvas-editor";
 import type { FlowMeta, InspectorField, InspectorFlowOption } from "@/components/flow-canvas/node-inspector";
@@ -49,6 +50,7 @@ export function FlowWorkspace({
   const [validation, setValidation] = useState<CanvasValidation>({ errors: [], warnings: [] });
   const canvasRef = useRef<FlowCanvasHandle>(null);
   const router = useRouter();
+  const [testing, setTesting] = useState(false);
   const [stepStats, setStepStats] = useState<Record<string, { sent: number; clicks: number }>>({});
   const [flowStats, setFlowStats] = useState<{ runs: number; people: number; ctr: number; completionRate: number; clicks: number } | null>(null);
 
@@ -224,6 +226,9 @@ export function FlowWorkspace({
               List
             </button>
           </div>
+          <Button size="sm" variant="outline" onClick={() => setTesting((value) => !value)}>
+            Test
+          </Button>
           <FlowShareButton botId={flow.botId} flowId={flow.id} />
           <Button size="sm" variant="outline" onClick={() => void duplicate()}>
             Duplicate
@@ -255,6 +260,18 @@ export function FlowWorkspace({
         </div>
       ) : null}
 
+      <div className="relative flex min-h-0 flex-1 flex-col">
+      {testing ? (
+        <FlowSimulator
+          onClose={() => setTesting(false)}
+          getFlow={() => {
+            // Read the canvas without committing it to state: the simulator calls this from event handlers.
+            const compiled = view === "canvas" ? canvasRef.current?.getDefinition() : null;
+            const definition = compiled ? { ...compiled, ...(flow.definition.trigger ? { trigger: flow.definition.trigger } : {}) } : flow.definition;
+            return { id: flow.id, triggerType: flow.triggerType, triggerValue: flow.triggerValue, definition };
+          }}
+        />
+      ) : null}
       <FlowStatsContext.Provider value={nodeStats}>
       {view === "canvas" ? (
         <FlowCanvasEditor
@@ -275,6 +292,7 @@ export function FlowWorkspace({
         </div>
       )}
       </FlowStatsContext.Provider>
+      </div>
     </div>
   );
 }

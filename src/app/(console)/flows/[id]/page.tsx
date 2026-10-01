@@ -46,7 +46,8 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
           channel={channel}
         />
       </div>
-      <div className="order-1 min-h-0 lg:order-2 lg:h-full">
+      {/* The header's Share button covers smaller screens; the panel only gets a column when there is room. */}
+      <div className="order-1 hidden min-h-0 lg:order-2 lg:h-full 2xl:block">
         <FlowSharePanel botId={flow.botId} flowId={flow.id} flowName={flow.name} links={links} />
       </div>
     </div>
