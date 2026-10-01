@@ -1,21 +1,23 @@
 # Relay
 
-Telegram automation for HI Studio. Inbox, lead-capture flows, CRM tags/fields, and tag-scoped broadcasts with a hard confirm gate.
+Social DM automation for HI Studio — a ManyChat-style platform for every network. Comment-to-DM, story replies, flows on a canvas, a shared Live Chat inbox, CRM, segmented broadcasts, analytics, and Claude-powered AI.
 
-Telegram only in v1. No Instagram, Facebook, or WhatsApp. No scraping. Sends are rate-limited.
+Connect every social account at once through **[Zernio](https://zernio.com)** (Instagram, Facebook, WhatsApp, TikTok, X, LinkedIn, YouTube, Threads, Bluesky, Reddit, SMS…), or connect Telegram, Instagram, Messenger and WhatsApp directly. No scraping. Sends are rate-limited.
 
 Origin is the source of truth for this project.
 
-## What v1 does
+## What it does
 
-1. **Bot connect** — paste a BotFather token. Relay calls `getMe`, encrypts the token (`ENCRYPTION_KEY`), sets the webhook, and health-checks it.
-2. **Contacts** — upsert on `/start` and every inbound message (Telegram user id, username, name).
-3. **Tags + CRM fields** — native name/email/phone plus custom fields (company is seeded).
-4. **Lead capture** — flow steps write answers onto the contact. Visible in inbox/CRM and CSV export.
-5. **Flows** — triggers: `/start`, growth-link `/start <payload>`, command, exact keyword. Steps: text (optional image/GIF), callback or HTTPS URL buttons, capture, lead form, condition (yes/no), delay, tag add/remove, set CRM field, subscribe/unsubscribe, end. Admins edit them on a drag-and-drop canvas (React Flow); the engine still runs the same `FlowDefinition`. Telegram sends photos via `sendPhoto` and GIFs via `sendAnimation`.
-6. **Broadcasts by tag** — compose audience, then **Confirm** (`confirm: true`) before anything queues. Status is tracked.
-7. **Live inbox** — inbound/outbound thread per contact; human reply from the UI.
-8. **Growth links** — trackable Telegram start links (`t.me/<bot>?start=param`). Short URL `/go/<slug>` counts a click then redirects. `/start param` attributes the contact, can apply a tag / UTM fields, and can kick a linked flow.
+1. **Channels** — paste a Zernio API key (Relay registers its own signed webhook and routes every linked account), or a BotFather token / Meta token. Credentials are encrypted at rest (`ENCRYPTION_KEY`).
+2. **Comment → DM** — keyword + post filters, random public replies, a private-reply opening DM, once per person per post. Story reply and story mention triggers.
+3. **Flows** — a drag-and-drop canvas: Send Message (text, media, buttons, quick replies, typing), User input, Lead form, Tag, Set field, Subscribe, Condition, Smart Delay, A/B split, Start flow, HTTP request, Notify admin, **AI Step**, Stop. Triggers: welcome, keywords, commands, growth links, comments, stories, default reply. Nine starter **templates**, an **in-browser simulator** to test before publishing, and per-node sent/click stats.
+4. **AI (Claude)** — AI Step (chats toward a goal, collects fields, continues the flow or hands off), AI auto-reply from your knowledge base, Live Chat reply suggestions + summaries, and "describe a flow, get a draft".
+5. **Live Chat** — three-pane inbox across every network: filters (open / needs reply / closed), saved replies (`/`), tags, notes, automation pause/resume, AI copilot. A human reply or AI hand-off pauses the bot for that person.
+6. **Contacts & CRM** — tags, custom fields, lists; segment filters, bulk actions, CSV import/export.
+7. **Broadcasts** — segments (tag, field, platform, list, last message within N hours, join date), send a message or a whole flow, schedule, and an explicit confirm before anything queues.
+8. **Growth** — trackable links (`/go/<slug>`), QR codes, attribution; Instagram ice breakers, Messenger menu, business hours with an away message.
+9. **Analytics** — overview dashboard, per-flow runs / CTR / completion.
+10. **API & webhooks** — `/api/v1` with API keys; signed outgoing webhooks for Zapier, Make or your backend.
 
 One process serves the web UI, the webhook, and the worker (`WORKER_MODE=all`).
 
@@ -57,6 +59,8 @@ Local-only `POST /api/dev/seed` (disabled in production) creates a demo bot, a l
 | `TELEGRAM_SENDS_PER_SECOND` | no | Default 20, capped at 25 |
 | `PORT` | Railway | Next.js reads this automatically |
 | `MEDIA_DIR` | no | Flow image/GIF uploads. Default `.data/media` |
+| `ANTHROPIC_API_KEY` | for AI | Enables AI Steps, auto-reply, Live Chat suggestions and the flow builder (Claude) |
+| `ZERNIO_API_BASE` | no | Override the Zernio API origin (default `https://zernio.com/api`) |
 
 Never commit tokens or `.env*`. Tokens are never logged (outbound logs are redacted).
 
@@ -127,12 +131,48 @@ On a **Message**, **Image / GIF**, or **Buttons** node, upload or drop a JPEG/PN
 - Local uploads are sent as multipart (`sendPhoto` / `sendAnimation`) so Telegram does not need a public media URL.
 - Broadcasts stay text-only; the confirm gate is unchanged.
 
+## Zernio (every social network)
+
+1. Connect accounts in Zernio and create an API key.
+2. In Relay → **Settings**, choose **All socials (Zernio)** and paste the key. Optionally limit Relay to some Zernio account ids.
+3. With `PUBLIC_URL` set, Relay registers `POST /api/zernio/webhook/<id>` for `message.received`, `comment.received` and `referral.received`, signed with its own secret (`X-Zernio-Signature`, HMAC-SHA256). Retries are deduped by `X-Zernio-Event-Id`.
+4. Contacts remember their network, Zernio account and conversation, so flows, broadcasts, sequences and Live Chat reply in the right thread. Buttons render natively where the network supports them and as numbered text elsewhere.
+
+Instagram and Facebook allow one private reply to a comment until the person answers, so a comment flow's first message should carry a button; the rest of the flow continues from the tap. Meta channels only deliver free-form messages inside the 24-hour window — use the **Last message within 24 hours** broadcast condition.
+
+## AI
+
+Set `ANTHROPIC_API_KEY`. In **AI assistant**, write a persona and paste your business knowledge (prices, hours, links, FAQs). Claude only states facts from that knowledge and hands off to a human otherwise.
+
+- **AI Step** (canvas): give it a goal and fields to collect (`email, budget`). It chats until the goal is met, saves what it learned to the contact, then continues from its right-hand handle.
+- **Auto-reply** answers messages no flow or keyword matched.
+- **Live Chat** ✨ drafts three replies and summarizes intent and sentiment.
+- **Build with AI** turns a sentence into an inactive draft flow.
+
+Requests use `claude-opus-5-5` with structured outputs, prompt caching and server-side refusal fallbacks.
+
+## API & webhooks
+
+Create a key under **API & webhooks**, then:
+
+```bash
+curl -H "Authorization: Bearer rly_…" "$PUBLIC_URL/api/v1/contacts?tag=lead"
+curl -X PATCH -H "Authorization: Bearer rly_…" -H 'content-type: application/json' \
+  -d '{"add_tags":["customer"],"fields":{"plan":"pro"}}' "$PUBLIC_URL/api/v1/contacts/<id>"
+curl -X POST -H "Authorization: Bearer rly_…" -H 'content-type: application/json' \
+  -d '{"flow_id":"<flow>"}' "$PUBLIC_URL/api/v1/contacts/<id>/flows"
+```
+
+Endpoints: `GET /me`, `GET /contacts`, `GET|PATCH /contacts/:id`, `POST /contacts/:id/flows`, `POST /contacts/:id/messages`, `GET /flows`, `GET /tags`.
+
+Webhooks POST `{ id, event, created_at, data }` for `contact.created`, `message.received`, `contact.tag_added`, `contact.tag_removed`, `contact.field_set`, `contact.subscribed`, `flow.completed` and `conversation.handoff`. Verify `X-Relay-Signature` (hex HMAC-SHA256 of the raw body with the endpoint's signing secret).
+
 ## Broadcasts (confirm is a hard gate)
 
-1. Tag the audience (broadcasts are tag-scoped — no “send to everyone”).
-2. Compose the message. That only creates `awaiting_confirm`.
-3. On the broadcast page, type `CONFIRM` and send. The API rejects anything except `{ "confirm": true }` on `/api/broadcasts/:id/confirm`.
-4. The worker sends with a per-bot rate limit and records sent/failed.
+1. Pick the audience: everyone subscribed or a tag, narrowed by conditions. The count updates live.
+2. Write a message or pick a flow to send. That only creates `awaiting_confirm`.
+3. On the broadcast page, type `CONFIRM` and send now or pick a time. The API rejects anything except `{ "confirm": true }` on `/api/broadcasts/:id/confirm`. Scheduled broadcasts work out their audience when they send.
+4. The worker sends with a per-account rate limit and records sent/failed. Unsubscribed contacts are always skipped.
 
 Delete bot / flow / tag / field also require `confirm: true`.
 
@@ -162,7 +202,7 @@ Keep both on the same Postgres + Redis. Do not run two `all` instances against o
 
 ## Schema
 
-Postgres tables: `bots`, `contacts`, `tags`, `contact_tags`, `custom_fields`, `contact_field_values`, `flows`, `flow_sessions`, `messages`, `broadcasts`, `broadcast_recipients`, `growth_links`, `growth_link_events`.
+Postgres tables: `bots`, `contacts`, `tags`, `contact_tags`, `custom_fields`, `contact_field_values`, `flows`, `flow_sessions`, `flow_events`, `messages`, `saved_replies`, `broadcasts`, `broadcast_recipients`, `growth_links`, `growth_link_events`, `sequences`, `sequence_steps`, `sequence_subscriptions`, `automation_rules`, `api_keys`, `webhook_subscriptions`.
 
 SQL lives in `src/lib/db/sql.ts` and is applied on boot. Drizzle schema: `src/lib/db/schema.ts`.
 
