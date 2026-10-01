@@ -347,3 +347,12 @@ describe("comment moderation", () => {
     expect(moderationReason({ ...moderation, enabled: false }, "scam")).toBeNull();
   });
 });
+
+describe("click-to-DM ad attribution", () => {
+  it("stores the ad id as custom fields", async () => {
+    const { referralFields } = await import("@/lib/channels/zernio");
+    expect(referralFields({ ad_id: "120200", source: "ADS" })).toEqual({ ad_id: "120200", ad_source: "ADS" });
+    expect(referralFields({ ref: "x" } as never)).toBeUndefined();
+    expect(referralFields(null)).toBeUndefined();
+  });
+});

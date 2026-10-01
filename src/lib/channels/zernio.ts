@@ -283,9 +283,23 @@ export type ZernioWebhookPayload = {
     parentCommentId?: string | null;
   };
   post?: { id?: string | null; platformPostId?: string; content?: string | null; permalink?: string | null };
-  referral?: { ref?: string };
+  referral?: { ref?: string; ad_id?: string; source?: string };
   sender?: { id?: string; name?: string; username?: string };
 };
+
+/**
+ * Click-to-DM ads: remember which ad brought someone in as custom fields (ad_id, ad_source), so
+ * segments, rules ("when ad_id is set, start a flow") and broadcasts can use it.
+ */
+export function referralFields(referral: { ad_id?: string; source?: string } | null | undefined): Record<string, string> | undefined {
+  if (!referral?.ad_id) return undefined;
+  return { ad_id: String(referral.ad_id).slice(0, 100), ad_source: String(referral.source ?? "ad").slice(0, 60) };
+}
+
+function mergeFields(...parts: (Record<string, string> | undefined)[]) {
+  const merged = Object.assign({}, ...parts.filter(Boolean)) as Record<string, string>;
+  return Object.keys(merged).length ? merged : undefined;
+}
 
 function splitName(name: string | undefined | null) {
   const [first, ...rest] = (name ?? "").trim().split(/\s+/);
@@ -350,7 +364,7 @@ export function parseZernioWebhook(payload: ZernioWebhookPayload, accountFilter:
         threadId: message.conversationId ?? payload.conversation?.id ?? null,
         avatarUrl: message.sender?.picture ?? payload.conversation?.participantPicture ?? null,
         storyUrl: meta.storyReply?.storyUrl ?? null,
-        profileFields: instagramProfileFields(message.sender?.instagramProfile),
+        profileFields: mergeFields(instagramProfileFields(message.sender?.instagramProfile), referralFields(meta.referral)),
       },
     ];
   }
@@ -387,18 +401,20 @@ export function parseZernioWebhook(payload: ZernioWebhookPayload, accountFilter:
   if (payload.event === "referral.received") {
     const ref = payload.referral?.ref ?? payload.metadata?.referral?.ref;
     const senderId = payload.sender?.id ?? payload.conversation?.participantId;
-    if (!ref || !senderId) return [];
+    const adFields = referralFields(payload.referral ?? payload.metadata?.referral);
+    if ((!ref && !adFields) || !senderId) return [];
     return [
       {
         externalUserId: zernioContactKey(accountId, senderId),
         username: payload.sender?.username ?? null,
         ...splitName(payload.sender?.name ?? payload.conversation?.participantName),
-        text: `/start ${ref}`,
-        referral: ref,
+        text: ref ? `/start ${ref}` : null,
+        referral: ref ?? null,
         kind: "message",
         platform: payload.account?.platform ?? null,
         channelAccountId: accountId,
         threadId: payload.conversation?.id ?? null,
+        profileFields: adFields,
       },
     ];
   }
