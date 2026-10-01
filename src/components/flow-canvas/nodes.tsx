@@ -25,7 +25,7 @@ import { useNodeStats } from "@/components/flow-canvas/flow-stats-context";
 import { MediaThumb } from "@/components/flow-canvas/media-picker";
 import { MANYCHAT, NODE_TONE } from "@/components/flow-canvas/node-colors";
 import { cn } from "@/lib/utils";
-import { blockLabel, isMediaBlock, type CanvasNodeData } from "@/lib/flow-canvas";
+import { blockLabel, isMediaBlock, ruleSummary, type CanvasNodeData } from "@/lib/flow-canvas";
 
 type FlowNode<K extends CanvasNodeData["kind"]> = Node<Extract<CanvasNodeData, { kind: K }>, K>;
 
@@ -406,7 +406,14 @@ export function SetFieldNode({ id, selected, data }: NodeProps<FlowNode<"set_fie
   const fieldLabel = data.field.startsWith("custom:")
     ? data.field.slice("custom:".length) || "custom"
     : data.field;
-  const preview = data.value.trim() ? `${fieldLabel} = ${data.value}` : `Clear ${fieldLabel}`;
+  const preview =
+    data.mode === "add"
+      ? `${fieldLabel} + ${data.value || 0}`
+      : data.mode === "subtract"
+        ? `${fieldLabel} − ${data.value || 0}`
+        : data.value.trim()
+          ? `${fieldLabel} = ${data.value}`
+          : `Clear ${fieldLabel}`;
   return (
     <NodeFrame id={id} selected={selected} kind="set_field" icon={PenLine} title="Action">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("set_field")} />
@@ -491,18 +498,8 @@ export function RandomizerNode({ id, selected, data }: NodeProps<FlowNode<"rando
 }
 
 export function ConditionNode({ id, selected, data }: NodeProps<FlowNode<"condition">>) {
-  const summary =
-    data.check === "tag"
-      ? data.tagName
-        ? `Has #${data.tagName}`
-        : "Has a tag"
-      : data.check === "subscription"
-        ? !data.tagName.trim() || data.tagName.trim().toLowerCase() === "all"
-          ? "Subscribed (not opted out)"
-          : `Subscribed to “${data.tagName}”`
-        : `${data.field} ${data.op === "eq" ? "=" : data.op === "contains" ? "contains" : "is set"}${
-            data.op !== "set" && data.value ? ` “${data.value}”` : ""
-          }`;
+  const joiner = data.match === "any" ? " or " : " and ";
+  const summary = [data, ...(data.extra ?? [])].map(ruleSummary).join(joiner);
   return (
     <NodeFrame id={id} selected={selected} kind="condition" icon={Filter} title="Action">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("condition")} />

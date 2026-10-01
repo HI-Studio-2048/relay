@@ -3,12 +3,14 @@ import type {
   CaptureField,
   ConditionCheck,
   ConditionOp,
+  ConditionRule,
   FlowCanvasLayout,
   FlowDefinition,
   FlowMedia,
   FlowStep,
   FormField,
   HttpMethod,
+  SetFieldMode,
   SubscribeAction,
   TagAction,
 } from "@/lib/types";
@@ -100,7 +102,7 @@ export type CanvasNodeData =
   | { kind: "capture"; field: CaptureField; prompt: string; skippable?: boolean }
   | { kind: "form"; intro: string; fields: FormField[] }
   | { kind: "tag"; tagName: string; action: TagAction }
-  | { kind: "set_field"; field: CaptureField; value: string }
+  | { kind: "set_field"; field: CaptureField; value: string; mode?: SetFieldMode }
   | { kind: "subscribe"; listName: string; action: SubscribeAction }
   | { kind: "delay"; seconds: number; unit?: "seconds" | "minutes" | "hours" | "days"; sendAfter?: string; sendBefore?: string }
   | { kind: "randomizer"; sticky: boolean; paths: { id: string; percent: number }[] }
@@ -110,6 +112,8 @@ export type CanvasNodeData =
       tagName: string;
       field: CaptureField;
       op: ConditionOp;
+      extra?: ConditionRule[];
+      match?: "all" | "any";
       value: string;
     }
   | { kind: "start_flow"; flowId: string }
@@ -374,7 +378,7 @@ function nodeFromStep(step: FlowStep, position: { x: number; y: number }): Canva
       id: step.id,
       type: "set_field",
       position,
-      data: { kind: "set_field", field: step.field, value: step.value },
+      data: { kind: "set_field", field: step.field, value: step.value, ...(step.mode && step.mode !== "set" ? { mode: step.mode } : {}) },
     };
   }
   if (step.type === "subscribe") {
@@ -427,6 +431,7 @@ function nodeFromStep(step: FlowStep, position: { x: number; y: number }): Canva
         field: step.field ?? "email",
         op: step.op ?? "set",
         value: step.value ?? "",
+        ...(step.extra?.length ? { extra: step.extra, match: step.match ?? "all" } : {}),
       },
     };
   }
@@ -723,6 +728,40 @@ export function compileSendMessage(nodeId: string, data: SendMessageData, edges:
   });
 }
 
+const OP_LABEL: Record<ConditionOp, string> = {
+  eq: "=",
+  neq: "≠",
+  contains: "contains",
+  not_contains: "doesn't contain",
+  set: "is set",
+  not_set: "is empty",
+  gt: ">",
+  lt: "<",
+};
+
+/** One-line summary of a condition rule for node previews. */
+export function ruleSummary(rule: ConditionRule): string {
+  const negate = rule.op === "not_set";
+  const name = (rule.tagName ?? "").trim();
+  if (rule.check === "tag") return name ? `${negate ? "No" : "Has"} #${name}` : "Has a tag";
+  if (rule.check === "subscription") {
+    if (!name || name.toLowerCase() === "all") return negate ? "Opted out" : "Subscribed (not opted out)";
+    return `${negate ? "Not subscribed" : "Subscribed"} to “${name}”`;
+  }
+  const field = (rule.field ?? "email").replace(/^custom:/, "");
+  const op = rule.op ?? "set";
+  return `${field} ${OP_LABEL[op]}${op !== "set" && op !== "not_set" && rule.value ? ` “${rule.value}”` : ""}`;
+}
+
+/** Keep only the parts of a condition rule its check uses. */
+export function cleanRule(rule: ConditionRule): ConditionRule {
+  if (rule.check === "field") {
+    const op = rule.op ?? "set";
+    return { check: "field", field: rule.field ?? "email", op, ...(op !== "set" && op !== "not_set" && rule.value ? { value: rule.value } : {}) };
+  }
+  return { check: rule.check, tagName: rule.tagName ?? "", ...(rule.op === "not_set" ? { op: "not_set" as const } : {}) };
+}
+
 export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
   const startStepId = nextFromHandle(graph.edges, TRIGGER_NODE_ID, "out") ?? "";
   const steps: FlowStep[] = [];
@@ -823,6 +862,7 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
         type: "set_field",
         field: node.data.field,
         value: node.data.value,
+        ...(node.data.mode && node.data.mode !== "set" ? { mode: node.data.mode } : {}),
         next: nextFromHandle(graph.edges, node.id, "next") ?? "",
       });
       continue;
@@ -871,7 +911,9 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
         id: node.id,
         type: "condition",
         check: node.data.check,
-        ...(node.data.check === "tag" || node.data.check === "subscription" ? { tagName: node.data.tagName } : {}),
+        ...(node.data.check === "tag" || node.data.check === "subscription"
+          ? { tagName: node.data.tagName, ...(node.data.op === "not_set" ? { op: "not_set" as const } : {}) }
+          : {}),
         ...(node.data.check === "field"
           ? {
               field: node.data.field,
@@ -879,6 +921,7 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
               ...(node.data.op !== "set" && node.data.value ? { value: node.data.value } : {}),
             }
           : {}),
+        ...(node.data.extra?.length ? { extra: node.data.extra.map(cleanRule), match: node.data.match ?? "all" } : {}),
         nextTrue: nextFromHandle(graph.edges, node.id, "yes") ?? "",
         nextFalse: nextFromHandle(graph.edges, node.id, "no") ?? "",
       });
@@ -1025,6 +1068,7 @@ export function engineDefinition(definition: FlowDefinition): FlowDefinition {
           type: "set_field",
           field: step.field,
           value: step.value,
+          ...(step.mode && step.mode !== "set" ? { mode: step.mode } : {}),
           next: step.next,
         };
       }
@@ -1071,7 +1115,9 @@ export function engineDefinition(definition: FlowDefinition): FlowDefinition {
             : {}),
           ...(step.check === "field" && step.field ? { field: step.field } : {}),
           ...(step.check === "field" && step.op ? { op: step.op } : {}),
-          ...(step.check === "field" && step.op !== "set" && step.value ? { value: step.value } : {}),
+          ...(step.check !== "field" && step.op === "not_set" ? { op: step.op } : {}),
+          ...(step.check === "field" && step.op !== "set" && step.op !== "not_set" && step.value ? { value: step.value } : {}),
+          ...(step.extra?.length ? { extra: step.extra.map(cleanRule), match: step.match ?? "all" } : {}),
           nextTrue: step.nextTrue,
           nextFalse: step.nextFalse,
         };

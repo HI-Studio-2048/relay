@@ -73,7 +73,20 @@ export type SubscribeAction = "subscribe" | "unsubscribe";
 
 export type ConditionCheck = "tag" | "field" | "subscription";
 
-export type ConditionOp = "eq" | "contains" | "set";
+/** set / not_set also mean "has" / "doesn't have" for tag and list checks; gt / lt compare numbers. */
+export type ConditionOp = "eq" | "neq" | "contains" | "not_contains" | "set" | "not_set" | "gt" | "lt";
+
+/** One rule in a condition. The step itself is the first rule; `extra` holds the rest. */
+export type ConditionRule = {
+  check: ConditionCheck;
+  tagName?: string;
+  field?: CaptureField;
+  op?: ConditionOp;
+  value?: string;
+};
+
+/** Set field: write a value, or treat the field as a number and add/subtract (ManyChat "increase by"). */
+export type SetFieldMode = "set" | "add" | "subtract";
 
 export type FormField = {
   field: CaptureField;
@@ -134,6 +147,7 @@ export type FlowStep =
       type: "set_field";
       field: CaptureField;
       value: string;
+      mode?: SetFieldMode;
       next: string;
     }
   | {
@@ -161,6 +175,9 @@ export type FlowStep =
       field?: CaptureField;
       op?: ConditionOp;
       value?: string;
+      /** More rules, combined with the first by `match` (default all). */
+      extra?: ConditionRule[];
+      match?: "all" | "any";
       nextTrue: string;
       nextFalse: string;
     }

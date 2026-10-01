@@ -28,8 +28,10 @@ import {
 import type {
   CaptureField,
   ConditionOp,
+  ConditionRule,
   FormField,
   HttpMethod,
+  SetFieldMode,
   SubscribeAction,
   TagAction,
   TriggerType,
@@ -334,14 +336,29 @@ export function NodeInspector({
             onChange={(field) => onDataChange(selectedId, { ...data, field })}
           />
           <div className="space-y-1">
-            <Label>Value</Label>
+            <Label>Action</Label>
+            <select
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              value={data.mode ?? "set"}
+              onChange={(event) => onDataChange(selectedId, { ...data, mode: event.target.value as SetFieldMode })}
+            >
+              <option value="set">Set to</option>
+              <option value="add">Increase by (number)</option>
+              <option value="subtract">Decrease by (number)</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label>{data.mode === "add" || data.mode === "subtract" ? "Amount" : "Value"}</Label>
             <Input
               value={data.value}
+              inputMode={data.mode === "add" || data.mode === "subtract" ? "decimal" : undefined}
               onChange={(event) => onDataChange(selectedId, { ...data, value: event.target.value })}
-              placeholder="Written onto the contact"
+              placeholder={data.mode === "add" || data.mode === "subtract" ? "1" : "Written onto the contact"}
             />
             <p className="text-[11px] text-muted-foreground">
-              Empty clears the field. Telegram does not ask the contact — use User input or a lead form for that.
+              {data.mode === "add" || data.mode === "subtract"
+                ? "Great for lead scores and counters. A blank field counts as 0."
+                : "Empty clears the field. To ask the contact, use User input or a lead form."}
             </p>
           </div>
         </div>
@@ -1293,6 +1310,81 @@ function RandomizerEditor({
   );
 }
 
+function RuleEditor({
+  rule,
+  customFields,
+  tagNames,
+  onChange,
+}: {
+  rule: ConditionRule;
+  customFields: InspectorField[];
+  tagNames: string[];
+  onChange: (rule: ConditionRule) => void;
+}) {
+  const op = rule.op ?? "set";
+  return (
+    <div className="space-y-2">
+      <select
+        aria-label="Check"
+        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+        value={rule.check === "field" ? "field" : `${rule.check}:${op === "not_set" ? "no" : "yes"}`}
+        onChange={(event) => {
+          const value = event.target.value;
+          if (value === "field") onChange({ ...rule, check: "field", op: "set" });
+          else {
+            const [check, polarity] = value.split(":");
+            onChange({ ...rule, check: check === "subscription" ? "subscription" : "tag", op: polarity === "no" ? "not_set" : "set" });
+          }
+        }}
+      >
+        <option value="tag:yes">Has tag</option>
+        <option value="tag:no">Doesn&apos;t have tag</option>
+        <option value="subscription:yes">Subscribed to list</option>
+        <option value="subscription:no">Not subscribed to list</option>
+        <option value="field">Field value</option>
+      </select>
+      {rule.check === "tag" || rule.check === "subscription" ? (
+        <>
+          <Input
+            list="relay-condition-tags"
+            aria-label={rule.check === "subscription" ? "List name" : "Tag name"}
+            placeholder={rule.check === "subscription" ? "List name (or all)" : "Tag name"}
+            value={rule.tagName ?? ""}
+            onChange={(event) => onChange({ ...rule, tagName: event.target.value })}
+          />
+          <datalist id="relay-condition-tags">
+            {tagNames.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+        </>
+      ) : (
+        <>
+          <FieldSelect field={rule.field ?? "email"} customFields={customFields} onChange={(field) => onChange({ ...rule, field })} />
+          <select
+            aria-label="Operator"
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            value={op}
+            onChange={(event) => onChange({ ...rule, op: event.target.value as ConditionOp })}
+          >
+            <option value="set">Is set</option>
+            <option value="not_set">Is empty</option>
+            <option value="eq">Equals</option>
+            <option value="neq">Doesn&apos;t equal</option>
+            <option value="contains">Contains</option>
+            <option value="not_contains">Doesn&apos;t contain</option>
+            <option value="gt">Greater than (number)</option>
+            <option value="lt">Less than (number)</option>
+          </select>
+          {op !== "set" && op !== "not_set" ? (
+            <Input aria-label="Value" placeholder="Value" value={rule.value ?? ""} onChange={(event) => onChange({ ...rule, value: event.target.value })} />
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
 function ConditionEditor({
   data,
   customFields,
@@ -1304,71 +1396,58 @@ function ConditionEditor({
   tagNames: string[];
   onChange: (data: Extract<CanvasNodeData, { kind: "condition" }>) => void;
 }) {
+  const extra = data.extra ?? [];
+  const setExtra = (next: ConditionRule[]) => onChange({ ...data, extra: next, match: data.match ?? "all" });
   return (
     <div className="space-y-3">
-      <div className="space-y-1">
-        <Label>Check</Label>
-        <select
-          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-          value={data.check}
-          onChange={(event) => {
-            const value = event.target.value;
-            onChange({
-              ...data,
-              check: value === "field" ? "field" : value === "subscription" ? "subscription" : "tag",
-            });
-          }}
-        >
-          <option value="tag">Has tag</option>
-          <option value="subscription">Subscribed to list</option>
-          <option value="field">Field value</option>
-        </select>
-      </div>
-      {data.check === "tag" || data.check === "subscription" ? (
-        <div className="space-y-1">
-          <Label>{data.check === "subscription" ? "List name" : "Tag name"}</Label>
-          <Input
-            list="relay-condition-tags"
-            value={data.tagName}
-            onChange={(event) => onChange({ ...data, tagName: event.target.value })}
-          />
-          <datalist id="relay-condition-tags">
-            {tagNames.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
-        </div>
-      ) : (
-        <>
-          <FieldSelect
-            field={data.field}
-            customFields={customFields}
-            onChange={(field) => onChange({ ...data, field })}
-          />
-          <div className="space-y-1">
-            <Label>Operator</Label>
+      <RuleEditor
+        rule={data}
+        customFields={customFields}
+        tagNames={tagNames}
+        onChange={(rule) =>
+          onChange({
+            ...data,
+            check: rule.check,
+            tagName: rule.tagName ?? data.tagName,
+            field: rule.field ?? data.field,
+            op: rule.op ?? "set",
+            value: rule.value ?? data.value,
+          })
+        }
+      />
+      {extra.map((rule, index) => (
+        <div key={index} className="space-y-2 border-t border-border pt-3">
+          <div className="flex items-center justify-between">
             <select
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-              value={data.op}
-              onChange={(event) => onChange({ ...data, op: event.target.value as ConditionOp })}
+              aria-label="Combine rules"
+              className="rounded-md border border-input bg-background px-2 py-1 text-xs font-medium uppercase"
+              value={data.match ?? "all"}
+              onChange={(event) => onChange({ ...data, match: event.target.value === "any" ? "any" : "all" })}
             >
-              <option value="set">Is set</option>
-              <option value="eq">Equals</option>
-              <option value="contains">Contains</option>
+              <option value="all">And</option>
+              <option value="any">Or</option>
             </select>
+            <Button type="button" size="icon-sm" variant="ghost" aria-label="Remove rule" onClick={() => setExtra(extra.filter((_, i) => i !== index))}>
+              ×
+            </Button>
           </div>
-          {data.op !== "set" ? (
-            <div className="space-y-1">
-              <Label>Value</Label>
-              <Input
-                value={data.value}
-                onChange={(event) => onChange({ ...data, value: event.target.value })}
-              />
-            </div>
-          ) : null}
-        </>
-      )}
-      <p className="text-[11px] text-muted-foreground">Connect the Yes and No handles to the next steps.</p>
+          <RuleEditor
+            rule={rule}
+            customFields={customFields}
+            tagNames={tagNames}
+            onChange={(next) => setExtra(extra.map((item, i) => (i === index ? next : item)))}
+          />
+        </div>
+      ))}
+      {extra.length < 9 ? (
+        <Button type="button" size="xs" variant="outline" onClick={() => setExtra([...extra, { check: "tag", tagName: "", op: "set" }])}>
+          + Add rule
+        </Button>
+      ) : null}
+      <p className="text-[11px] text-muted-foreground">
+        {extra.length > 0 ? (data.match === "any" ? "Yes when any rule matches. " : "Yes when every rule matches. ") : ""}
+        Connect the Yes and No handles to the next steps.
+      </p>
     </div>
   );
 }

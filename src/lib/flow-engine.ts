@@ -12,6 +12,7 @@ import { stepButtons } from "@/lib/types";
 import type {
   CaptureField,
   ConditionOp,
+  ConditionRule,
   ContactRecord,
   FlowButton,
   FlowDefinition,
@@ -20,6 +21,7 @@ import type {
   FlowStep,
   InboundEvent,
   OutboundReply,
+  SetFieldMode,
   TriggerType,
 } from "@/lib/types";
 
@@ -141,27 +143,50 @@ function contactFieldValue(contact: ContactRecord, field: CaptureField): string 
   return contact.customFields[field.slice("custom:".length)] ?? "";
 }
 
+export function evaluateRule(contact: ContactRecord, rule: ConditionRule): boolean {
+  if (rule.check === "tag" || rule.check === "subscription") {
+    const name = (rule.tagName ?? "").trim().toLowerCase();
+    let has: boolean;
+    if (rule.check === "tag") has = name.length > 0 && contact.tags.some((tag) => tag.toLowerCase() === name);
+    else if (!name || name === "all") has = !contact.unsubscribed;
+    else has = (contact.subscriptions ?? []).some((item) => item.toLowerCase() === name);
+    return rule.op === "not_set" ? !has : has;
+  }
+  const field = rule.field ?? "email";
+  const raw = contactFieldValue(contact, field);
+  const op: ConditionOp = rule.op ?? "set";
+  if (op === "set") return raw.trim().length > 0;
+  if (op === "not_set") return raw.trim().length === 0;
+  const expected = (rule.value ?? "").trim().toLowerCase();
+  const actual = raw.trim().toLowerCase();
+  if (op === "gt" || op === "lt") {
+    const a = Number(actual);
+    const b = Number(expected);
+    if (!actual || !expected || !Number.isFinite(a) || !Number.isFinite(b)) return false;
+    return op === "gt" ? a > b : a < b;
+  }
+  if (op === "contains") return expected.length > 0 && actual.includes(expected);
+  if (op === "not_contains") return expected.length === 0 || !actual.includes(expected);
+  if (op === "neq") return actual !== expected;
+  return expected.length > 0 && actual === expected;
+}
+
+/** All rules (or any, with match: "any"). The step's own check is the first rule. */
 export function evaluateCondition(
   contact: ContactRecord,
   step: Extract<FlowStep, { type: "condition" }>,
 ): boolean {
-  if (step.check === "tag") {
-    const name = (step.tagName ?? "").trim().toLowerCase();
-    return name.length > 0 && contact.tags.some((tag) => tag.toLowerCase() === name);
-  }
-  if (step.check === "subscription") {
-    const name = (step.tagName ?? "").trim().toLowerCase();
-    if (!name || name === "all") return !contact.unsubscribed;
-    return (contact.subscriptions ?? []).some((item) => item.toLowerCase() === name);
-  }
-  const field = step.field ?? "email";
-  const raw = contactFieldValue(contact, field);
-  const op: ConditionOp = step.op ?? "set";
-  if (op === "set") return raw.trim().length > 0;
-  const expected = (step.value ?? "").trim().toLowerCase();
-  const actual = raw.trim().toLowerCase();
-  if (op === "contains") return expected.length > 0 && actual.includes(expected);
-  return expected.length > 0 && actual === expected;
+  const rules: ConditionRule[] = [step, ...(step.extra ?? [])];
+  return step.match === "any" ? rules.some((rule) => evaluateRule(contact, rule)) : rules.every((rule) => evaluateRule(contact, rule));
+}
+
+/** Set field with add/subtract: numbers only; a blank or non-numeric current value counts as 0. */
+export function nextFieldValue(current: string, value: string, mode: SetFieldMode | undefined): string {
+  if (!mode || mode === "set") return value;
+  const base = Number(current.trim() || "0");
+  const delta = Number(value.trim() || "0");
+  const result = (Number.isFinite(base) ? base : 0) + (mode === "subtract" ? -1 : 1) * (Number.isFinite(delta) ? delta : 0);
+  return String(Math.round(result * 1e6) / 1e6);
 }
 
 function applySubscribe(
@@ -361,7 +386,7 @@ export function executeFrom(
     if (step.type === "set_field") {
       try {
         const field = parseCaptureField(step.field);
-        nextContact = assignFieldValue(nextContact, field, step.value ?? "");
+        nextContact = assignFieldValue(nextContact, field, nextFieldValue(contactFieldValue(nextContact, field), step.value ?? "", step.mode));
       } catch {
         // Unknown field keys are ignored so a bad step does not stall Telegram.
       }
