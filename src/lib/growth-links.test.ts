@@ -97,3 +97,27 @@ describe("growth links", () => {
     expect(contact.telegramUserId).toBe("9");
   });
 });
+
+describe("Zernio entry links", () => {
+  it("builds a ref link per DM network and skips the rest", async () => {
+    const { zernioEntryLinks } = await import("@/lib/growth");
+    expect(
+      zernioEntryLinks(
+        [
+          { platform: "instagram", username: "hi.studio" },
+          { platform: "facebook", username: "histudio" },
+          { platform: "whatsapp", username: "+1 (555) 010-9999" },
+          { platform: "telegram", username: "@relay_bot" },
+          { platform: "tiktok", username: "histudio" },
+          { platform: "instagram", username: null },
+        ],
+        "spring sale",
+      ).map((entry) => entry.url),
+    ).toEqual([
+      "https://ig.me/m/hi.studio?ref=spring%20sale",
+      "https://m.me/histudio?ref=spring%20sale",
+      "https://wa.me/15550109999?text=spring%20sale",
+      "https://t.me/relay_bot?start=spring%20sale",
+    ]);
+  });
+});

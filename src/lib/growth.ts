@@ -17,6 +17,8 @@ export type GrowthLinkView = {
   clickCount: number;
   startCount: number;
   telegramUrl: string | null;
+  /** Zernio accounts: one deep link per DM network. */
+  entries?: EntryLink[];
   shortUrl: string;
   qrUrl: string;
   createdAt?: string | Date;
@@ -81,6 +83,33 @@ export function channelStartUrl(
   return null;
 }
 
+export type EntryLink = { platform: string; label: string; handle: string; url: string };
+
+const ENTRY_LABEL: Record<string, string> = { instagram: "Instagram", facebook: "Messenger", whatsapp: "WhatsApp", telegram: "Telegram" };
+
+/**
+ * Deep links into each DM network a Zernio workspace reaches, all carrying the growth-link ref.
+ * Networks without a public "open a DM with a ref" URL are left out.
+ */
+export function zernioEntryLinks(accounts: { platform: string; username: string | null }[], slug: string): EntryLink[] {
+  const ref = encodeURIComponent(slug);
+  const links: EntryLink[] = [];
+  for (const account of accounts) {
+    const handle = (account.username ?? "").replace(/^@/, "");
+    if (!handle) continue;
+    let url: string | null = null;
+    if (account.platform === "instagram") url = `https://ig.me/m/${encodeURIComponent(handle)}?ref=${ref}`;
+    if (account.platform === "facebook") url = `https://m.me/${encodeURIComponent(handle)}?ref=${ref}`;
+    if (account.platform === "telegram") url = `https://t.me/${encodeURIComponent(handle)}?start=${ref}`;
+    if (account.platform === "whatsapp") {
+      const phone = handle.replace(/[^\d]/g, "");
+      url = phone ? `https://wa.me/${phone}?text=${ref}` : null;
+    }
+    if (url) links.push({ platform: account.platform, label: ENTRY_LABEL[account.platform] ?? account.platform, handle, url });
+  }
+  return links;
+}
+
 export function growthRedirectPath(slug: string): string {
   return `/go/${encodeURIComponent(slug)}`;
 }
@@ -110,19 +139,27 @@ export function nextShareSlug(preferred: string, taken: Iterable<string>): strin
 
 export function presentGrowthLink<T extends { slug: string }>(
   row: T,
-  input: { telegramUsername?: string | null; channel?: string | null; externalAccountId?: string | null; origin?: string | null },
+  input: {
+    telegramUsername?: string | null;
+    channel?: string | null;
+    externalAccountId?: string | null;
+    origin?: string | null;
+    linkedAccounts?: { platform: string; username: string | null }[];
+  },
 ) {
   /** Kept under its historical name; it is the channel's deep link (t.me, m.me, ig.me, or wa.me). */
-  const telegramUrl = channelStartUrl(
-    { channel: input.channel, handle: input.telegramUsername, externalAccountId: input.externalAccountId },
-    row.slug,
-  );
+  const entries = input.channel === "zernio" ? zernioEntryLinks(input.linkedAccounts ?? [], row.slug) : [];
+  const telegramUrl =
+    input.channel === "zernio"
+      ? (entries[0]?.url ?? null)
+      : channelStartUrl({ channel: input.channel, handle: input.telegramUsername, externalAccountId: input.externalAccountId }, row.slug);
   const redirectPath = growthRedirectPath(row.slug);
   const origin = input.origin?.replace(/\/$/, "") ?? "";
   const shortUrl = origin ? `${origin}${redirectPath}` : redirectPath;
   return {
     ...row,
     telegramUrl,
+    entries,
     shortUrl,
     qrUrl: qrImageUrl(shortUrl),
   };

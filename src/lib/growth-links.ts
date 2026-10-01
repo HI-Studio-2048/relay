@@ -84,7 +84,7 @@ export async function listGrowthLinks(botId: string, options?: { origin?: string
 
   const origin = options?.origin ?? process.env.PUBLIC_URL?.replace(/\/$/, "") ?? "";
   return rows.map((row) =>
-    presentGrowthLink(row, { telegramUsername: bot?.telegramUsername, channel: bot?.channel, externalAccountId: bot?.externalAccountId, origin }),
+    presentGrowthLink(row, { telegramUsername: bot?.telegramUsername, channel: bot?.channel, externalAccountId: bot?.externalAccountId, origin, linkedAccounts: linkedOf(bot) }),
   );
 }
 
@@ -152,9 +152,13 @@ export async function presentStoredGrowthLink(
   const db = await getDb();
   const [bot] = await db.select().from(bots).where(eq(bots.id, row.botId)).limit(1);
   const origin = options?.origin ?? process.env.PUBLIC_URL?.replace(/\/$/, "") ?? "";
-  return presentGrowthLink(row, { telegramUsername: bot?.telegramUsername, channel: bot?.channel, externalAccountId: bot?.externalAccountId, origin });
+  return presentGrowthLink(row, { telegramUsername: bot?.telegramUsername, channel: bot?.channel, externalAccountId: bot?.externalAccountId, origin, linkedAccounts: linkedOf(bot) });
 }
 
 export function originFromRequest(request: Request): string {
   return publicUrl(request.url) ?? "";
+}
+
+function linkedOf(bot: { settings?: Record<string, unknown> | null } | null | undefined) {
+  return (bot?.settings?.zernioAccounts as { platform: string; username: string | null }[] | undefined) ?? [];
 }
