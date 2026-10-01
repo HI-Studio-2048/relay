@@ -148,14 +148,14 @@ export default async function OverviewPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <CanvasCard className="space-y-3 p-4 lg:col-span-2">
+        <CanvasCard className="min-w-0 space-y-3 p-4 lg:col-span-2">
           <div className="flex items-baseline justify-between">
             <p className="font-heading text-[15px] text-[#1b1f24]">New contacts</p>
             <p className="text-[12px] text-[#6b7280]">{data.newInPeriod.toLocaleString()} in the last 30 days</p>
           </div>
           <DailyColumns data={data.series} label="new contacts" />
         </CanvasCard>
-        <CanvasCard className="space-y-3 p-4">
+        <CanvasCard className="min-w-0 space-y-3 p-4">
           <p className="font-heading text-[15px] text-[#1b1f24]">Where people come from</p>
           {data.platforms.length === 0 ? (
             <p className="text-[13px] text-[#6b7280]">No contacts yet.</p>
@@ -166,7 +166,7 @@ export default async function OverviewPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <CanvasCard className="space-y-2 p-4">
+        <CanvasCard className="min-w-0 space-y-2 p-4">
           <div className="flex items-baseline justify-between">
             <p className="font-heading text-[15px] text-[#1b1f24]">Top flows · 30 days</p>
             <Link href="/flows" className="text-[12px] text-[#0084ff] hover:underline">
@@ -186,22 +186,22 @@ export default async function OverviewPage() {
               .
             </p>
           ) : (
-            <table className="w-full text-[13px]">
+            <table className="w-full table-fixed text-[13px]">
               <thead>
                 <tr className="text-left text-[11px] font-semibold tracking-wide text-[#8b95a1] uppercase">
                   <th className="py-1.5">Flow</th>
-                  <th className="py-1.5 text-right">Runs</th>
-                  <th className="py-1.5 text-right">CTR</th>
-                  <th className="py-1.5 text-right">Done</th>
+                  <th className="w-14 py-1.5 text-right">Runs</th>
+                  <th className="w-14 py-1.5 text-right">CTR</th>
+                  <th className="w-14 py-1.5 text-right">Done</th>
                 </tr>
               </thead>
               <tbody>
                 {data.topFlows.map((flow) => (
                   <tr key={flow.id} className="border-t border-[#f0f2f4]">
                     <td className="py-2">
-                      <Link href={`/flows/${flow.id}`} className="flex items-center gap-2 text-[#1b1f24] hover:underline">
-                        <Workflow className="size-3.5 text-[#0084ff]" />
-                        {flow.name}
+                      <Link href={`/flows/${flow.id}`} className="flex min-w-0 items-center gap-2 text-[#1b1f24] hover:underline">
+                        <Workflow className="size-3.5 shrink-0 text-[#0084ff]" />
+                        <span className="truncate">{flow.name}</span>
                       </Link>
                     </td>
                     <td className="py-2 text-right tabular-nums">{flow.stats.runs}</td>
@@ -214,7 +214,7 @@ export default async function OverviewPage() {
           )}
         </CanvasCard>
 
-        <CanvasCard className="space-y-2 p-4">
+        <CanvasCard className="min-w-0 space-y-2 p-4">
           <div className="flex items-baseline justify-between">
             <p className="font-heading text-[15px] text-[#1b1f24]">Latest conversations</p>
             <Link href="/inbox" className="text-[12px] text-[#0084ff] hover:underline">

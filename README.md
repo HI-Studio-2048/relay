@@ -138,7 +138,9 @@ On a **Message**, **Image / GIF**, or **Buttons** node, upload or drop a JPEG/PN
 3. With `PUBLIC_URL` set, Relay registers `POST /api/zernio/webhook/<id>` for `message.received`, `comment.received` and `referral.received`, signed with its own secret (`X-Zernio-Signature`, HMAC-SHA256). Retries are deduped by `X-Zernio-Event-Id`.
 4. Contacts remember their network, Zernio account and conversation, so flows, broadcasts, sequences and Live Chat reply in the right thread. Buttons render natively where the network supports them and as numbered text elsewhere.
 
-Instagram and Facebook allow one private reply to a comment until the person answers, so a comment flow's first message should carry a button; the rest of the flow continues from the tap. Meta channels only deliver free-form messages inside the 24-hour window — use the **Last message within 24 hours** broadcast condition.
+Instagram and Facebook allow one private reply to a comment until the person answers, so a comment flow's first message should carry a button (Relay adds a **Continue** button when it has none); the rest of the flow continues from the tap.
+
+When `ADMIN_PASSWORD` is set, Meta webhooks must be signed: add the app secret when connecting Instagram, Messenger or WhatsApp directly. Meta channels only deliver free-form messages inside the 24-hour window — use the **Last message within 24 hours** broadcast condition.
 
 ## AI
 
