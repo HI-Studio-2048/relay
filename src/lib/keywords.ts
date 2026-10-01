@@ -59,3 +59,30 @@ export function compareKeywordPriority(
   const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
   return aTime - bTime;
 }
+
+export type KeywordRuleFlow = {
+  id: string;
+  name: string;
+  triggerType: string;
+  triggerValue: string | null;
+  isActive: boolean;
+};
+
+/**
+ * Keywords another flow steals: someone typing just that word gets a flow higher in the list instead.
+ * `flows` must be in priority order (first wins).
+ */
+export function shadowedKeywords(flows: KeywordRuleFlow[]) {
+  const active = flows.filter((flow) => flow.isActive && isKeywordTrigger(flow.triggerType));
+  const found: { flowId: string; keyword: string; byFlowId: string; byName: string }[] = [];
+  active.forEach((flow, index) => {
+    if (flow.triggerType === "keyword_not_contains") return;
+    for (const keyword of parseKeywordList(flow.triggerValue)) {
+      const winner = active
+        .slice(0, index)
+        .find((earlier) => matchesKeywordRule(earlier.triggerType as KeywordTriggerType, keyword, parseKeywordList(earlier.triggerValue)));
+      if (winner) found.push({ flowId: flow.id, keyword, byFlowId: winner.id, byName: winner.name });
+    }
+  });
+  return found;
+}

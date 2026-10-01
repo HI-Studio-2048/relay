@@ -30,7 +30,11 @@ export default async function KeywordsPage() {
   }
 
   const db = await getDb();
-  const rows = (await db.select().from(flows).where(eq(flows.botId, bot.id)))
+  const all = await db.select().from(flows).where(eq(flows.botId, bot.id));
+  const others = all
+    .filter((flow) => !isKeywordTrigger(flow.triggerType) && flow.isActive)
+    .map((flow) => ({ id: flow.id, name: flow.name, triggerType: flow.triggerType, triggerValue: flow.triggerValue, isActive: flow.isActive, priority: flow.priority ?? 0 }));
+  const rows = all
     .filter((flow) => isKeywordTrigger(flow.triggerType))
     .sort(compareKeywordPriority)
     .map((flow) => ({
@@ -49,9 +53,9 @@ export default async function KeywordsPage() {
         icon={MessageSquareText}
         tone="content"
         title="Keywords"
-        description="Five Telegram rules from ManyChat Help: Message is, contains, whole word, begins with, and doesn't contain. Thumbs Up is Messenger-only. Top of the list wins when several keywords match."
+        description="DM keyword rules: message is, contains, whole word, begins with, and doesn't contain. Top of the list wins when several match — test a message below and Relay flags keywords another flow steals."
       />
-      <KeywordsBoard botId={bot.id} initial={rows} />
+      <KeywordsBoard botId={bot.id} initial={rows} others={others} />
       {rows.length === 0 ? (
         <EmptyState
           icon={MessageSquareText}

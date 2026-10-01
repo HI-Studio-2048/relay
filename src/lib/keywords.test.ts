@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareKeywordPriority, matchesKeywordRule, parseKeywordList } from "@/lib/keywords";
+import { compareKeywordPriority, matchesKeywordRule, parseKeywordList, shadowedKeywords } from "@/lib/keywords";
 import { chooseRandomizerPath, delaySecondsFromUnit, nextResumeAt } from "@/lib/smart-delay";
 import { matchFlowTrigger, processInboundEvent, type FlowRecord } from "@/lib/flow-engine";
 import type { ContactRecord } from "@/lib/types";
@@ -120,5 +120,20 @@ describe("welcome once and randomizer / smart delay", () => {
     const due = nextResumeAt(new Date(2026, 8, 6, 23, 0, 0).getTime(), 0, "09:00", "21:00");
     expect(due.getHours()).toBe(9);
     expect(due.getDate()).toBe(7);
+  });
+});
+
+describe("shadowed keywords", () => {
+  it("flags keywords a higher flow always catches", () => {
+    const flows = [
+      { id: "a", name: "Pricing", triggerType: "keyword_contains", triggerValue: "price", isActive: true },
+      { id: "b", name: "Price list", triggerType: "keyword", triggerValue: "price list, menu", isActive: true },
+      { id: "c", name: "Off", triggerType: "keyword_contains", triggerValue: "menu", isActive: false },
+      { id: "d", name: "Menu", triggerType: "keyword_word", triggerValue: "menu", isActive: true },
+    ];
+    expect(shadowedKeywords(flows)).toEqual([
+      { flowId: "b", keyword: "price list", byFlowId: "a", byName: "Pricing" },
+      { flowId: "d", keyword: "menu", byFlowId: "b", byName: "Price list" },
+    ]);
   });
 });
