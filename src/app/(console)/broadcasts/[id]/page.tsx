@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
-import { broadcasts } from "@/lib/db/schema";
+import { broadcastRecipients, broadcasts } from "@/lib/db/schema";
 import { describeCondition, sanitizeSegment, type Segment } from "@/lib/segments";
 import { BroadcastDetail } from "./broadcast-detail";
 
@@ -24,6 +24,13 @@ export default async function BroadcastDetailPage({
   const db = await getDb();
   const [broadcast] = await db.select().from(broadcasts).where(eq(broadcasts.id, id)).limit(1);
   if (!broadcast) notFound();
+  const waiting = broadcast.smartTiming
+    ? await db
+        .select({ sendAt: broadcastRecipients.sendAt })
+        .from(broadcastRecipients)
+        .where(and(eq(broadcastRecipients.broadcastId, id), eq(broadcastRecipients.status, "pending"), gt(broadcastRecipients.sendAt, new Date())))
+    : [];
+  const nextAt = waiting.reduce<Date | null>((min, row) => (row.sendAt && (!min || row.sendAt < min) ? row.sendAt : min), null);
   return (
     <BroadcastDetail
       notice={query.queued ? "queued" : query.scheduled ? "scheduled" : query.error}
@@ -39,6 +46,9 @@ export default async function BroadcastDetailPage({
         scheduledAt: broadcast.scheduledAt ? new Date(broadcast.scheduledAt).toISOString() : null,
         segment: describeSegment(sanitizeSegment(broadcast.segment)),
         isFlow: Boolean(broadcast.flowId),
+        smartTiming: broadcast.smartTiming,
+        waitingCount: waiting.length,
+        nextAt: nextAt ? nextAt.toISOString() : null,
       }}
     />
   );

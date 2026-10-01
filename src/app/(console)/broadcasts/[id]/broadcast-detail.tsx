@@ -26,6 +26,10 @@ export type BroadcastView = {
   /** Human summary of the segment conditions, if any. */
   segment?: string | null;
   isFlow?: boolean;
+  smartTiming?: boolean;
+  /** Smart timing: recipients still waiting for their usual hour. */
+  waitingCount?: number;
+  nextAt?: string | null;
 };
 
 export function BroadcastDetail({
@@ -52,6 +56,14 @@ export function BroadcastDetail({
       {broadcast.status === "scheduled" && broadcast.scheduledAt ? (
         <p className="rounded-lg bg-[#eef6ff] px-3 py-2 text-sm text-[#0b63c5]">
           Scheduled for {new Date(broadcast.scheduledAt).toLocaleString()}. The audience is worked out when it sends.
+        </p>
+      ) : null}
+      {broadcast.smartTiming ? (
+        <p className="rounded-lg bg-[#f5f3ff] px-3 py-2 text-sm text-[#5b21b6]">
+          Smart send time is on: each person gets it at the hour they usually message, within 24 hours.
+          {broadcast.waitingCount
+            ? ` ${broadcast.waitingCount} waiting for their hour${broadcast.nextAt ? ` (next at ${new Date(broadcast.nextAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})` : ""}.`
+            : ""}
         </p>
       ) : null}
       {broadcast.segment ? (
@@ -121,6 +133,16 @@ export function BroadcastDetail({
                 />
                 <input type="hidden" name="scheduledAt" value={scheduledIso} />
               </div>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" name="smartTiming" className="mt-1" />
+                <span>
+                  <span className="font-medium">Smart send time</span>
+                  <span className="block text-muted-foreground">
+                    Deliver to each person at the hour they usually message, within 24 hours of the send. People with no
+                    history get it right away.
+                  </span>
+                </span>
+              </label>
               <button
                 type="submit"
                 className={cn(buttonVariants({ variant: "destructive" }))}

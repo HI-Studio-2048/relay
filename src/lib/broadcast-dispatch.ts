@@ -1,6 +1,7 @@
-import { and, eq, inArray, lte } from "drizzle-orm";
+import { and, desc, eq, inArray, lte } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { broadcastRecipients, broadcasts } from "@/lib/db/schema";
+import { broadcastRecipients, broadcasts, messages } from "@/lib/db/schema";
+import { nextSendAt, preferredHour } from "@/lib/smart-timing";
 import { log } from "@/lib/logger";
 import { enqueueBroadcast } from "@/lib/queue";
 import { sanitizeSegment } from "@/lib/segments";
@@ -32,9 +33,16 @@ export async function materializeBroadcast(broadcastId: string, from: string[] =
     throw new EmptyAudienceError();
   }
 
+  const sendAt = claimed.smartTiming ? await smartSendTimes(audience.map((contact) => contact.id)) : new Map<string, Date>();
   await db.delete(broadcastRecipients).where(eq(broadcastRecipients.broadcastId, broadcastId));
   await db.insert(broadcastRecipients).values(
-    audience.map((contact) => ({ id: crypto.randomUUID(), broadcastId, contactId: contact.id, status: "pending" })),
+    audience.map((contact) => ({
+      id: crypto.randomUUID(),
+      broadcastId,
+      contactId: contact.id,
+      status: "pending",
+      sendAt: sendAt.get(contact.id) ?? null,
+    })),
   );
   const [updated] = await db
     .update(broadcasts)
@@ -43,6 +51,29 @@ export async function materializeBroadcast(broadcastId: string, from: string[] =
     .returning();
   await enqueueBroadcast({ kind: "broadcast", broadcastId });
   return updated!;
+}
+
+/** Each contact's next usual active hour (from their last 50 inbound messages); now when unknown. */
+async function smartSendTimes(contactIds: string[]) {
+  const db = await getDb();
+  const now = new Date();
+  const result = new Map<string, Date>();
+  for (let i = 0; i < contactIds.length; i += 500) {
+    const chunk = contactIds.slice(i, i + 500);
+    const rows = await db
+      .select({ contactId: messages.contactId, createdAt: messages.createdAt })
+      .from(messages)
+      .where(and(inArray(messages.contactId, chunk), eq(messages.direction, "inbound")))
+      .orderBy(desc(messages.createdAt));
+    const byContact = new Map<string, Date[]>();
+    for (const row of rows) {
+      const list = byContact.get(row.contactId) ?? [];
+      if (list.length < 50) list.push(new Date(row.createdAt));
+      byContact.set(row.contactId, list);
+    }
+    for (const id of chunk) result.set(id, nextSendAt(now, preferredHour(byContact.get(id) ?? [])));
+  }
+  return result;
 }
 
 /** Worker tick: release scheduled broadcasts whose time has come. */

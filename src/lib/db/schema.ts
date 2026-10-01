@@ -203,6 +203,8 @@ export const broadcasts = pgTable("broadcasts", {
   flowId: text("flow_id").references(() => flows.id, { onDelete: "set null" }),
   /** Confirmed broadcasts wait in "scheduled" until this time. */
   scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
+  /** Deliver to each person at their usual active hour within 24h. */
+  smartTiming: boolean("smart_timing").notNull().default(false),
   status: text("status").notNull().default("draft"),
   confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
   totalCount: integer("total_count").notNull().default(0),
@@ -226,6 +228,8 @@ export const broadcastRecipients = pgTable(
       .references(() => contacts.id, { onDelete: "cascade" }),
     status: text("status").notNull().default("pending"),
     error: text("error"),
+    /** Smart timing: not before this moment. */
+    sendAt: timestamp("send_at", { withTimezone: true }),
     sentAt: timestamp("sent_at", { withTimezone: true }),
   },
   (table) => [uniqueIndex("broadcast_recipients_unique").on(table.broadcastId, table.contactId)],

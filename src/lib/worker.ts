@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, lte } from "drizzle-orm";
 import { isBroadcastable } from "@/lib/broadcast";
 import { accountFromRow, channelTarget, sendChannelReply } from "@/lib/channels";
 import { getDb } from "@/lib/db";
@@ -18,7 +18,19 @@ import { processChannelUpdate } from "@/lib/webhook";
 type GlobalWorker = { relayWorkerStarted?: boolean };
 const globalForWorker = globalThis as unknown as GlobalWorker;
 
+const inFlight = new Set<string>();
+
 async function handleBroadcast(broadcastId: string) {
+  if (inFlight.has(broadcastId)) return;
+  inFlight.add(broadcastId);
+  try {
+    await sendBroadcast(broadcastId);
+  } finally {
+    inFlight.delete(broadcastId);
+  }
+}
+
+async function sendBroadcast(broadcastId: string) {
   const db = await getDb();
   const [broadcast] = await db.select().from(broadcasts).where(eq(broadcasts.id, broadcastId)).limit(1);
   if (!broadcast) return;
@@ -40,9 +52,15 @@ async function handleBroadcast(broadcastId: string) {
 
   let sentCount = broadcast.sentCount;
   let failedCount = broadcast.failedCount;
+  let waiting = 0;
 
   for (const recipient of recipients) {
     if (recipient.status !== "pending") continue;
+    if (recipient.sendAt && recipient.sendAt.getTime() > Date.now()) {
+      // Smart timing: their usual hour has not come yet; a later tick picks them up.
+      waiting += 1;
+      continue;
+    }
     try {
       const [contact] = await db.select().from(contacts).where(eq(contacts.id, recipient.contactId)).limit(1);
       if (!contact) throw new Error("Contact missing");
@@ -97,6 +115,7 @@ async function handleBroadcast(broadcastId: string) {
       .where(eq(broadcasts.id, broadcastId));
   }
 
+  if (waiting > 0) return;
   const status = failedCount > 0 && sentCount === 0 ? "failed" : "sent";
   await db
     .update(broadcasts)
@@ -116,6 +135,28 @@ async function handleJob(job: Job) {
   if (job.kind === "broadcast") {
     await handleBroadcast(job.broadcastId);
   }
+}
+
+let lastSmartCheck = 0;
+
+/** Smart-timing broadcasts stay "sending" for up to a day; send whoever's hour has come. */
+async function releaseSmartRecipients() {
+  if (Date.now() - lastSmartCheck < 30_000) return;
+  lastSmartCheck = Date.now();
+  const db = await getDb();
+  const due = await db
+    .selectDistinct({ id: broadcasts.id })
+    .from(broadcasts)
+    .innerJoin(broadcastRecipients, eq(broadcastRecipients.broadcastId, broadcasts.id))
+    .where(
+      and(
+        eq(broadcasts.status, "sending"),
+        eq(broadcasts.smartTiming, true),
+        eq(broadcastRecipients.status, "pending"),
+        lte(broadcastRecipients.sendAt, new Date()),
+      ),
+    );
+  for (const row of due) await handleBroadcast(row.id);
 }
 
 export async function drainJobs(max = 25) {
@@ -138,6 +179,7 @@ export function startWorker() {
     try {
       await releaseDueBroadcasts();
       await drainJobs();
+      await releaseSmartRecipients();
       await resumeDueDelays();
       await resumeDueSequences();
     } catch (error) {
