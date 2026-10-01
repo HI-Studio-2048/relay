@@ -25,6 +25,7 @@ export default async function FlowsPage() {
           triggerType: flow.triggerType,
           triggerValue: flow.triggerValue,
           isActive: flow.isActive,
+          folder: flow.folder ?? null,
           updatedAt: new Date(flow.updatedAt).toISOString(),
           stats: stats[flow.id] ?? null,
         }))}

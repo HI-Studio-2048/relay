@@ -28,8 +28,10 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
       triggerValue?: string | null;
       isActive?: boolean;
       priority?: number;
+      folder?: string | null;
       definition?: FlowDefinition;
     }>(request);
+    const folderOnly = Object.keys(body).length === 1 && body.folder !== undefined;
     const db = await getDb();
     // Keep the version being replaced (definition / trigger edits only), newest 20 per flow.
     const [before] = await db.select().from(flows).where(eq(flows.id, id)).limit(1);
@@ -66,7 +68,8 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
         ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
         ...(body.priority !== undefined ? { priority: body.priority } : {}),
         ...(body.definition ? { definition: body.definition } : {}),
-        updatedAt: new Date(),
+        ...(body.folder !== undefined ? { folder: typeof body.folder === "string" && body.folder.trim() ? body.folder.trim().slice(0, 60) : null } : {}),
+        ...(folderOnly ? {} : { updatedAt: new Date() }),
       })
       .where(eq(flows.id, id))
       .returning();

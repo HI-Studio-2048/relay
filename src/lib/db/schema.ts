@@ -138,6 +138,8 @@ export const flows = pgTable("flows", {
   triggerValue: text("trigger_value"),
   isActive: boolean("is_active").notNull().default(true),
   priority: integer("priority").notNull().default(0),
+  /** Folder name on the Flows board; null = unfiled. */
+  folder: text("folder"),
   definition: jsonb("definition").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

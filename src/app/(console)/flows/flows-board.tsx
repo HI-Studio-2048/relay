@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { LayoutTemplate, Plus, Search, Sparkles, Workflow } from "lucide-react";
+import { Folder, LayoutTemplate, Plus, Search, Sparkles, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/chrome/page-header";
 import { PlatformDot } from "@/components/chrome/platform-badge";
@@ -31,6 +31,7 @@ type FlowRow = {
   triggerType: string;
   triggerValue: string | null;
   isActive: boolean;
+  folder: string | null;
   updatedAt: string;
   stats: FlowStats | null;
 };
@@ -80,6 +81,11 @@ export function FlowsBoard({ botId, flows }: { botId: string; flows: FlowRow[] }
   const router = useRouter();
   const [rows, setRows] = useState(flows);
   const [group, setGroup] = useState("all");
+  const [folder, setFolder] = useState<string>("*");
+  const folders = useMemo(
+    () => [...new Set(rows.map((flow) => flow.folder).filter((name): name is string => Boolean(name)))].sort((a, b) => a.localeCompare(b)),
+    [rows],
+  );
   const [query, setQuery] = useState("");
   const [showTemplates, setShowTemplates] = useState(flows.length < 3);
   const [busy, setBusy] = useState(false);
@@ -88,9 +94,28 @@ export function FlowsBoard({ botId, flows }: { botId: string; flows: FlowRow[] }
     const needle = query.trim().toLowerCase();
     const match = GROUPS.find((item) => item.value === group)!.match;
     return rows.filter(
-      (flow) => match(flow.triggerType) && (!needle || flow.name.toLowerCase().includes(needle) || (flow.triggerValue ?? "").toLowerCase().includes(needle)),
+      (flow) =>
+        match(flow.triggerType) &&
+        (folder === "*" || (folder === "" ? !flow.folder : flow.folder === folder)) &&
+        (!needle || flow.name.toLowerCase().includes(needle) || (flow.triggerValue ?? "").toLowerCase().includes(needle)),
     );
-  }, [rows, group, query]);
+  }, [rows, group, query, folder]);
+
+  const moveToFolder = async (flow: FlowRow, choice: string) => {
+    let next: string | null = choice || null;
+    if (choice === "__new") {
+      const name = window.prompt("New folder name")?.trim();
+      if (!name) return;
+      next = name.slice(0, 60);
+    }
+    setRows((current) => current.map((item) => (item.id === flow.id ? { ...item, folder: next } : item)));
+    try {
+      await api(`/api/flows/${flow.id}`, { method: "PATCH", body: JSON.stringify({ folder: next }) });
+    } catch (error) {
+      setRows((current) => current.map((item) => (item.id === flow.id ? { ...item, folder: flow.folder } : item)));
+      toast.error(error instanceof Error ? error.message : "Could not move");
+    }
+  };
 
   const totals = useMemo(
     () =>
@@ -230,6 +255,29 @@ export function FlowsBoard({ botId, flows }: { botId: string; flows: FlowRow[] }
         </div>
       </div>
 
+      {folders.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Folder className="size-3.5 text-[#8b95a1]" />
+          {[
+            { value: "*", label: "All folders", count: rows.length },
+            ...folders.map((name) => ({ value: name, label: name, count: rows.filter((flow) => flow.folder === name).length })),
+            { value: "", label: "Unfiled", count: rows.filter((flow) => !flow.folder).length },
+          ].map((item) => (
+            <button
+              key={item.value || "unfiled"}
+              type="button"
+              onClick={() => setFolder(item.value)}
+              className={cn(
+                "rounded-lg px-2.5 py-1 text-[12px]",
+                folder === item.value ? "bg-[#eef6ff] font-medium text-[#0b63c5] ring-1 ring-[#0084ff]/30" : "text-[#6b7280] hover:bg-white",
+              )}
+            >
+              {item.label} <span className="tabular-nums opacity-70">{item.count}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       {visible.length === 0 ? (
         <p className="rounded-2xl bg-white px-4 py-8 text-center text-[13px] text-[#6b7280] ring-1 ring-[#e5e7eb]">
           {rows.length === 0 ? "No flows yet — start from a template above." : "No flows match."}
@@ -244,6 +292,7 @@ export function FlowsBoard({ botId, flows }: { botId: string; flows: FlowRow[] }
                 <th className="px-3 py-2.5 text-right">CTR</th>
                 <th className="px-3 py-2.5 text-right">Completed</th>
                 <th className="px-3 py-2.5 text-right">Goals</th>
+                <th className="px-3 py-2.5">Folder</th>
                 <th className="px-4 py-2.5 text-right">On</th>
               </tr>
             </thead>
@@ -268,6 +317,22 @@ export function FlowsBoard({ botId, flows }: { botId: string; flows: FlowRow[] }
                     ) : (
                       "—"
                     )}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <select
+                      aria-label={`Folder for ${flow.name}`}
+                      value={flow.folder ?? ""}
+                      onChange={(event) => void moveToFolder(flow, event.target.value)}
+                      className="field-sizing-content max-w-[9rem] rounded-md border border-transparent bg-transparent px-1 py-0.5 text-[12px] text-[#6b7280] hover:border-[#e5e7eb]"
+                    >
+                      <option value="">—</option>
+                      {folders.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                      <option value="__new">New folder…</option>
+                    </select>
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     <button
