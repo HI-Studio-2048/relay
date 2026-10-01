@@ -87,7 +87,7 @@ describe("Messenger / Instagram adapter", () => {
     expect(events).toEqual([
       { externalUserId: "u1", text: "hello", callbackData: null, externalMessageId: "m1", referral: null },
       { externalUserId: "u2", text: "Yes", callbackData: null, externalMessageId: "m3", referral: null },
-      { externalUserId: "u3", text: null, callbackData: "n:pricing", referral: null },
+      { externalUserId: "u3", text: null, callbackData: "n:pricing", callbackTitle: "Pricing", referral: null },
       { externalUserId: "u4", text: "/start promo", callbackData: null, referral: "promo" },
       { externalUserId: "u5", text: "/start spring", referral: "spring" },
     ]);

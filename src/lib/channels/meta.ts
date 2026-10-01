@@ -231,7 +231,7 @@ export function parseMetaWebhook(payload: MetaWebhookPayload): NormalizedInbound
           externalUserId: sender,
           text: isStart ? (ref ? `/start ${ref}` : "/start") : postback.startsWith("n:") ? null : event.postback?.title ?? null,
           callbackData: postback.startsWith("n:") ? postback : null,
-          callbackTitle: event.postback?.title ?? null,
+          ...(postback.startsWith("n:") && event.postback?.title ? { callbackTitle: event.postback.title } : {}),
           referral: ref,
         });
         continue;
