@@ -254,4 +254,14 @@ CREATE TABLE IF NOT EXISTS webhook_subscriptions (
   last_delivered_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS team_members (
+  id text PRIMARY KEY,
+  name text NOT NULL,
+  email text,
+  color text NOT NULL DEFAULT '#0084FF',
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS assigned_to text;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS author text;
 `;

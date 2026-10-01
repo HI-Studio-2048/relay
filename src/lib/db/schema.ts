@@ -63,6 +63,8 @@ export const contacts = pgTable(
     avatarUrl: text("avatar_url"),
     /** Live Chat takeover: automation stays quiet for this person until then (or until resumed). */
     botPausedUntil: timestamp("bot_paused_until", { withTimezone: true }),
+    /** Live Chat assignee (team_members.id). */
+    assignedTo: text("assigned_to"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -166,6 +168,8 @@ export const messages = pgTable("messages", {
   source: text("source").notNull(),
   body: text("body").notNull(),
   telegramMessageId: text("telegram_message_id"),
+  /** Team member who wrote an agent reply. */
+  author: text("author"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -346,6 +350,15 @@ export const webhookSubscriptions = pgTable("webhook_subscriptions", {
   lastStatus: integer("last_status"),
   lastError: text("last_error"),
   lastDeliveredAt: timestamp("last_delivered_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** People who answer in Live Chat. App-wide (one login), picked per browser. */
+export const teamMembers = pgTable("team_members", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email"),
+  color: text("color").notNull().default("#0084FF"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

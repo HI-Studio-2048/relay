@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useBot } from "@/components/bot-provider";
 import { ContactAvatar } from "@/components/chrome/avatar";
 import { PlatformBadge } from "@/components/chrome/platform-badge";
+import { useTeam } from "@/components/use-team";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client";
 import { displayName } from "@/lib/lead-capture";
@@ -19,6 +20,7 @@ type Message = {
   source: string;
   body: string;
   createdAt: string;
+  author?: string | null;
 };
 
 type Automation = { status: "active" | "paused" | "completed" | "idle"; flowId: string | null; flowName: string | null };
@@ -40,7 +42,7 @@ const EVENT_PREFIX = /^\[(comment|story reply|public reply|mentioned you in thei
 function SourceLabel({ message }: { message: Message }) {
   if (message.direction === "inbound") return null;
   const label =
-    message.source === "agent" ? "You" : message.source === "broadcast" ? "Broadcast" : message.source === "ai" ? "AI" : "Bot";
+    message.source === "agent" ? message.author ?? "Team" : message.source === "broadcast" ? "Broadcast" : message.source === "ai" ? "AI" : "Bot";
   return <span className="font-medium">{label}</span>;
 }
 
@@ -135,6 +137,8 @@ export function ThreadView({
   const [newTag, setNewTag] = useState("");
   const [assist, setAssist] = useState<Assist | null>(null);
   const [assisting, setAssisting] = useState(false);
+  const [assignedTo, setAssignedTo] = useState<string | null>(null);
+  const { team } = useTeam();
   const bottom = useRef<HTMLDivElement>(null);
 
   const load = async () => {
@@ -143,8 +147,10 @@ export function ThreadView({
       messages: Message[];
       automation?: Automation;
       flows?: FlowOption[];
+      assignedTo?: string | null;
     }>(`/api/inbox/${contactId}`);
     setContact(data.contact);
+    setAssignedTo(data.assignedTo ?? null);
     setMessages(data.messages);
     setNotes((current) => (current === (contact.notes ?? "") ? data.contact.notes ?? "" : current));
     if (data.automation) setAutomation(data.automation);
@@ -295,6 +301,27 @@ export function ThreadView({
               ) : null}
             </p>
           </div>
+          {team.length > 0 ? (
+            <select
+              aria-label="Assigned to"
+              value={assignedTo ?? ""}
+              onChange={(event) => {
+                const memberId = event.target.value || null;
+                setAssignedTo(memberId);
+                void api(`/api/inbox/${contactId}/assign`, { method: "POST", body: JSON.stringify({ memberId }) }).catch(() =>
+                  toast.error("Could not assign"),
+                );
+              }}
+              className="hidden rounded-lg border border-[#e5e7eb] bg-white px-2 py-1 text-[12px] sm:block"
+            >
+              <option value="">Unassigned</option>
+              {team.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
           {automation.status === "paused" ? (
             <Button variant="outline" size="sm" onClick={() => void resumeAutomation()}>
               <Play className="size-3.5" />

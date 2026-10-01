@@ -17,6 +17,7 @@ export async function GET(_request: Request, context: RouteParams<{ contactId: s
       row ? db.select().from(flows).where(eq(flows.botId, row.botId)) : Promise.resolve([]),
     ]);
     return json({
+      assignedTo: row?.assignedTo ?? null,
       contact,
       messages,
       automation: {

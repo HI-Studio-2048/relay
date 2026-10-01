@@ -7,6 +7,7 @@ import { Search } from "lucide-react";
 import { useBot } from "@/components/bot-provider";
 import { ContactAvatar } from "@/components/chrome/avatar";
 import { PlatformBadge } from "@/components/chrome/platform-badge";
+import { useTeam } from "@/components/use-team";
 import { api } from "@/lib/client";
 import { cn } from "@/lib/utils";
 
@@ -21,13 +22,16 @@ type Thread = {
   lastBody: string;
   lastDirection: "inbound" | "outbound";
   needsReply: boolean;
+  assignedTo: string | null;
 };
 
-type Filter = "open" | "unanswered" | "closed" | "all";
+type Filter = "open" | "unanswered" | "mine" | "unassigned" | "closed" | "all";
 
-const FILTERS: { value: Filter; label: string }[] = [
+const FILTERS: { value: Filter; label: string; team?: boolean }[] = [
   { value: "open", label: "Open" },
   { value: "unanswered", label: "Needs reply" },
+  { value: "mine", label: "Mine", team: true },
+  { value: "unassigned", label: "Unassigned", team: true },
   { value: "closed", label: "Closed" },
   { value: "all", label: "All" },
 ];
@@ -52,6 +56,7 @@ export function ConversationList() {
   const [threads, setThreads] = useState<Thread[] | null>(null);
   const [filter, setFilter] = useState<Filter>("open");
   const [query, setQuery] = useState("");
+  const { team, me, setMe, byId } = useTeam();
 
   useEffect(() => {
     if (!botId) return;
@@ -76,10 +81,12 @@ export function ConversationList() {
     return {
       open: list.filter((thread) => thread.status === "open").length,
       unanswered: list.filter((thread) => thread.needsReply).length,
+      mine: list.filter((thread) => thread.status === "open" && me && thread.assignedTo === me).length,
+      unassigned: list.filter((thread) => thread.status === "open" && !thread.assignedTo).length,
       closed: list.filter((thread) => thread.status === "closed").length,
       all: list.length,
     };
-  }, [threads]);
+  }, [threads, me]);
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -87,6 +94,8 @@ export function ConversationList() {
       if (filter === "open" && thread.status !== "open") return false;
       if (filter === "closed" && thread.status !== "closed") return false;
       if (filter === "unanswered" && !thread.needsReply) return false;
+      if (filter === "mine" && !(thread.status === "open" && me && thread.assignedTo === me)) return false;
+      if (filter === "unassigned" && !(thread.status === "open" && !thread.assignedTo)) return false;
       if (!needle) return true;
       return (
         thread.name.toLowerCase().includes(needle) ||
@@ -94,7 +103,7 @@ export function ConversationList() {
         thread.lastBody.toLowerCase().includes(needle)
       );
     });
-  }, [threads, filter, query]);
+  }, [threads, filter, query, me]);
 
   return (
     <aside
@@ -104,6 +113,24 @@ export function ConversationList() {
       )}
     >
       <div className="space-y-2.5 border-b border-[#e5e7eb] p-3">
+        {team.length > 0 ? (
+          <label className="flex items-center gap-2 text-[12px] text-[#6b7280]">
+            You are
+            <select
+              aria-label="You are"
+              value={me ?? ""}
+              onChange={(event) => setMe(event.target.value || null)}
+              className="flex-1 rounded-lg border border-[#e5e7eb] bg-white px-2 py-1 text-[12px] text-[#1b1f24]"
+            >
+              <option value="">Pick your name…</option>
+              {team.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <div className="flex items-center gap-2 rounded-xl bg-[#f4f6f8] px-2.5 py-1.5">
           <Search className="size-3.5 text-[#8b95a1]" />
           <input
@@ -114,7 +141,7 @@ export function ConversationList() {
           />
         </div>
         <div className="flex gap-1 overflow-x-auto">
-          {FILTERS.map((item) => (
+          {FILTERS.filter((item) => !item.team || team.length > 0).map((item) => (
             <button
               key={item.value}
               type="button"
@@ -162,7 +189,18 @@ export function ConversationList() {
                   </p>
                   {thread.needsReply ? <span className="size-2 shrink-0 rounded-full bg-[#0084ff]" /> : null}
                 </div>
-                {thread.platform ? <PlatformBadge platform={thread.platform} className="mt-1" /> : null}
+                <div className="mt-1 flex items-center gap-1.5">
+                  {thread.platform ? <PlatformBadge platform={thread.platform} /> : null}
+                  {byId(thread.assignedTo) ? (
+                    <span
+                      className="rounded-full px-1.5 py-0.5 text-[10px] font-medium text-white"
+                      style={{ background: byId(thread.assignedTo)!.color }}
+                      title={`Assigned to ${byId(thread.assignedTo)!.name}`}
+                    >
+                      {byId(thread.assignedTo)!.name.split(" ")[0]}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             </Link>
           ))

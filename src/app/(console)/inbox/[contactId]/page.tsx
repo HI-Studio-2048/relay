@@ -22,6 +22,7 @@ export default async function ThreadPage({
         direction: message.direction,
         source: message.source,
         body: message.body,
+        author: message.author,
         createdAt:
           message.createdAt instanceof Date
             ? message.createdAt.toISOString()

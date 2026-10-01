@@ -5,6 +5,7 @@ import { bots, contacts } from "@/lib/db/schema";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
 import { acquireSendSlot } from "@/lib/rate-limit";
 import { pauseContactAutomation, saveMessage } from "@/lib/store";
+import { agentIdFromCookieHeader, assignContact, findMember } from "@/lib/team";
 
 export async function POST(request: Request, context: RouteParams<{ contactId: string }>) {
   try {
@@ -16,6 +17,7 @@ export async function POST(request: Request, context: RouteParams<{ contactId: s
     if (!contact) return json({ error: "Contact not found" }, 404);
     const [bot] = await db.select().from(bots).where(eq(bots.id, contact.botId)).limit(1);
     if (!bot) return json({ error: "Bot not found" }, 404);
+    const agent = await findMember(agentIdFromCookieHeader(request.headers.get("cookie")));
     await acquireSendSlot(contact.botId, contact.telegramUserId);
     const sent = await sendChannelReply(accountFromRow(bot), channelTarget(contact), {
       text: body.text.trim(),
@@ -28,7 +30,10 @@ export async function POST(request: Request, context: RouteParams<{ contactId: s
       source: "agent",
       body: body.text.trim(),
       telegramMessageId: sent.message_id || null,
+      author: agent?.name ?? null,
     });
+    // Whoever answers an unassigned conversation picks it up.
+    if (agent && !contact.assignedTo) await assignContact(contactId, agent.id);
     await pauseContactAutomation(contactId);
     return json({ ok: true, telegramMessageId: sent.message_id });
   } catch (error) {

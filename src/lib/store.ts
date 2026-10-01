@@ -299,6 +299,8 @@ export async function saveMessage(input: {
   source: "user" | "flow" | "agent" | "broadcast" | "ai";
   body: string;
   telegramMessageId?: string | null;
+  /** Team member name for agent replies. */
+  author?: string | null;
 }) {
   const db = await getDb();
   await db.insert(messages).values({
@@ -309,6 +311,7 @@ export async function saveMessage(input: {
     source: input.source,
     body: input.body,
     telegramMessageId: input.telegramMessageId ?? null,
+    author: input.author ?? null,
   });
 }
 
@@ -346,6 +349,7 @@ export type InboxThread = {
   lastDirection: "inbound" | "outbound";
   /** The contact spoke last: someone should answer. */
   needsReply: boolean;
+  assignedTo: string | null;
 };
 
 /** Live Chat list: one row per conversation with its latest message, newest first. */
@@ -380,6 +384,7 @@ export async function listInboxThreads(botId: string): Promise<InboxThread[]> {
         lastBody: last.body,
         lastDirection: last.direction === "outbound" ? ("outbound" as const) : ("inbound" as const),
         needsReply: last.direction === "inbound" && row.inboxStatus !== "closed",
+        assignedTo: row.assignedTo ?? null,
       };
     })
     .sort((a, b) => (b.lastAt ?? "").localeCompare(a.lastAt ?? ""));
