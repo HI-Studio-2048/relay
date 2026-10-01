@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { bots, contacts } from "@/lib/db/schema";
 import { recordFlowEvents } from "@/lib/analytics";
+import { botFieldValues } from "@/lib/template";
 import { applyFlowEffects, interpolateTemplate } from "@/lib/flow-effects";
 import { executeFrom, type FlowRecord } from "@/lib/flow-engine";
 import { outboundPreview } from "@/lib/media";
@@ -9,6 +10,13 @@ import { acquireSendSlot } from "@/lib/rate-limit";
 import { loadActiveFlows, loadContactRecord, persistContact, persistSession, saveMessage } from "@/lib/store";
 import { accountFromRow, channelTarget, sendChannelReply, type ChannelAccount } from "@/lib/channels";
 import type { ContactRecord, FlowSessionState, OutboundReply } from "@/lib/types";
+
+/** {{bot.key}} values for an account. */
+export async function loadBotFieldValues(botId: string) {
+  const db = await getDb();
+  const [bot] = await db.select({ settings: bots.settings }).from(bots).where(eq(bots.id, botId)).limit(1);
+  return botFieldValues(bot?.settings);
+}
 
 export class FlowDispatchError extends Error {
   constructor(message: string) {
@@ -25,9 +33,10 @@ export async function deliverReplies(input: {
   replies: OutboundReply[];
   source?: "flow" | "agent" | "ai";
 }) {
+  const botValues = input.replies.length ? await loadBotFieldValues(input.botId) : {};
   for (const reply of input.replies) {
     await acquireSendSlot(input.botId, input.contact.telegramUserId);
-    const personalized = { ...reply, text: interpolateTemplate(reply.text, input.contact) };
+    const personalized = { ...reply, text: interpolateTemplate(reply.text, input.contact, botValues) };
     const sent = await sendChannelReply(input.account, channelTarget(input.contact), personalized);
     await saveMessage({
       botId: input.botId,

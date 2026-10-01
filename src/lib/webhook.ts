@@ -15,7 +15,7 @@ import { emitWebhookSoon, publicContact } from "@/lib/developer";
 import { buttonSourceStep, recordFlowEvents } from "@/lib/analytics";
 import { runAiAutoReply } from "@/lib/ai-runtime";
 import { replyToZernioComment, sendZernioPrivateReply } from "@/lib/channels/zernio";
-import { deliverReplies } from "@/lib/flow-dispatch";
+import { deliverReplies, loadBotFieldValues } from "@/lib/flow-dispatch";
 import { interpolateTemplate } from "@/lib/flow-effects";
 import { outboundPreview } from "@/lib/media";
 import { applyFlowEffects } from "@/lib/flow-effects";
@@ -293,7 +293,7 @@ async function answerComment(
   };
   if (publicReply) {
     try {
-      const textReply = interpolateTemplate(publicReply, contact);
+      const textReply = interpolateTemplate(publicReply, contact, await loadBotFieldValues(botId));
       await replyToZernioComment(account.token, ref, textReply);
       await saveMessage({ botId, contactId: contact.id, direction: "outbound", source: "flow", body: `[public reply] ${textReply}` });
     } catch (error) {
@@ -318,7 +318,7 @@ async function answerComment(
     session = { id: crypto.randomUUID(), contactId: contact.id, flowId: opening.flowId, stepId: held.stepId, awaitingInput: false, status: "active" };
   }
   try {
-    const personalized = { ...withContinue, text: interpolateTemplate(withContinue.text, contact) };
+    const personalized = { ...withContinue, text: interpolateTemplate(withContinue.text, contact, await loadBotFieldValues(botId)) };
     const sent = await sendZernioPrivateReply(account.token, ref, personalized);
     await saveMessage({
       botId,

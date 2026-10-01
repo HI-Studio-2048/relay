@@ -30,3 +30,23 @@ export function interpolateTemplate(template: string, contact: ContactRecord, ex
     return value?.trim() ? value : (fallback ?? "").trim();
   });
 }
+
+export type BotField = { key: string; value: string };
+
+/** Account-wide variables (ManyChat Bot Fields), usable as {{bot.key}} in any message. */
+export function readBotFields(settings: Record<string, unknown> | null | undefined): BotField[] {
+  const raw = settings?.botFields;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => item as BotField)
+    .map((item) => ({
+      key: String(item?.key ?? "").trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, ""),
+      value: String(item?.value ?? ""),
+    }))
+    .filter((item) => item.key)
+    .slice(0, 50);
+}
+
+export function botFieldValues(settings: Record<string, unknown> | null | undefined): Record<string, string> {
+  return Object.fromEntries(readBotFields(settings).map((field) => [`bot.${field.key}`, field.value]));
+}

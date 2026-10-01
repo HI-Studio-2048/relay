@@ -43,3 +43,15 @@ describe("interpolateTemplate", () => {
     expect(interpolateTemplate("{{unknown|ok}}", contact)).toBe("ok");
   });
 });
+
+describe("bot fields", () => {
+  it("reads, sanitizes and interpolates {{bot.key}}", async () => {
+    const { botFieldValues, readBotFields } = await import("@/lib/template");
+    expect(readBotFields({ botFields: [{ key: "Promo Code", value: "SPRING20" }, { key: "", value: "x" }, "junk"] })).toEqual([
+      { key: "promo_code", value: "SPRING20" },
+    ]);
+    const values = botFieldValues({ botFields: [{ key: "promo_code", value: "SPRING20" }] });
+    const contact = { id: "c", telegramUserId: "1", username: null, firstName: "Ada", lastName: null, email: null, phone: null, customFields: {}, tags: [] };
+    expect(interpolateTemplate("Use {{bot.promo_code}}, {{first_name}}! {{bot.missing|none}}", contact, values)).toBe("Use SPRING20, Ada! none");
+  });
+});

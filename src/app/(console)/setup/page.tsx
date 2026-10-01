@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { CHANNELS, CHANNEL_IDS, type ChannelId } from "@/lib/channels/types";
 import { api } from "@/lib/client";
 import { PlatformDot, zernioPlatformLabel } from "@/components/chrome/platform-badge";
+import { BotFieldsCard } from "@/components/bot-fields-card";
 import { TeamCard } from "@/components/team-card";
 
 const GUIDES: Record<ChannelId, { title: string; steps: string[]; tokenLabel: string; accountLabel?: string }> = {
@@ -288,6 +289,8 @@ export default function SetupPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      {bot ? <BotFieldsCard botId={bot.id} /> : null}
 
       <TeamCard />
 

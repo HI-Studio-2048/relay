@@ -4,6 +4,7 @@ import { accountFromRow, channelTarget, sendChannelReply } from "@/lib/channels"
 import { getDb } from "@/lib/db";
 import { bots, broadcastRecipients, broadcasts, contacts } from "@/lib/db/schema";
 import { interpolateTemplate } from "@/lib/flow-effects";
+import { botFieldValues } from "@/lib/template";
 import { log } from "@/lib/logger";
 import { resumeDueDelays } from "@/lib/flow-resume";
 import { resumeDueSequences } from "@/lib/sequence-resume";
@@ -65,7 +66,7 @@ async function handleBroadcast(broadcastId: string) {
       }
       await acquireSendSlot(broadcast.botId, contact.telegramUserId);
       const record = await loadContactRecord(contact.id);
-      const personalized = record ? interpolateTemplate(broadcast.body, record) : broadcast.body;
+      const personalized = record ? interpolateTemplate(broadcast.body, record, botFieldValues(bot.settings)) : broadcast.body;
       const sent = await sendChannelReply(account, channelTarget(contact), { text: personalized, source: "broadcast" });
       await db
         .update(broadcastRecipients)
