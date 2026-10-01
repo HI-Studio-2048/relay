@@ -58,6 +58,8 @@ export async function applyFlowEffects(input: {
         await recordFlowEvents([
           { botId: input.botId, flowId: effect.flowId, stepId: effect.stepId, contactId: input.contact.id, kind: "goal", name: effect.name, value: effect.value ?? null },
         ]);
+        const { runRules } = await import("@/lib/rules");
+        await runRules(input.botId, input.contact, [{ type: "goal_reached", value: effect.name }]);
         continue;
       }
 

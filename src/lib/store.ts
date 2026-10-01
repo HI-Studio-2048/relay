@@ -178,7 +178,7 @@ export async function persistContact(
   }
 
   await syncContactSequences(botId, record, existing[0]?.subscriptions ?? []);
-  if (!options.skipRules) await fireContactRules(botId, previous, record);
+  if (!options.skipRules) await fireContactRules(botId, previous, record, { created: !existing[0] });
 }
 
 export async function loadActiveSession(contactId: string): Promise<FlowSessionState | null> {

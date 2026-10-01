@@ -47,12 +47,12 @@ export function CreateRuleForm({
   };
 
   const save = async () => {
-    if (!name.trim() || !triggerValue.trim() || !actionValue.trim()) return;
+    if (!name.trim() || !actionValue.trim()) return;
     setBusy(true);
     try {
       await api("/api/rules", {
         method: "POST",
-        body: JSON.stringify({ botId, name, triggerType, triggerValue, actionType, actionValue }),
+        body: JSON.stringify({ botId, name, triggerType, triggerValue: triggerType === "contact_created" ? "" : triggerValue, actionType, actionValue }),
       });
       toast.success("Rule created");
       setName("");
@@ -82,13 +82,21 @@ export function CreateRuleForm({
           ))}
         </select>
       </div>
-      <div className="space-y-1">
+      <div className={trigger.value === "contact_created" ? "hidden" : "space-y-1"}>
         <Label>{trigger.valueLabel}</Label>
         <Input
           list="relay-rule-trigger-values"
-          value={triggerValue}
+          value={trigger.value === "contact_created" ? "" : triggerValue}
           onChange={(event) => setTriggerValue(event.target.value)}
-          placeholder={trigger.valueLabel === "Field key" ? "company" : trigger.valueLabel === "List name" ? "newsletter" : "lead"}
+          placeholder={
+            trigger.value === "goal_reached"
+              ? "Any goal"
+              : trigger.valueLabel === "Field key"
+                ? "company"
+                : trigger.valueLabel === "List name"
+                  ? "newsletter"
+                  : "lead (empty = any)"
+          }
         />
         <datalist id="relay-rule-trigger-values">
           {suggestionsFor(trigger.valueLabel).map((item) => (

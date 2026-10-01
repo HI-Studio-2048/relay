@@ -191,3 +191,18 @@ describe("rules: contact change events", () => {
     expect(matched.map((rule) => rule.id)).toEqual(["1"]);
   });
 });
+
+describe("rule matching additions", () => {
+  it("treats an empty or * trigger value as any", () => {
+    const rules = [
+      { id: "any", isActive: true, triggerType: "goal_reached", triggerValue: "", actionType: "add_tag", actionValue: "converted" },
+      { id: "star", isActive: true, triggerType: "tag_applied", triggerValue: "*", actionType: "add_tag", actionValue: "x" },
+      { id: "named", isActive: true, triggerType: "goal_reached", triggerValue: "Purchase", actionType: "add_tag", actionValue: "buyer" },
+      { id: "new", isActive: true, triggerType: "contact_created", triggerValue: "", actionType: "assign_to", actionValue: "round robin" },
+    ];
+    expect(matchingRules(rules, [{ type: "goal_reached", value: "Booked a call" }]).map((rule) => rule.id)).toEqual(["any"]);
+    expect(matchingRules(rules, [{ type: "goal_reached", value: "purchase" }]).map((rule) => rule.id)).toEqual(["any", "named"]);
+    expect(matchingRules(rules, [{ type: "tag_applied", value: "vip" }]).map((rule) => rule.id)).toEqual(["star"]);
+    expect(matchingRules(rules, [{ type: "contact_created", value: "" }]).map((rule) => rule.id)).toEqual(["new"]);
+  });
+});

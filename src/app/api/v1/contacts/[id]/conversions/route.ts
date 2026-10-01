@@ -4,6 +4,8 @@ import { apiHandler, ownedContactId } from "@/lib/api-v1";
 import { getDb } from "@/lib/db";
 import { flows } from "@/lib/db/schema";
 import { json, readJson, type RouteParams } from "@/lib/http";
+import { runRules } from "@/lib/rules";
+import { loadContactRecord } from "@/lib/store";
 
 /**
  * POST /api/v1/contacts/:id/conversions { name, value?, flow_id? }
@@ -24,6 +26,8 @@ export async function POST(request: Request, context: RouteParams<{ id: string }
       if (!flow || flow.botId !== botId) flowId = null;
     }
     if (flowId) await recordFlowEvents([{ botId, flowId, contactId: id, kind: "goal", name, value }]);
+    const contact = await loadContactRecord(id);
+    if (contact) await runRules(botId, contact, [{ type: "goal_reached", value: name }]);
     return json({ ok: true, attributed_flow_id: flowId });
   });
 }

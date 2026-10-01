@@ -11,6 +11,8 @@ export const RULE_TRIGGERS = [
   { value: "subscribed", label: "Subscribed to list", valueLabel: "List name" },
   { value: "unsubscribed", label: "Unsubscribed from list", valueLabel: "List name" },
   { value: "field_set", label: "Custom field set", valueLabel: "Field key" },
+  { value: "contact_created", label: "New contact", valueLabel: "—" },
+  { value: "goal_reached", label: "Goal reached", valueLabel: "Goal name (empty = any)" },
 ] as const;
 
 export const RULE_ACTIONS = [
@@ -20,6 +22,8 @@ export const RULE_ACTIONS = [
   { value: "remove_tag", label: "Remove tag", valueLabel: "Tag name" },
   { value: "start_flow", label: "Start flow", valueLabel: "Flow" },
   { value: "notify_admin", label: "Notify admin", valueLabel: "Message" },
+  { value: "set_field", label: "Set field", valueLabel: "key=value" },
+  { value: "assign_to", label: "Assign conversation", valueLabel: "Teammate name (or 'round robin')" },
 ] as const;
 
 export type RuleTrigger = (typeof RULE_TRIGGERS)[number]["value"];
@@ -72,10 +76,11 @@ export type RuleRow = {
   actionValue: string | null;
 };
 
+/** An empty (or "*") trigger value matches any value: "any tag applied", "any goal". */
 export function matchingRules<T extends RuleRow>(rules: T[], events: RuleEvent[]): T[] {
-  return rules.filter(
-    (rule) =>
-      rule.isActive &&
-      events.some((event) => event.type === rule.triggerType && lower(event.value) === lower(rule.triggerValue ?? "")),
-  );
+  return rules.filter((rule) => {
+    if (!rule.isActive) return false;
+    const wanted = lower(rule.triggerValue ?? "");
+    return events.some((event) => event.type === rule.triggerType && (wanted === "" || wanted === "*" || lower(event.value) === wanted));
+  });
 }

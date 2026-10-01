@@ -8,6 +8,7 @@ import { findSequenceByName, subscribeToSequence, unsubscribeFromSequence } from
 import {
   contactRuleEvents,
   matchingRules,
+  type RuleEvent,
 } from "@/lib/rule-types";
 import type { ContactRecord } from "@/lib/types";
 
@@ -21,11 +22,17 @@ export async function listRules(botId: string) {
 }
 
 /**
- * Run global rules for a contact change. Tag actions re-save the contact with rules disabled,
- * so one rule can chain into a tag change without looping.
+ * Run global rules for a contact change. Tag and field actions re-save the contact with rules
+ * disabled, so one rule can chain into a change without looping.
  */
-export async function fireContactRules(botId: string, previous: ContactRecord | null, next: ContactRecord) {
+export async function fireContactRules(
+  botId: string,
+  previous: ContactRecord | null,
+  next: ContactRecord,
+  options: { created?: boolean } = {},
+) {
   const events = contactRuleEvents(previous, next);
+  if (options.created) events.unshift({ type: "contact_created", value: "" });
   if (events.length === 0) return;
   const hooks: Record<string, WebhookEvent> = {
     tag_applied: "contact.tag_added",
@@ -38,6 +45,12 @@ export async function fireContactRules(botId: string, previous: ContactRecord | 
     const hook = hooks[event.type];
     if (hook) emitWebhookSoon(botId, hook, { contact: publicContact(next), value: event.value });
   }
+  await runRules(botId, next, events);
+}
+
+/** Run every active rule matching these events for one contact. */
+export async function runRules(botId: string, start: ContactRecord, events: RuleEvent[]) {
+  if (events.length === 0) return;
   const db = await getDb();
   const rows = await db
     .select()
@@ -46,8 +59,8 @@ export async function fireContactRules(botId: string, previous: ContactRecord | 
   const matched = matchingRules(rows, events);
   if (matched.length === 0) return;
 
-  let contact = next;
-  let tagsChanged = false;
+  let contact = start;
+  let changed = false;
   for (const rule of matched) {
     const value = (rule.actionValue ?? "").trim();
     if (!value) continue;
@@ -62,15 +75,33 @@ export async function fireContactRules(botId: string, previous: ContactRecord | 
       if (rule.actionType === "add_tag") {
         if (!contact.tags.some((tag) => lower(tag) === lower(value))) {
           contact = { ...contact, tags: [...contact.tags, value] };
-          tagsChanged = true;
+          changed = true;
         }
         continue;
       }
       if (rule.actionType === "remove_tag") {
         if (contact.tags.some((tag) => lower(tag) === lower(value))) {
           contact = { ...contact, tags: contact.tags.filter((tag) => lower(tag) !== lower(value)) };
-          tagsChanged = true;
+          changed = true;
         }
+        continue;
+      }
+      if (rule.actionType === "set_field") {
+        const [rawKey, ...rest] = value.split("=");
+        const key = (rawKey ?? "").trim().toLowerCase().replace(/[^a-z0-9_]/g, "_");
+        if (key && !key.startsWith("_")) {
+          contact = { ...contact, customFields: { ...contact.customFields, [key]: interpolateTemplate(rest.join("=").trim(), contact) } };
+          changed = true;
+        }
+        continue;
+      }
+      if (rule.actionType === "assign_to") {
+        const { assignContact, listTeam, pickAssignee } = await import("@/lib/team");
+        const member =
+          lower(value) === "round robin"
+            ? await pickAssignee(botId)
+            : (await listTeam()).find((item) => lower(item.name) === lower(value) || lower(item.email ?? "") === lower(value));
+        if (member) await assignContact(contact.id, member.id);
         continue;
       }
       if (rule.actionType === "notify_admin") {
@@ -86,7 +117,7 @@ export async function fireContactRules(botId: string, previous: ContactRecord | 
       log.warn(`Rule "${rule.id}" failed`, error instanceof Error ? error.message : error);
     }
   }
-  if (tagsChanged) {
+  if (changed) {
     const { persistContact } = await import("@/lib/store");
     await persistContact(botId, contact, { skipRules: true });
   }

@@ -24,8 +24,9 @@ export async function POST(request: Request) {
       actionType?: string;
       actionValue?: string;
     }>(request);
-    if (!body.botId || !body.name?.trim() || !body.triggerValue?.trim() || !body.actionValue?.trim()) {
-      return json({ error: "botId, name, trigger value, and action value are required" }, 400);
+    // An empty trigger value means "any" (any tag, any goal); New contact has no value at all.
+    if (!body.botId || !body.name?.trim() || !body.actionValue?.trim()) {
+      return json({ error: "botId, name, and action value are required" }, 400);
     }
     const triggerType = body.triggerType ?? "tag_applied";
     const actionType = body.actionType ?? "subscribe_sequence";
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
         name: body.name.trim(),
         isActive: true,
         triggerType,
-        triggerValue: body.triggerValue.trim(),
+        triggerValue: body.triggerValue?.trim() ?? "",
         actionType,
         actionValue: body.actionValue.trim(),
       })
