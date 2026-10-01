@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Bot, MessageSquareDashed, Wand2 } from "lucide-react";
+import { BookOpen, Bot, Lightbulb, MessageSquareDashed, Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Panel } from "@/components/chrome/panel";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/client";
-import type { BotAiSettings } from "@/lib/ai";
+import type { BotAiSettings, ConversationInsights } from "@/lib/ai";
 
 const EXAMPLES = [
   "When someone comments GUIDE on a post, DM them the free guide after they give their email, and tag them lead",
@@ -31,6 +31,30 @@ export function AiSettingsForm({
   const [saving, setSaving] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [building, setBuilding] = useState(false);
+  const [insights, setInsights] = useState<ConversationInsights | null>(null);
+  const [analyzed, setAnalyzed] = useState(0);
+  const [analyzing, setAnalyzing] = useState(false);
+
+  const analyze = async () => {
+    setAnalyzing(true);
+    try {
+      const data = await api<{ insights: ConversationInsights; analyzed: number }>(`/api/bots/${botId}/insights`, {
+        method: "POST",
+        body: JSON.stringify({ days: 14 }),
+      });
+      setInsights(data.insights);
+      setAnalyzed(data.analyzed);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not analyze");
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const addToKnowledge = (topic: string, answer: string) => {
+    setSettings((current) => ({ ...current, knowledge: `${(current.knowledge ?? "").trim()}\n\n${topic}: ${answer}`.trim() }));
+    toast.success("Added to Knowledge — review it below, then save");
+  };
 
   const save = async () => {
     setSaving(true);
@@ -96,6 +120,82 @@ export function AiSettingsForm({
             {building ? "Building…" : "Build flow"}
           </Button>
         </div>
+      </Panel>
+
+      <Panel
+        tone="start"
+        icon={Lightbulb}
+        label="Insights"
+        title="What people asked in the last 14 days"
+        trailing={
+          <Button size="sm" variant="outline" disabled={analyzing || !configured} onClick={() => void analyze()}>
+            {analyzing ? "Reading conversations…" : insights ? "Refresh" : "Analyze"}
+          </Button>
+        }
+      >
+        {insights ? (
+          <div className="space-y-3">
+            <p className="text-[13px] text-[#1b1f24]">{insights.summary}</p>
+            <p className="text-[12px] text-[#6b7280]">
+              {analyzed} messages · {insights.sentiment.positive}% positive · {insights.sentiment.neutral}% neutral ·{" "}
+              {insights.sentiment.negative}% negative
+            </p>
+            <ul className="space-y-2">
+              {insights.topics.map((topic) => (
+                <li key={topic.topic} className="rounded-xl p-3 ring-1 ring-[#e5e7eb]">
+                  <div className="flex items-center gap-2">
+                    <p className="flex-1 text-[13px] font-medium text-[#1b1f24]">{topic.topic}</p>
+                    <span
+                      className={
+                        topic.covered
+                          ? "rounded-full bg-[#ecfdf3] px-2 py-0.5 text-[11px] text-[#05603a]"
+                          : "rounded-full bg-amber-50 px-2 py-0.5 text-[11px] text-amber-800"
+                      }
+                    >
+                      {topic.covered ? "Covered" : "Not covered"}
+                    </span>
+                    <span className="w-10 text-right text-[12px] tabular-nums text-[#6b7280]">{Math.round(topic.share)}%</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 rounded-full bg-[#f1f3f5]">
+                    <div className="h-full rounded-full bg-[#2a78d6]" style={{ width: `${Math.max(2, Math.min(100, topic.share))}%` }} />
+                  </div>
+                  <p className="mt-1.5 text-[12px] text-[#6b7280] italic">“{topic.example}”</p>
+                  {!topic.covered && topic.suggested_answer ? (
+                    <div className="mt-2 flex items-start gap-2 rounded-lg bg-[#f9fafb] p-2">
+                      <p className="flex-1 text-[12px] text-[#1b1f24]">{topic.suggested_answer}</p>
+                      <Button size="sm" variant="outline" onClick={() => addToKnowledge(topic.topic, topic.suggested_answer)}>
+                        Add to knowledge
+                      </Button>
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+            {insights.opportunities.length ? (
+              <div className="space-y-1">
+                <p className="text-[11px] font-semibold tracking-wide text-[#8b95a1] uppercase">Automate next</p>
+                {insights.opportunities.map((idea) => (
+                  <button
+                    key={idea}
+                    type="button"
+                    onClick={() => {
+                      setPrompt(idea);
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className="block w-full rounded-lg px-2 py-1.5 text-left text-[13px] text-[#1b1f24] hover:bg-[#f4f6f8]"
+                  >
+                    ✨ {idea}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-[13px] text-[#6b7280]">
+            Claude reads recent DMs and comments, groups what people ask about, flags what your knowledge does not cover yet,
+            and suggests automations to build next.
+          </p>
+        )}
       </Panel>
 
       <Panel tone="content" icon={Bot} label="Persona" title="Who is answering, and how they sound">

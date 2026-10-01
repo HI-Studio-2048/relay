@@ -253,3 +253,39 @@ export async function generateFlowDraft(prompt: string, settings: BotAiSettings,
     user: prompt,
   });
 }
+
+const InsightsSchema = z.object({
+  summary: z.string().describe("Two or three sentences on what people are messaging about."),
+  topics: z
+    .array(
+      z.object({
+        topic: z.string().describe("Short name, e.g. 'Shipping times'."),
+        share: z.number().describe("Rough percent of these conversations about it, 0-100."),
+        example: z.string().describe("One representative customer message, quoted."),
+        covered: z.boolean().describe("True if the business knowledge already answers it."),
+        suggested_answer: z.string().describe("For uncovered topics: a knowledge-base entry the business could add (facts in brackets where unknown). Empty if covered."),
+      }),
+    )
+    .describe("Up to 8 topics, most common first."),
+  sentiment: z.object({ positive: z.number(), neutral: z.number(), negative: z.number() }).describe("Percent split, summing to 100."),
+  opportunities: z.array(z.string()).describe("Up to 3 concrete automation ideas (a flow, keyword or template to add)."),
+});
+
+export type ConversationInsights = z.infer<typeof InsightsSchema>;
+
+/** Read recent inbound messages and say what people ask, what is not covered, and what to automate next. */
+export async function analyzeConversations(input: { settings: BotAiSettings; brandName: string; messages: { contact: string; text: string }[] }) {
+  const sample = input.messages
+    .slice(-400)
+    .map((message) => `- (${message.contact}) ${message.text.replace(/\s+/g, " ").slice(0, 300)}`)
+    .join("\n");
+  return parse(InsightsSchema, {
+    system: systemPrompt(input.settings, input.brandName),
+    effort: "medium",
+    user: [
+      "You are reviewing a business's recent inbound DMs and comments to improve their automation.",
+      `<messages>\n${sample}\n</messages>`,
+      "Group them into topics, say which ones the business knowledge already covers, draft knowledge entries for the gaps, and suggest automations. Ignore greetings and button taps.",
+    ].join("\n\n"),
+  });
+}
