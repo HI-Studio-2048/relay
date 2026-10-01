@@ -6,6 +6,7 @@ import {
   parseKeywordList,
 } from "@/lib/keywords";
 import { chooseRandomizerPath, nextResumeAt } from "@/lib/smart-delay";
+import { flowIdFromPayload } from "@/lib/starters";
 import { alreadyAnswered, commentOnceKey, matchSocialFlow, pickPublicReply } from "@/lib/social-triggers";
 import type {
   CaptureField,
@@ -589,6 +590,20 @@ export function processInboundEvent(input: {
   }
 
   if (input.session?.status === "paused" && !start.isStart) {
+    return { contact, session: input.session, replies: [], inboundSaved, effects: [] };
+  }
+
+  // Ice breaker / persistent menu / API payload "flow:<id>": start that flow, whatever was running.
+  const starterFlowId = flowIdFromPayload(input.event.callbackData);
+  if (starterFlowId) {
+    const target = flowById.get(starterFlowId);
+    if (target?.isActive) {
+      return toEngineResult(
+        executeFrom(target.definition, startSession(contact.id, target), contact, now, input.flows),
+        inboundSaved,
+        target.id,
+      );
+    }
     return { contact, session: input.session, replies: [], inboundSaved, effects: [] };
   }
 

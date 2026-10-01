@@ -10,6 +10,7 @@ import {
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
 import { readAiSettings } from "@/lib/ai";
+import { isWithinHours, readHours } from "@/lib/starters";
 import { emitWebhookSoon, publicContact } from "@/lib/developer";
 import { buttonSourceStep, recordFlowEvents } from "@/lib/analytics";
 import { runAiAutoReply } from "@/lib/ai-runtime";
@@ -60,6 +61,8 @@ export async function processChannelUpdate(botId: string, payload: unknown) {
     }
   }
 }
+
+const AWAY_FIELD = "_away_at";
 
 /** Kept for the Telegram webhook route and existing tests. */
 export async function processTelegramUpdate(botId: string, update: TelegramUpdate) {
@@ -227,11 +230,27 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
     Boolean(text?.trim()) &&
     !text!.trim().startsWith("/") &&
     (!result.session || (result.session.status === "active" && !result.session.awaitingInput));
+  let aiAnswered = false;
   if (unanswered && !paused && readAiSettings(bot.settings).autoReply) {
     try {
-      await runAiAutoReply({ botId, account, contactId: contact.id });
+      aiAnswered = await runAiAutoReply({ botId, account, contactId: contact.id });
     } catch (error) {
       log.warn("AI auto-reply failed", error instanceof Error ? error.message : error);
+    }
+  }
+
+  // Business hours: a message nobody answered automatically, outside hours, gets the away message
+  // (at most once every 12 hours per person).
+  const hours = readHours(bot.settings);
+  if ((unanswered || paused) && !aiAnswered && kind === "message" && hours.enabled && !isWithinHours(hours)) {
+    const last = Date.parse(contact.customFields[AWAY_FIELD] ?? "");
+    if (!Number.isFinite(last) || Date.now() - last > 12 * 3_600_000) {
+      try {
+        await deliverReplies({ botId, account, contact, replies: [{ text: hours.awayMessage, source: "flow" }] });
+        await persistContact(botId, { ...contact, customFields: { ...contact.customFields, [AWAY_FIELD]: new Date().toISOString() } }, { skipRules: true });
+      } catch (error) {
+        log.warn("Away message failed", error instanceof Error ? error.message : error);
+      }
     }
   }
 }

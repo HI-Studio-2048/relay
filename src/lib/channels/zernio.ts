@@ -301,7 +301,7 @@ export function parseZernioWebhook(payload: ZernioWebhookPayload, accountFilter:
     const ref = meta.referral?.ref ?? null;
     let text = message.text ?? null;
     let callbackData: string | null = null;
-    if (payloadValue?.startsWith("n:")) {
+    if (payloadValue?.startsWith("n:") || payloadValue?.startsWith("flow:")) {
       callbackData = payloadValue;
       text = null;
     } else if (payloadValue?.startsWith("qr:")) {

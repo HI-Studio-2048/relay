@@ -229,8 +229,8 @@ export function parseMetaWebhook(payload: MetaWebhookPayload): NormalizedInbound
         const isStart = postback === GET_STARTED_PAYLOAD || Boolean(ref);
         events.push({
           externalUserId: sender,
-          text: isStart ? (ref ? `/start ${ref}` : "/start") : postback.startsWith("n:") ? null : event.postback?.title ?? null,
-          callbackData: postback.startsWith("n:") ? postback : null,
+          text: isStart ? (ref ? `/start ${ref}` : "/start") : postback.startsWith("n:") || postback.startsWith("flow:") ? null : event.postback?.title ?? null,
+          callbackData: postback.startsWith("n:") || postback.startsWith("flow:") ? postback : null,
           ...(postback.startsWith("n:") && event.postback?.title ? { callbackTitle: event.postback.title } : {}),
           referral: ref,
         });

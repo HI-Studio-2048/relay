@@ -17,6 +17,7 @@ import {
   MessageSquareText,
   Sparkles,
   Plug,
+  MessageCircleQuestion,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useBot } from "@/components/bot-provider";
@@ -50,6 +51,7 @@ const GROUPS: {
     items: [
       { href: "/flows", label: "Flows", icon: Workflow, tone: "content" },
       { href: "/keywords", label: "Keywords", icon: MessageSquareText, tone: "content" },
+      { href: "/starters", label: "Starters & hours", icon: MessageCircleQuestion, tone: "content" },
       { href: "/sequences", label: "Sequences", icon: Repeat, tone: "action" },
       { href: "/rules", label: "Rules", icon: ListFilter, tone: "action" },
       { href: "/broadcasts", label: "Broadcasts", icon: Megaphone, tone: "action", count: "confirm" },
@@ -78,6 +80,7 @@ function sectionTitle(pathname: string) {
   if (pathname.startsWith("/setup")) return "Settings";
   if (pathname.startsWith("/ai")) return "AI assistant";
   if (pathname.startsWith("/integrations")) return "API & webhooks";
+  if (pathname.startsWith("/starters")) return "Conversation starters";
   return "Relay";
 }
 
