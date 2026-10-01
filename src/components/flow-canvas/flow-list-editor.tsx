@@ -11,6 +11,7 @@ import type { FlowEditorRecord, FlowStep, HttpMethod, TriggerType } from "@/lib/
 import { TRIGGER_OPTIONS } from "@/lib/types";
 import { SocialTriggerEditor, type InspectorFlowOption } from "@/components/flow-canvas/node-inspector";
 import { isSocialTrigger } from "@/lib/social-triggers";
+import { parseCollectList } from "@/lib/flow-canvas";
 
 function emptyStep(type: FlowStep["type"]): FlowStep {
   const id = crypto.randomUUID().slice(0, 8);
@@ -48,6 +49,7 @@ function emptyStep(type: FlowStep["type"]): FlowStep {
   if (type === "start_flow") return { id, type, flowId: "", next: "" };
   if (type === "http") return { id, type, url: "https://", method: "POST", body: "", next: "" };
   if (type === "notify") return { id, type, text: "New lead: {{name}} {{email}}", next: "" };
+  if (type === "ai") return { id, type, goal: "Answer their questions and find out what they need", collect: ["email"] };
   if (type === "end") return { id, type, text: "Done." };
   return { id, type: "text", text: "Hello.", buttons: [], next: "" };
 }
@@ -548,6 +550,25 @@ export function FlowListEditor({
                 />
               </>
             ) : null}
+            {step.type === "ai" ? (
+              <>
+                <Textarea
+                  placeholder="Goal"
+                  value={step.goal}
+                  onChange={(event) => updateStep(index, { ...step, goal: event.target.value })}
+                />
+                <Input
+                  placeholder="Collect (email, phone, budget)"
+                  value={(step.collect ?? []).join(", ")}
+                  onChange={(event) => updateStep(index, { ...step, collect: parseCollectList(event.target.value) })}
+                />
+                <Input
+                  placeholder="Next step id when the goal is reached"
+                  value={step.next ?? ""}
+                  onChange={(event) => updateStep(index, { ...step, next: event.target.value || undefined })}
+                />
+              </>
+            ) : null}
             {step.type === "end" ? (
               <Textarea
                 value={step.text ?? ""}
@@ -573,6 +594,7 @@ export function FlowListEditor({
             "start_flow",
             "http",
             "notify",
+            "ai",
             "end",
           ] as const
         ).map((type) => (

@@ -57,6 +57,7 @@ export async function loadContactRecord(contactId: string): Promise<ContactRecor
     channelAccountId: row.channelAccountId ?? null,
     threadId: row.threadId ?? null,
     avatarUrl: row.avatarUrl ?? null,
+    botPausedUntil: row.botPausedUntil ? new Date(row.botPausedUntil).toISOString() : null,
   };
 }
 
@@ -201,7 +202,19 @@ export async function loadActiveSession(contactId: string): Promise<FlowSessionS
   };
 }
 
-export async function pauseContactAutomation(contactId: string) {
+/** How long a human reply keeps the bot quiet for that person (ManyChat pauses automation on takeover). */
+export const AGENT_PAUSE_MINUTES = 60;
+
+/**
+ * Live Chat takeover: pause the flow the contact is in, and keep every automation (keywords,
+ * default reply, AI auto-reply) quiet for them for `minutes` (or until someone resumes).
+ */
+export async function pauseContactAutomation(contactId: string, minutes = AGENT_PAUSE_MINUTES) {
+  const db = await getDb();
+  await db
+    .update(contacts)
+    .set({ botPausedUntil: new Date(Date.now() + minutes * 60_000) })
+    .where(eq(contacts.id, contactId));
   const session = await loadActiveSession(contactId);
   if (!session || session.status === "paused") return;
   await persistSession(contactId, {
@@ -212,17 +225,24 @@ export async function pauseContactAutomation(contactId: string) {
   });
 }
 
+export function isBotPaused(row: { botPausedUntil?: Date | string | null }, now = Date.now()) {
+  if (!row.botPausedUntil) return false;
+  return new Date(row.botPausedUntil).getTime() > now;
+}
+
 /** Live Chat "Resume automation": un-pause the session and re-arm any question it was waiting on. */
 export async function resumeContactAutomation(contactId: string) {
+  const db = await getDb();
+  await db.update(contacts).set({ botPausedUntil: null }).where(eq(contacts.id, contactId));
   const session = await loadActiveSession(contactId);
   if (!session || session.status !== "paused") return null;
-  const db = await getDb();
   const [row] = await db.select().from(flows).where(eq(flows.id, session.flowId)).limit(1);
   const definition = row?.definition as FlowDefinition | undefined;
   const step = definition?.steps.find((item) => item.id === session.stepId);
   const awaitingInput =
     step?.type === "capture" ||
     step?.type === "form" ||
+    step?.type === "ai" ||
     (step?.type === "text" && (step.quickReplies ?? []).length > 0);
   const next: FlowSessionState = { ...session, status: "active", awaitingInput, resumeAt: null };
   await persistSession(contactId, next);
@@ -273,7 +293,7 @@ export async function saveMessage(input: {
   botId: string;
   contactId: string;
   direction: "inbound" | "outbound";
-  source: "user" | "flow" | "agent" | "broadcast";
+  source: "user" | "flow" | "agent" | "broadcast" | "ai";
   body: string;
   telegramMessageId?: string | null;
 }) {

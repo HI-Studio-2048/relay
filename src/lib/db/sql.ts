@@ -213,4 +213,5 @@ CREATE TABLE IF NOT EXISTS saved_replies (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS messages_contact_created_idx ON messages(contact_id, created_at);
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS bot_paused_until timestamptz;
 `;

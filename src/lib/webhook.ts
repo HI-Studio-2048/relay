@@ -9,6 +9,8 @@ import {
 } from "@/lib/channels";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
+import { readAiSettings } from "@/lib/ai";
+import { runAiAutoReply } from "@/lib/ai-runtime";
 import { replyToZernioComment, sendZernioPrivateReply } from "@/lib/channels/zernio";
 import { deliverReplies } from "@/lib/flow-dispatch";
 import { interpolateTemplate } from "@/lib/flow-effects";
@@ -27,6 +29,7 @@ import {
 import { log } from "@/lib/logger";
 import {
   findContactByTelegram,
+  isBotPaused,
   loadActiveFlows,
   loadActiveSession,
   persistContact,
@@ -115,7 +118,13 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
   };
   const kind = inbound.kind ?? "message";
 
-  let result: EngineResult = processInboundEvent({ contact: prepared, session, flows, event: { ...baseEvent, text } });
+  // Live Chat takeover: a teammate (or an AI hand-off) is handling this person. Log the message and
+  // leave it for them; comments still run their automations because they are public.
+  const paused = Boolean(existing?.botPausedUntil && isBotPaused({ botPausedUntil: existing.botPausedUntil }));
+  let result: EngineResult =
+    paused && kind !== "comment" && !startParam
+      ? { contact: { ...existing!, inboxStatus: "open" }, session, replies: [], inboundSaved: true, effects: [] }
+      : processInboundEvent({ contact: prepared, session, flows, event: { ...baseEvent, text } });
 
   // Meta channels: a brand-new contact whose first message matched nothing still gets the welcome flow,
   // the way ManyChat's Welcome Message fires on the first interaction.
@@ -181,6 +190,23 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
   // Effects run after the replies: a typing indicator belongs after the text it follows,
   // and webhooks/notifications should describe a message that has already gone out.
   await applyFlowEffects({ botId, account, contact, effects: result.effects });
+
+  // AI auto-reply: nothing matched, nobody is mid-flow, and the account turned AI answers on.
+  const unanswered =
+    replies.length === 0 &&
+    result.effects.length === 0 &&
+    !inbound.callbackData &&
+    (kind === "message" || kind === "story_reply") &&
+    Boolean(text?.trim()) &&
+    !text!.trim().startsWith("/") &&
+    (!result.session || (result.session.status === "active" && !result.session.awaitingInput));
+  if (unanswered && !paused && readAiSettings(bot.settings).autoReply) {
+    try {
+      await runAiAutoReply({ botId, account, contactId: contact.id });
+    } catch (error) {
+      log.warn("AI auto-reply failed", error instanceof Error ? error.message : error);
+    }
+  }
 }
 
 function inboundLabel(kind: string, text: string | null) {

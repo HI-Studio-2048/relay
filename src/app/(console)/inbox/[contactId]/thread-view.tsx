@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BookmarkPlus, CheckCircle2, MessageCircle, PanelRight, Play, RotateCcw, Send, X } from "lucide-react";
+import { ArrowLeft, BookmarkPlus, Sparkles, CheckCircle2, MessageCircle, PanelRight, Play, RotateCcw, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { useBot } from "@/components/bot-provider";
 import { ContactAvatar } from "@/components/chrome/avatar";
@@ -27,12 +27,20 @@ type FlowOption = { id: string; name: string };
 
 type SavedReply = { id: string; title: string; body: string };
 
+type Assist = {
+  suggestions: string[];
+  summary: string;
+  intent: string;
+  sentiment: "positive" | "neutral" | "negative";
+};
+
 /** Inbox lines Relay writes for non-DM events. Shown as labeled cards instead of chat bubbles. */
 const EVENT_PREFIX = /^\[(comment|story reply|public reply|mentioned you in their story)\]\s*/i;
 
 function SourceLabel({ message }: { message: Message }) {
   if (message.direction === "inbound") return null;
-  const label = message.source === "agent" ? "You" : message.source === "broadcast" ? "Broadcast" : "Bot";
+  const label =
+    message.source === "agent" ? "You" : message.source === "broadcast" ? "Broadcast" : message.source === "ai" ? "AI" : "Bot";
   return <span className="font-medium">{label}</span>;
 }
 
@@ -125,6 +133,8 @@ export function ThreadView({
   const [saved, setSaved] = useState<SavedReply[]>([]);
   const [showProfile, setShowProfile] = useState(true);
   const [newTag, setNewTag] = useState("");
+  const [assist, setAssist] = useState<Assist | null>(null);
+  const [assisting, setAssisting] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
 
   const load = async () => {
@@ -200,11 +210,24 @@ export function ThreadView({
     try {
       await api(`/api/inbox/${contactId}/reply`, { method: "POST", body: JSON.stringify({ text }) });
       setText("");
+      setAssist(null);
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Send failed");
     } finally {
       setSending(false);
+    }
+  };
+
+  const suggest = async () => {
+    setAssisting(true);
+    try {
+      const data = await api<{ assist: Assist }>(`/api/inbox/${contactId}/assist`, { method: "POST" });
+      setAssist(data.assist);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "AI is unavailable");
+    } finally {
+      setAssisting(false);
     }
   };
 
@@ -340,6 +363,37 @@ export function ThreadView({
               )}
             </div>
           ) : null}
+          {assist ? (
+            <div className="mb-2 space-y-1.5">
+              <p className="flex items-center gap-1.5 text-[11px] text-[#6b7280]">
+                <Sparkles className="size-3 text-[#d946ef]" />
+                <span className="font-medium text-[#1b1f24]">{assist.intent}</span>·
+                <span
+                  className={cn(
+                    assist.sentiment === "negative" ? "text-red-600" : assist.sentiment === "positive" ? "text-[#00a344]" : "",
+                  )}
+                >
+                  {assist.sentiment}
+                </span>
+                · {assist.summary}
+                <button type="button" className="ml-auto text-[#8b95a1] hover:text-[#1b1f24]" onClick={() => setAssist(null)} aria-label="Dismiss">
+                  <X className="size-3" />
+                </button>
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {assist.suggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => setText(suggestion)}
+                    className="max-w-full rounded-xl bg-[#fdf4ff] px-2.5 py-1.5 text-left text-[12px] text-[#1b1f24] ring-1 ring-[#f0abfc] hover:bg-[#fae8ff]"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div className="flex items-end gap-2">
             <textarea
               value={text}
@@ -356,6 +410,16 @@ export function ThreadView({
                 if (event.key === "Escape" && slashQuery !== null) setText("");
               }}
             />
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Suggest replies with AI"
+              title="Suggest replies with AI"
+              disabled={assisting}
+              onClick={() => void suggest()}
+            >
+              <Sparkles className={cn("size-4 text-[#d946ef]", assisting && "animate-pulse")} />
+            </Button>
             <Button variant="ghost" size="icon" aria-label="Save as reply" disabled={!text.trim()} onClick={() => void saveAsReply()}>
               <BookmarkPlus className="size-4" />
             </Button>

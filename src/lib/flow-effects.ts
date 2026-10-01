@@ -80,6 +80,13 @@ export async function applyFlowEffects(input: {
         continue;
       }
 
+      if (effect.type === "ai_turn") {
+        // Lazy import: the AI runtime re-enters the engine and dispatcher, which import this file.
+        const { runAiTurn } = await import("@/lib/ai-runtime");
+        await runAiTurn({ botId: input.botId, account: input.account, contactId: input.contact.id, flowId: effect.flowId, stepId: effect.stepId });
+        continue;
+      }
+
       if (effect.type === "typing") {
         await sendChannelTyping(input.account, channelTarget(input.contact));
         continue;

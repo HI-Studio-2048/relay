@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { contacts, flows } from "@/lib/db/schema";
 import { json, fail, type RouteParams } from "@/lib/http";
-import { listMessages, loadActiveSession, loadContactRecord } from "@/lib/store";
+import { isBotPaused, listMessages, loadActiveSession, loadContactRecord } from "@/lib/store";
 
 export async function GET(_request: Request, context: RouteParams<{ contactId: string }>) {
   try {
@@ -20,7 +20,8 @@ export async function GET(_request: Request, context: RouteParams<{ contactId: s
       contact,
       messages,
       automation: {
-        status: session ? session.status : "idle",
+        status: session?.status === "paused" || (row && isBotPaused(row)) ? "paused" : session ? session.status : "idle",
+        pausedUntil: row?.botPausedUntil ? new Date(row.botPausedUntil).toISOString() : null,
         flowId: session?.flowId ?? null,
         flowName: session ? flowRows.find((flow) => flow.id === session.flowId)?.name ?? null : null,
       },

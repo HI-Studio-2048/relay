@@ -15,6 +15,7 @@ import {
   Repeat,
   ListFilter,
   MessageSquareText,
+  Sparkles,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useBot } from "@/components/bot-provider";
@@ -51,6 +52,7 @@ const GROUPS: {
       { href: "/sequences", label: "Sequences", icon: Repeat, tone: "action" },
       { href: "/rules", label: "Rules", icon: ListFilter, tone: "action" },
       { href: "/broadcasts", label: "Broadcasts", icon: Megaphone, tone: "action", count: "confirm" },
+      { href: "/ai", label: "AI assistant", icon: Sparkles, tone: "action" },
     ],
   },
   {
@@ -70,6 +72,7 @@ function sectionTitle(pathname: string) {
   if (pathname.startsWith("/broadcasts")) return "Broadcasts";
   if (pathname.startsWith("/growth")) return "Growth";
   if (pathname.startsWith("/setup")) return "Settings";
+  if (pathname.startsWith("/ai")) return "AI assistant";
   return "Relay";
 }
 

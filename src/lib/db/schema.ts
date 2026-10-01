@@ -61,6 +61,8 @@ export const contacts = pgTable(
     channelAccountId: text("channel_account_id"),
     threadId: text("thread_id"),
     avatarUrl: text("avatar_url"),
+    /** Live Chat takeover: automation stays quiet for this person until then (or until resumed). */
+    botPausedUntil: timestamp("bot_paused_until", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

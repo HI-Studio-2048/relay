@@ -28,6 +28,7 @@ export const RELAY = {
   http: "#0CA678",
   notify: "#F76707",
   randomizer: "#E67700",
+  ai: "#D946EF",
 } as const;
 
 /** @deprecated Use RELAY. Same hex map — kept so existing canvas imports stay short. */

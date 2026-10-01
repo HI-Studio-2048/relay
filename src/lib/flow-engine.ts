@@ -427,6 +427,14 @@ export function executeFrom(
       return { session: null, replies, contact: nextContact, effects };
     }
 
+    if (step.type === "ai") {
+      // The AI answers asynchronously (see ai-runtime). The session parks here and every
+      // message the contact sends is routed back to this step until the goal is complete.
+      effects.push({ type: "ai_turn", flowId: current.flowId, stepId: step.id });
+      current = { ...current, awaitingInput: true, formIndex: undefined, resumeAt: null };
+      return { session: current, replies, contact: nextContact, effects };
+    }
+
     if (step.type === "end") {
       if (step.text) replies.push({ text: step.text, source: "flow" });
       return {
@@ -610,6 +618,15 @@ export function processInboundEvent(input: {
         ),
         inboundSaved,
       );
+    }
+    if (flow && step?.type === "ai") {
+      return {
+        contact,
+        session: input.session,
+        replies: [],
+        inboundSaved,
+        effects: [{ type: "ai_turn", flowId: flow.id, stepId: step.id }],
+      };
     }
     if (flow && step?.type === "capture") {
       const usedKeyboard = step.field === "phone" || Boolean(step.skippable);

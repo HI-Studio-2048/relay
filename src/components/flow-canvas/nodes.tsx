@@ -14,6 +14,7 @@ import {
   ImageIcon,
   MessageSquare,
   PenLine,
+  Sparkles,
   Square,
   Timer,
   UserRound,
@@ -500,6 +501,20 @@ export function NotifyNode({ selected, data }: NodeProps<FlowNode<"notify">>) {
   );
 }
 
+export function AiNode({ selected, data }: NodeProps<FlowNode<"ai">>) {
+  return (
+    <NodeFrame selected={selected} kind="ai" icon={Sparkles} title="AI Step">
+      <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("ai")} />
+      <Preview>{data.goal || "Describe the goal"}</Preview>
+      {data.collect.trim() ? (
+        <p className="mt-1 truncate text-[11px] text-muted-foreground">Collects {data.collect}</p>
+      ) : null}
+      <p className="mt-1 text-right text-[10px] text-muted-foreground">Goal reached →</p>
+      <Handle type="source" position={Position.Right} id="next" className={handleClass()} style={handleStyle("ai")} />
+    </NodeFrame>
+  );
+}
+
 export function EndNode({ selected, data }: NodeProps<FlowNode<"end">>) {
   return (
     <NodeFrame selected={selected} kind="end" icon={Square} title="Stop">
@@ -526,5 +541,6 @@ export const flowNodeTypes = {
   start_flow: StartFlowNode,
   http: HttpNode,
   notify: NotifyNode,
+  ai: AiNode,
   end: EndNode,
 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, CornerUpRight, Dices, Filter, Globe, Hash, MessageSquare, PenLine, Square, Timer, UserRound, ClipboardList } from "lucide-react";
+import { Bell, Sparkles, CornerUpRight, Dices, Filter, Globe, Hash, MessageSquare, PenLine, Square, Timer, UserRound, ClipboardList } from "lucide-react";
 import { NODE_TONE } from "@/components/flow-canvas/node-colors";
 import type { CanvasNodeKind } from "@/lib/flow-canvas";
 
@@ -22,6 +22,7 @@ const GROUPS: {
         hint: "Text, image, buttons, quick replies",
         icon: MessageSquare,
       },
+      { kind: "ai", label: "AI Step", hint: "Claude chats toward a goal", icon: Sparkles },
     ],
   },
   {

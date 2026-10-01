@@ -31,6 +31,7 @@ export type CanvasNodeKind =
   | "http"
   | "notify"
   | "randomizer"
+  | "ai"
   | "end";
 
 export type CanvasButton = {
@@ -98,6 +99,7 @@ export type CanvasNodeData =
   | { kind: "start_flow"; flowId: string }
   | { kind: "http"; url: string; method: HttpMethod; body: string }
   | { kind: "notify"; text: string }
+  | { kind: "ai"; goal: string; collect: string }
   | { kind: "end"; text?: string };
 
 export type CanvasNode = {
@@ -439,6 +441,14 @@ function nodeFromStep(step: FlowStep, position: { x: number; y: number }): Canva
       type: "notify",
       position,
       data: { kind: "notify", text: step.text },
+    };
+  }
+  if (step.type === "ai") {
+    return {
+      id: step.id,
+      type: "ai",
+      position,
+      data: { kind: "ai", goal: step.goal, collect: (step.collect ?? []).join(", ") },
     };
   }
   return {
@@ -821,6 +831,19 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
       continue;
     }
 
+    if (node.data.kind === "ai") {
+      const next = nextFromHandle(graph.edges, node.id, "next");
+      const collect = parseCollectList(node.data.collect);
+      steps.push({
+        id: node.id,
+        type: "ai",
+        goal: node.data.goal,
+        ...(collect.length ? { collect } : {}),
+        ...(next ? { next } : {}),
+      });
+      continue;
+    }
+
     if (node.data.kind === "end") {
       steps.push({
         id: node.id,
@@ -975,9 +998,30 @@ export function engineDefinition(definition: FlowDefinition): FlowDefinition {
       if (step.type === "notify") {
         return { id: step.id, type: "notify", text: step.text, next: step.next };
       }
+      if (step.type === "ai") {
+        return {
+          id: step.id,
+          type: "ai",
+          goal: step.goal,
+          ...(step.collect?.length ? { collect: step.collect } : {}),
+          ...(step.next ? { next: step.next } : {}),
+        };
+      }
       return { id: step.id, type: "end", ...(step.text ? { text: step.text } : {}) };
     }),
   };
+}
+
+/** "email, phone, budget" → field keys the AI step may fill. Custom keys are snake_cased. */
+export function parseCollectList(value: string): string[] {
+  return [
+    ...new Set(
+      value
+        .split(/[,\n]+/)
+        .map((item) => item.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, ""))
+        .filter(Boolean),
+    ),
+  ].slice(0, 10);
 }
 
 export function createCanvasNode(
@@ -1091,6 +1135,13 @@ export function createCanvasNode(
         type: "notify",
         position,
         data: { kind: "notify", text: "New lead: {{name}} {{email}}" },
+      };
+    case "ai":
+      return {
+        id,
+        type: "ai",
+        position,
+        data: { kind: "ai", goal: "Answer their questions and find out what they need", collect: "email" },
       };
     case "end":
       return { id, type: "end", position, data: { kind: "end", text: "Done." } };
@@ -1278,6 +1329,9 @@ export function validateCanvas(graph: CanvasGraph, channel?: ChannelLimits): Can
     }
     if (node.data.kind === "notify" && !node.data.text.trim()) {
       warnings.push("A Notify admin step has no message.");
+    }
+    if (node.data.kind === "ai" && !node.data.goal.trim()) {
+      errors.push("An AI step needs a goal.");
     }
   }
 

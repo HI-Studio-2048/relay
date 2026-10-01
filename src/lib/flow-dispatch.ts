@@ -22,7 +22,7 @@ export async function deliverReplies(input: {
   account: ChannelAccount;
   contact: ContactRecord;
   replies: OutboundReply[];
-  source?: "flow" | "agent";
+  source?: "flow" | "agent" | "ai";
 }) {
   for (const reply of input.replies) {
     await acquireSendSlot(input.botId, input.contact.telegramUserId);

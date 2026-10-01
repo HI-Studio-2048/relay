@@ -480,6 +480,33 @@ export function NodeInspector({
         </div>
       ) : null}
 
+      {data.kind === "ai" ? (
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <Label>Goal</Label>
+            <Textarea
+              rows={4}
+              value={data.goal}
+              onChange={(event) => onDataChange(selectedId, { ...data, goal: event.target.value })}
+              placeholder="Qualify the lead: find out their budget and timeline, then offer a call"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Collect</Label>
+            <Input
+              value={data.collect}
+              onChange={(event) => onDataChange(selectedId, { ...data, collect: event.target.value })}
+              placeholder="email, phone, budget"
+            />
+          </div>
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Claude chats with the contact using your AI persona and knowledge (Settings → AI) until the goal is met,
+            saving what it collects to their profile. Then the flow continues from the right handle. If it cannot help,
+            it hands the conversation to your team and pauses the bot.
+          </p>
+        </div>
+      ) : null}
+
       {data.kind === "end" ? (
         <div className="space-y-1">
           <Label>Closing text</Label>

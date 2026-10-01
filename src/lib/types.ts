@@ -35,7 +35,9 @@ export type FlowEffect =
   | { type: "http"; url: string; method: HttpMethod; body?: string }
   | { type: "notify"; text: string }
   /** Show Telegram's "typing…" indicator while a Send Message typing delay runs. */
-  | { type: "typing" };
+  | { type: "typing" }
+  /** AI Step: generate the next reply with Claude (async, outside the pure engine). */
+  | { type: "ai_turn"; flowId: string; stepId: string };
 
 export type CaptureField = "name" | "email" | "phone" | `custom:${string}`;
 
@@ -184,6 +186,16 @@ export type FlowStep =
     }
   | {
       id: string;
+      /** ManyChat AI Step: Claude holds the conversation until the goal is met or it hands off. */
+      type: "ai";
+      goal: string;
+      /** Field keys to pick up along the way: name, email, phone, or custom keys. */
+      collect?: string[];
+      /** Where the flow continues once the goal is complete. */
+      next?: string;
+    }
+  | {
+      id: string;
       type: "end";
       text?: string;
     };
@@ -227,6 +239,8 @@ export type ContactRecord = {
   channelAccountId?: string | null;
   threadId?: string | null;
   avatarUrl?: string | null;
+  /** Read-only here: set by Live Chat takeover, see store.pauseContactAutomation. */
+  botPausedUntil?: string | null;
 };
 
 export type FlowSessionState = {
