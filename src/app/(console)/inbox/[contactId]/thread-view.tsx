@@ -8,6 +8,7 @@ import { useBot } from "@/components/bot-provider";
 import { ContactAvatar } from "@/components/chrome/avatar";
 import { PlatformBadge } from "@/components/chrome/platform-badge";
 import { useTeam } from "@/components/use-team";
+import { messagingWindow } from "@/lib/messaging-window";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client";
 import { displayName } from "@/lib/lead-capture";
@@ -123,7 +124,7 @@ export function ThreadView({
   initialContact: ContactRecord;
   initialMessages: Message[];
 }) {
-  const { botId } = useBot();
+  const { botId, bot } = useBot();
   const [contact, setContact] = useState(initialContact);
   const [messages, setMessages] = useState(initialMessages);
   const [text, setText] = useState("");
@@ -278,6 +279,9 @@ export function ThreadView({
   };
 
   const name = displayName(contact);
+  const lastInbound = [...messages].reverse().find((message) => message.direction === "inbound")?.createdAt ?? null;
+  // eslint-disable-next-line react-hooks/purity -- the window is a live countdown; re-rendered on every poll
+  const dmWindow = messagingWindow(contact.platform, bot?.channel, lastInbound, Date.now());
   const visibleFields = Object.entries(contact.customFields).filter(([key]) => !key.startsWith("_"));
   let lastDay = "";
 
@@ -454,8 +458,19 @@ export function ThreadView({
               <Send className="size-4" />
             </Button>
           </div>
-          <p className="mt-1.5 text-[11px] text-[#8b95a1]">
-            Sending pauses the bot for {contact.firstName ?? "this person"} until you resume it.
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-[11px] text-[#8b95a1]">
+            <span>Sending pauses the bot for {contact.firstName ?? "this person"} until you resume it.</span>
+            {dmWindow.kind === "open" ? (
+              <span className="rounded-full bg-[#ecfdf3] px-2 py-0.5 text-[#05603a]">Messaging window: {dmWindow.hoursLeft}h left</span>
+            ) : dmWindow.kind === "human_agent" ? (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-800">
+                24h window closed — replies go out as a human agent ({Math.ceil(dmWindow.hoursLeft / 24)}d left)
+              </span>
+            ) : dmWindow.kind === "closed" ? (
+              <span className="rounded-full bg-red-50 px-2 py-0.5 text-red-700">
+                {dmWindow.whatsapp ? "Window closed — WhatsApp needs an approved template" : "Window closed — they need to message you first"}
+              </span>
+            ) : null}
           </p>
         </div>
       </div>

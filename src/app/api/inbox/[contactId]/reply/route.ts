@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { accountFromRow, channelTarget, sendChannelReply } from "@/lib/channels";
 import { getDb } from "@/lib/db";
-import { bots, contacts } from "@/lib/db/schema";
+import { bots, contacts, messages } from "@/lib/db/schema";
+import { messagingWindow } from "@/lib/messaging-window";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
 import { acquireSendSlot } from "@/lib/rate-limit";
 import { pauseContactAutomation, saveMessage } from "@/lib/store";
@@ -19,9 +20,18 @@ export async function POST(request: Request, context: RouteParams<{ contactId: s
     if (!bot) return json({ error: "Bot not found" }, 404);
     const agent = await findMember(agentIdFromCookieHeader(request.headers.get("cookie")));
     await acquireSendSlot(contact.botId, contact.telegramUserId);
+    const [lastInbound] = await db
+      .select({ at: messages.createdAt })
+      .from(messages)
+      .where(and(eq(messages.contactId, contactId), eq(messages.direction, "inbound")))
+      .orderBy(desc(messages.createdAt))
+      .limit(1);
+    const window = messagingWindow(contact.platform, bot.channel, lastInbound?.at ?? null);
     const sent = await sendChannelReply(accountFromRow(bot), channelTarget(contact), {
       text: body.text.trim(),
       source: "agent",
+      // Direct Meta accounts: after 24 hours a human reply must carry the HUMAN_AGENT tag.
+      ...(window.kind === "human_agent" ? { humanAgent: true } : {}),
     });
     await saveMessage({
       botId: contact.botId,

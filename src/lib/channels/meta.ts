@@ -135,7 +135,7 @@ export async function sendMetaReply(
   for (const message of buildMetaMessages(reply, channel)) {
     const sent = await graphPost<{ message_id?: string }>(path, account.token, {
       recipient: { id: recipientId },
-      messaging_type: "RESPONSE",
+      ...(reply.humanAgent ? { messaging_type: "MESSAGE_TAG", tag: "HUMAN_AGENT" } : { messaging_type: "RESPONSE" }),
       message,
     });
     last = { message_id: sent.message_id ?? "" };

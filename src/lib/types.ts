@@ -297,6 +297,8 @@ export type OutboundReply = {
   /** Analytics: which flow step produced this message. */
   flowId?: string;
   stepId?: string;
+  /** Meta: a human agent reply sent after the 24-hour window (allowed for 7 days). */
+  humanAgent?: boolean;
 };
 
 export type BroadcastStatus =
