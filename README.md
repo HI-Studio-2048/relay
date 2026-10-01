@@ -16,7 +16,7 @@ Origin is the source of truth for this project.
 6. **Contacts & CRM** — tags, custom fields, lists; segment filters, bulk actions, CSV import/export.
 7. **Broadcasts** — segments (tag, field, platform, list, last message within N hours, join date), send a message or a whole flow, schedule, **smart send time** (each person gets it at the hour they usually message, within 24h), and an explicit confirm before anything queues.
 8. **Growth** — trackable links (`/go/<slug>`), QR codes, attribution; Instagram ice breakers, Messenger menu, business hours with an away message.
-9. **Analytics** — overview dashboard with a getting-started checklist, per-flow runs / CTR / completion / conversions / revenue, AI conversation insights.
+9. **Analytics** — overview dashboard with a getting-started checklist, a Live Chat team report (replies, conversations and median first response per teammate), per-flow runs / CTR / completion / conversions / revenue, AI conversation insights.
 10. **API & webhooks** — `/api/v1` with API keys; signed outgoing webhooks for Zapier, Make or your backend.
 
 One process serves the web UI, the webhook, and the worker (`WORKER_MODE=all`).

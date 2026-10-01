@@ -10,7 +10,8 @@ import { CanvasCard, ToneChip, type ToneName } from "@/components/chrome/tone";
 import { Button } from "@/components/ui/button";
 import { CHANNELS } from "@/lib/channels/types";
 import { currentBot } from "@/lib/current-bot";
-import { loadChecklist, loadDashboard } from "@/lib/dashboard";
+import { loadChecklist, loadDashboard, loadTeamReport } from "@/lib/dashboard";
+import { formatDuration } from "@/lib/team-report";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -81,7 +82,7 @@ export default async function OverviewPage() {
     );
   }
 
-  const [data, checklist] = await Promise.all([loadDashboard(bot.id), loadChecklist(bot.id)]);
+  const [data, checklist, team] = await Promise.all([loadDashboard(bot.id), loadChecklist(bot.id), loadTeamReport(bot.id)]);
   const remaining = checklist.filter((item) => !item.done);
   const weekDelta = data.newPreviousWeek > 0 ? Math.round(((data.newThisWeek - data.newPreviousWeek) / data.newPreviousWeek) * 100) : null;
   const automatedShare = data.week.outbound ? Math.round((data.week.automated / data.week.outbound) * 100) : 0;
@@ -286,6 +287,40 @@ export default async function OverviewPage() {
           )}
         </CanvasCard>
       </div>
+
+      {team.humanReplies > 0 ? (
+        <CanvasCard className="min-w-0 space-y-3 p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="font-heading text-[15px] text-[#1b1f24]">Live Chat team · 30 days</p>
+            <p className="text-[12px] text-[#6b7280]">
+              Median first response <span className="font-medium text-[#1b1f24]">{formatDuration(team.medianResponseMs)}</span> ·{" "}
+              {team.humanReplies.toLocaleString()} human / {team.automatedReplies.toLocaleString()} automated replies
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[420px] text-[13px]">
+              <thead>
+                <tr className="text-left text-[11px] font-semibold tracking-wide text-[#8b95a1] uppercase">
+                  <th className="py-1.5">Teammate</th>
+                  <th className="py-1.5 text-right">Replies</th>
+                  <th className="py-1.5 text-right">Conversations</th>
+                  <th className="py-1.5 text-right">Median first response</th>
+                </tr>
+              </thead>
+              <tbody>
+                {team.agents.map((agent) => (
+                  <tr key={agent.name} className="border-t border-[#f0f2f4]">
+                    <td className="py-2 font-medium text-[#1b1f24]">{agent.name}</td>
+                    <td className="py-2 text-right tabular-nums">{agent.replies}</td>
+                    <td className="py-2 text-right tabular-nums">{agent.conversations}</td>
+                    <td className="py-2 text-right tabular-nums">{formatDuration(agent.medianResponseMs)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CanvasCard>
+      ) : null}
     </div>
   );
 }

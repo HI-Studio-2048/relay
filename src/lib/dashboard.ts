@@ -3,6 +3,7 @@ import { statsByFlow } from "@/lib/analytics";
 import { getDb } from "@/lib/db";
 import { bots, contacts, flowEvents, flows, growthLinks, messages, teamMembers } from "@/lib/db/schema";
 import { readAiSettings } from "@/lib/ai";
+import { buildTeamReport } from "@/lib/team-report";
 import { listInboxThreads } from "@/lib/store";
 
 const DAY = 86_400_000;
@@ -85,6 +86,18 @@ export async function loadDashboard(botId: string, days = 30) {
 }
 
 export type Dashboard = Awaited<ReturnType<typeof loadDashboard>>;
+
+/** Live Chat team performance over the last `days`. */
+export async function loadTeamReport(botId: string, days = 30) {
+  const db = await getDb();
+  const rows = await db
+    .select({ contactId: messages.contactId, direction: messages.direction, source: messages.source, author: messages.author, createdAt: messages.createdAt })
+    .from(messages)
+    .where(and(eq(messages.botId, botId), gte(messages.createdAt, new Date(Date.now() - days * DAY))))
+    .orderBy(messages.createdAt)
+    .limit(50_000);
+  return buildTeamReport(rows.map((row) => ({ ...row, createdAt: new Date(row.createdAt) })));
+}
 
 export type ChecklistItem = { id: string; label: string; done: boolean; href: string; hint: string };
 
