@@ -106,7 +106,29 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
   const growth = startParam ? await findGrowthLink(botId, startParam) : null;
   let flows = await loadActiveFlows(botId);
   const identity = { telegramUserId: externalUserId, ...profile };
-  const prepared = growth ? attributedContact(existing, identity, growth) : existing;
+  let prepared = growth ? attributedContact(existing, identity, growth) : existing;
+  // Follower status and similar profile facts land before the engine runs, so a Condition in this
+  // very event (a "follow to unlock" gate) sees the current value.
+  if (inbound.profileFields) {
+    prepared = prepared
+      ? { ...prepared, customFields: { ...prepared.customFields, ...inbound.profileFields } }
+      : {
+          id: crypto.randomUUID(),
+          telegramUserId: externalUserId,
+          username: profile.username,
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          email: null,
+          phone: null,
+          customFields: { ...inbound.profileFields },
+          tags: [],
+          subscriptions: [],
+          unsubscribed: false,
+          welcomed: false,
+          notes: "",
+          inboxStatus: "open",
+        };
+  }
   if (growth?.flowId && !session?.awaitingInput) {
     flows = preferLinkedFlow(flows, growth.flowId, growth.slug);
   }
@@ -151,6 +173,7 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
 
   let contact = result.contact;
   if (growth) contact = applyGrowthAttribution(contact, growth);
+  if (inbound.profileFields) contact = { ...contact, customFields: { ...contact.customFields, ...inbound.profileFields } };
   // Hub channels: remember where this person lives so later sends (flows, broadcasts, live chat) can reach them.
   contact = {
     ...contact,

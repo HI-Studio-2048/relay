@@ -151,6 +151,8 @@ export type NormalizedInbound = {
   avatarUrl?: string | null;
   storyUrl?: string | null;
   comment?: InboundComment | null;
+  /** Profile facts the platform sent with this event (follows_you, ig_followers, ig_verified). */
+  profileFields?: Record<string, string>;
 };
 
 export type InboundComment = {

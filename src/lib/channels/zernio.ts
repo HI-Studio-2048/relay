@@ -227,6 +227,18 @@ export async function sendZernioPrivateReply(apiKey: string, ref: ZernioCommentR
 
 type ZernioAttachment = { type?: string; originalType?: string; url?: string };
 
+type InstagramProfile = { isFollower?: boolean | null; followerCount?: number | null; isVerified?: boolean | null };
+
+/** Instagram profile facts become contact fields, so Conditions and segments can use them. */
+export function instagramProfileFields(profile: InstagramProfile | null | undefined): Record<string, string> | undefined {
+  if (!profile) return undefined;
+  const fields: Record<string, string> = {};
+  if (typeof profile.isFollower === "boolean") fields.follows_you = profile.isFollower ? "yes" : "no";
+  if (typeof profile.followerCount === "number") fields.ig_followers = String(profile.followerCount);
+  if (typeof profile.isVerified === "boolean") fields.ig_verified = profile.isVerified ? "yes" : "no";
+  return Object.keys(fields).length ? fields : undefined;
+}
+
 export type ZernioWebhookPayload = {
   id?: string;
   event?: string;
@@ -238,7 +250,7 @@ export type ZernioWebhookPayload = {
     direction?: "incoming" | "outgoing";
     text?: string | null;
     attachments?: ZernioAttachment[];
-    sender?: { id?: string; name?: string; username?: string; picture?: string; phoneNumber?: string | null };
+    sender?: { id?: string; name?: string; username?: string; picture?: string; phoneNumber?: string | null; instagramProfile?: InstagramProfile };
   };
   conversation?: { id?: string; participantId?: string; participantName?: string; participantUsername?: string; participantPicture?: string };
   account?: { id?: string; accountId?: string; platform?: string; username?: string };
@@ -259,7 +271,7 @@ export type ZernioWebhookPayload = {
     platformPostId?: string;
     platform?: string;
     text?: string;
-    author?: { id?: string; username?: string; name?: string; picture?: string | null; isOwnAccount?: boolean };
+    author?: { id?: string; username?: string; name?: string; picture?: string | null; isOwnAccount?: boolean; instagramProfile?: InstagramProfile };
     isReply?: boolean;
     parentCommentId?: string | null;
   };
@@ -331,6 +343,7 @@ export function parseZernioWebhook(payload: ZernioWebhookPayload, accountFilter:
         threadId: message.conversationId ?? payload.conversation?.id ?? null,
         avatarUrl: message.sender?.picture ?? payload.conversation?.participantPicture ?? null,
         storyUrl: meta.storyReply?.storyUrl ?? null,
+        profileFields: instagramProfileFields(message.sender?.instagramProfile),
       },
     ];
   }
@@ -351,6 +364,7 @@ export function parseZernioWebhook(payload: ZernioWebhookPayload, accountFilter:
         channelAccountId: accountId,
         threadId: null,
         avatarUrl: comment.author?.picture ?? null,
+        profileFields: instagramProfileFields(comment.author?.instagramProfile),
         comment: {
           id: comment.id ?? "",
           postId: comment.postId ?? payload.post?.id ?? comment.platformPostId ?? payload.post?.platformPostId ?? "",

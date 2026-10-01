@@ -308,3 +308,30 @@ describe("review fixes", () => {
     expect(JSON.parse(contact!.customFields._cm!)).toHaveLength(200);
   });
 });
+
+describe("Instagram follower facts", () => {
+  it("become contact fields on DMs and comments", async () => {
+    const { instagramProfileFields } = await import("@/lib/channels/zernio");
+    expect(instagramProfileFields({ isFollower: false, followerCount: 1200, isVerified: null })).toEqual({ follows_you: "no", ig_followers: "1200" });
+    expect(instagramProfileFields(undefined)).toBeUndefined();
+    const [event] = parseZernioWebhook({
+      event: "message.received",
+      message: { conversationId: "c", direction: "incoming", text: "x", sender: { id: "u", instagramProfile: { isFollower: true, isVerified: true } }, attachments: [] },
+      account,
+    });
+    expect(event?.profileFields).toEqual({ follows_you: "yes", ig_verified: "yes" });
+  });
+
+  it("gates the follow-to-unlock template on follows_you", async () => {
+    const { FLOW_TEMPLATES } = await import("@/lib/flow-templates");
+    const template = FLOW_TEMPLATES.find((item) => item.id === "follow-gate")!;
+    const flow = { id: "fg", triggerType: template.triggerType, triggerValue: template.triggerValue, isActive: true, definition: template.definition };
+    const base = { id: "c", telegramUserId: "u", username: null, firstName: "Ada", lastName: null, email: null, phone: null, customFields: {}, tags: [] };
+    const session = { id: "s", contactId: "c", flowId: "fg", stepId: "open", awaitingInput: false, status: "active" as const };
+    const notYet = processInboundEvent({ contact: { ...base, customFields: { follows_you: "no" } }, session, flows: [flow], event: { telegramUserId: "u", callbackData: "n:check" } });
+    expect(notYet.replies[0]?.text).toContain("Follow us first");
+    const followed = processInboundEvent({ contact: { ...base, customFields: { follows_you: "yes" } }, session: notYet.session, flows: [flow], event: { telegramUserId: "u", callbackData: "n:check" } });
+    expect(followed.replies[0]?.text).toContain("Unlocked");
+    expect(followed.contact.tags).toContain("follower-unlocked");
+  });
+});
