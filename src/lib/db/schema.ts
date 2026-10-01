@@ -320,9 +320,6 @@ export const growthLinkEvents = pgTable("growth_link_events", {
     .references(() => growthLinks.id, { onDelete: "cascade" }),
   contactId: text("contact_id").references(() => contacts.id, { onDelete: "set null" }),
   kind: text("kind").notNull(),
-  /** Goal events: the goal name and its value (revenue). */
-  name: text("name"),
-  value: doublePrecision("value"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
