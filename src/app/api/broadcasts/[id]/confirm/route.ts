@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { canDispatchBroadcast } from "@/lib/broadcast";
 import { EmptyAudienceError, materializeBroadcast } from "@/lib/broadcast-dispatch";
 import { getDb } from "@/lib/db";
@@ -50,15 +50,17 @@ export async function POST(request: Request, context: RouteParams<{ id: string }
       const [scheduled] = await db
         .update(broadcasts)
         .set({ status: "scheduled", confirmedAt: new Date(), scheduledAt })
-        .where(eq(broadcasts.id, id))
+        .where(and(eq(broadcasts.id, id), inArray(broadcasts.status, ["draft", "awaiting_confirm"])))
         .returning();
+      if (!scheduled) return viaForm ? redirectTo("?error=INVALID_STATUS") : json({ error: "Already confirmed" }, 409);
       return viaForm ? redirectTo("?scheduled=1") : json({ broadcast: scheduled });
     }
 
     let updated;
     try {
       await db.update(broadcasts).set({ confirmedAt: new Date() }).where(eq(broadcasts.id, id));
-      updated = await materializeBroadcast(id);
+      updated = await materializeBroadcast(id, ["draft", "awaiting_confirm"]);
+      if (!updated) return viaForm ? redirectTo("?queued=1") : json({ error: "Already confirmed" }, 409);
     } catch (error) {
       if (error instanceof EmptyAudienceError) {
         return viaForm ? redirectTo("?error=empty") : json({ error: error.message }, 400);

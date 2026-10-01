@@ -98,3 +98,12 @@ export async function setTtlValue(key: string, value: string, ttlSeconds: number
   }
   await client.set(key, value, "EX", ttlSeconds);
 }
+
+export async function delKey(key: string) {
+  const client = getRedis();
+  if (isMemoryRedis(client)) {
+    client.kv.delete(key);
+    return;
+  }
+  await client.del(key);
+}

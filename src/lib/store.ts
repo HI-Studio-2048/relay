@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, isNotNull, lte, notLike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, isNotNull, lte, notInArray, notLike, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import {
   bots,
@@ -136,13 +136,14 @@ export async function persistContact(
         set: { value },
       });
   }
-  for (const field of byKey.values()) {
-    if (!(field.key in record.customFields)) {
-      await db
-        .delete(contactFieldValues)
-        .where(and(eq(contactFieldValues.contactId, record.id), eq(contactFieldValues.fieldId, field.id)));
-    }
-  }
+  const keptFieldIds = [...byKey.values()].filter((field) => field.key in record.customFields).map((field) => field.id);
+  await db
+    .delete(contactFieldValues)
+    .where(
+      keptFieldIds.length
+        ? and(eq(contactFieldValues.contactId, record.id), notInArray(contactFieldValues.fieldId, keptFieldIds))
+        : eq(contactFieldValues.contactId, record.id),
+    );
 
   const wanted = new Set(record.tags);
   const existingLinks = await db

@@ -73,12 +73,31 @@ export function matchSocialFlow<T extends SocialFlow>(flows: T[], event: SocialE
   );
 }
 
+/** All once-per-post markers live in one internal field (a JSON list), capped so it cannot grow forever. */
+export const COMMENT_MARKERS_FIELD = "_cm";
+const MAX_MARKERS = 200;
+
 export function commentOnceKey(flowId: string, postId: string | null | undefined) {
-  return `_cm:${flowId}:${postId ?? "any"}`;
+  return `${flowId}:${postId ?? "any"}`;
+}
+
+function readMarkers(contact: ContactRecord | null): string[] {
+  try {
+    const parsed = JSON.parse(contact?.customFields[COMMENT_MARKERS_FIELD] ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 export function alreadyAnswered(contact: ContactRecord | null, flowId: string, postId: string | null | undefined) {
-  return Boolean(contact?.customFields[commentOnceKey(flowId, postId)]);
+  return readMarkers(contact).includes(commentOnceKey(flowId, postId));
+}
+
+export function markAnswered(contact: ContactRecord, flowId: string, postId: string | null | undefined): ContactRecord {
+  const key = commentOnceKey(flowId, postId);
+  const markers = [...readMarkers(contact).filter((item) => item !== key), key].slice(-MAX_MARKERS);
+  return { ...contact, customFields: { ...contact.customFields, [COMMENT_MARKERS_FIELD]: JSON.stringify(markers) } };
 }
 
 export function pickPublicReply(config: SocialTriggerConfig | undefined, random = Math.random()): string | null {

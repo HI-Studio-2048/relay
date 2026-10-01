@@ -1,4 +1,4 @@
-import { and, eq, lte } from "drizzle-orm";
+import { and, eq, inArray, lte } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { broadcastRecipients, broadcasts } from "@/lib/db/schema";
 import { log } from "@/lib/logger";
@@ -13,13 +13,24 @@ export class EmptyAudienceError extends Error {
   }
 }
 
-/** Freeze the audience into recipient rows and queue the send. Used on confirm and when a schedule comes due. */
-export async function materializeBroadcast(broadcastId: string) {
+/**
+ * Freeze the audience into recipient rows and queue the send. Used on confirm and when a schedule
+ * comes due. The status flip is an atomic claim, so two workers (or a double submit) cannot both
+ * send the same broadcast; returns null when someone else already claimed it.
+ */
+export async function materializeBroadcast(broadcastId: string, from: string[] = ["draft", "awaiting_confirm", "scheduled"]) {
   const db = await getDb();
-  const [broadcast] = await db.select().from(broadcasts).where(eq(broadcasts.id, broadcastId)).limit(1);
-  if (!broadcast) throw new Error("Broadcast not found");
-  const audience = await broadcastAudience(broadcast.botId, broadcast.tagId, sanitizeSegment(broadcast.segment));
-  if (audience.length === 0) throw new EmptyAudienceError();
+  const [claimed] = await db
+    .update(broadcasts)
+    .set({ status: "queued" })
+    .where(and(eq(broadcasts.id, broadcastId), inArray(broadcasts.status, from)))
+    .returning();
+  if (!claimed) return null;
+  const audience = await broadcastAudience(claimed.botId, claimed.tagId, sanitizeSegment(claimed.segment));
+  if (audience.length === 0) {
+    await db.update(broadcasts).set({ status: claimed.scheduledAt ? "failed" : "awaiting_confirm", lastError: claimed.scheduledAt ? "Nobody matched the audience" : null }).where(eq(broadcasts.id, broadcastId));
+    throw new EmptyAudienceError();
+  }
 
   await db.delete(broadcastRecipients).where(eq(broadcastRecipients.broadcastId, broadcastId));
   await db.insert(broadcastRecipients).values(
@@ -27,7 +38,7 @@ export async function materializeBroadcast(broadcastId: string) {
   );
   const [updated] = await db
     .update(broadcasts)
-    .set({ status: "queued", totalCount: audience.length, sentCount: 0, failedCount: 0 })
+    .set({ totalCount: audience.length, sentCount: 0, failedCount: 0 })
     .where(eq(broadcasts.id, broadcastId))
     .returning();
   await enqueueBroadcast({ kind: "broadcast", broadcastId });
@@ -43,7 +54,7 @@ export async function releaseDueBroadcasts() {
     .where(and(eq(broadcasts.status, "scheduled"), lte(broadcasts.scheduledAt, new Date())));
   for (const broadcast of due) {
     try {
-      await materializeBroadcast(broadcast.id);
+      await materializeBroadcast(broadcast.id, ["scheduled"]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not start";
       log.warn(`Scheduled broadcast ${broadcast.id} did not start`, message);

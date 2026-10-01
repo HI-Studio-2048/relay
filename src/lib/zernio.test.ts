@@ -253,3 +253,58 @@ describe("comment automations", () => {
     expect(pickPublicReply({ publicReplies: [] })).toBeNull();
   });
 });
+
+describe("review fixes", () => {
+  const buttonsFlow: FlowRecord = {
+    id: "b",
+    triggerType: "keyword",
+    triggerValue: "menu",
+    isActive: true,
+    definition: {
+      startStepId: "m",
+      steps: [
+        { id: "m", type: "text", text: "Pick", buttons: [{ text: "Pricing", next: "p" }, { text: "Site", url: "https://x" }, { text: "Human", next: "h" }] },
+        { id: "p", type: "end", text: "Plans start at $49" },
+        { id: "h", type: "end", text: "Connecting you" },
+      ],
+    },
+  };
+
+  it("maps a typed number or label to the button on the parked step", () => {
+    const first = processInboundEvent({ contact: null, session: null, flows: [buttonsFlow], event: { telegramUserId: "u", text: "menu" } });
+    const byNumber = processInboundEvent({ contact: first.contact, session: first.session, flows: [buttonsFlow], event: { telegramUserId: "u", text: "3" } });
+    expect(byNumber.replies[0]?.text).toBe("Connecting you");
+    expect(byNumber.clicked).toEqual({ flowId: "b", stepId: "m" });
+    const byLabel = processInboundEvent({ contact: first.contact, session: first.session, flows: [buttonsFlow], event: { telegramUserId: "u", text: "pricing" } });
+    expect(byLabel.replies[0]?.text).toBe("Plans start at $49");
+    const urlButton = processInboundEvent({ contact: first.contact, session: first.session, flows: [buttonsFlow], event: { telegramUserId: "u", text: "2" } });
+    expect(urlButton.clicked).toBeUndefined();
+  });
+
+  it("numbers overflow buttons by their position in the full list", () => {
+    const [body] = buildZernioMessages(
+      { text: "Pick", buttons: [1, 2, 3, 4].map((n) => ({ text: `B${n}`, data: `n:${n}` })), source: "flow" },
+      "instagram",
+    );
+    expect(body?.message).toBe("Pick\n4. B4");
+  });
+
+  it("does not let a comment replace a paused or mid-question session", () => {
+    const flow = commentFlow("c", "", {});
+    const session = { id: "s", contactId: "c", flowId: "other", stepId: "x", awaitingInput: true, status: "active" as const };
+    const result = processInboundEvent({ contact: null, session, flows: [flow], event: { telegramUserId: "u", text: "hi", kind: "comment", postId: "p" } });
+    expect(result.replies).toEqual([]);
+    expect(result.session).toBe(session);
+  });
+
+  it("keeps once-per-post markers in one capped field", () => {
+    const flow = commentFlow("c", "", {});
+    let contact = null as ReturnType<typeof processInboundEvent>["contact"] | null;
+    for (let i = 0; i < 205; i += 1) {
+      contact = processInboundEvent({ contact, session: null, flows: [flow], event: { telegramUserId: "u", text: "hi", kind: "comment", postId: `p${i}` } }).contact;
+    }
+    const keys = Object.keys(contact!.customFields).filter((key) => key.startsWith("_"));
+    expect(keys).toEqual(["_cm"]);
+    expect(JSON.parse(contact!.customFields._cm!)).toHaveLength(200);
+  });
+});

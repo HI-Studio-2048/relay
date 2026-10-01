@@ -7,7 +7,7 @@ import {
 } from "@/lib/keywords";
 import { chooseRandomizerPath, nextResumeAt } from "@/lib/smart-delay";
 import { flowIdFromPayload } from "@/lib/starters";
-import { alreadyAnswered, commentOnceKey, matchSocialFlow, pickPublicReply } from "@/lib/social-triggers";
+import { alreadyAnswered, markAnswered, matchSocialFlow, pickPublicReply } from "@/lib/social-triggers";
 import type {
   CaptureField,
   ConditionOp,
@@ -537,6 +537,22 @@ function toEngineResult(
   };
 }
 
+/** The callback button a typed "2" or "Pricing" refers to, on the step the session is parked at. */
+export function typedButton(
+  session: FlowSessionState | null,
+  flows: Map<string, FlowRecord>,
+  text: string | null | undefined,
+): { stepId: string; next: string } | null {
+  const typedText = (text ?? "").trim();
+  if (!session || !typedText) return null;
+  const step = flows.get(session.flowId)?.definition.steps.find((item) => item.id === session.stepId);
+  if (step?.type !== "text" || !step.buttons?.length) return null;
+  const index = /^\d{1,2}$/.test(typedText) ? Number(typedText) - 1 : step.buttons.findIndex((button) => button.text.trim().toLowerCase() === typedText.toLowerCase());
+  const button = index >= 0 ? step.buttons[index] : undefined;
+  if (!button || button.url || !button.next) return null;
+  return { stepId: step.id, next: button.next };
+}
+
 type InboundInput = {
   contact: ContactRecord | null;
   session: FlowSessionState | null;
@@ -549,6 +565,9 @@ function runSocialTrigger(contact: ContactRecord, input: InboundInput, now: numb
   const event = input.event;
   const kind = event.kind;
   if (kind !== "comment" && kind !== "story_reply" && kind !== "story_mention") return null;
+  // A teammate is talking to them, or a flow is waiting on their answer: a comment or story must
+  // not replace that conversation.
+  if (input.session && (input.session.status === "paused" || input.session.awaitingInput)) return null;
   const flow = matchSocialFlow(input.flows, {
     kind,
     text: event.text ?? "",
@@ -562,13 +581,7 @@ function runSocialTrigger(contact: ContactRecord, input: InboundInput, now: numb
   if (kind === "comment" && (config?.oncePerContact ?? true) && alreadyAnswered(input.contact, flow.id, event.postId)) {
     return { contact, session: input.session, replies: [], inboundSaved: true, effects: [], matchedFlowId: null };
   }
-  let marked = contact;
-  if (kind === "comment") {
-    marked = {
-      ...contact,
-      customFields: { ...contact.customFields, [commentOnceKey(flow.id, event.postId)]: new Date(now).toISOString() },
-    };
-  }
+  const marked = kind === "comment" ? markAnswered(contact, flow.id, event.postId) : contact;
   const executed = executeFrom(flow.definition, startSession(marked.id, flow), marked, now, input.flows);
   return {
     ...toEngineResult(executed, true, flow.id),
@@ -641,6 +654,19 @@ export function processInboundEvent(input: {
         );
       }
     }
+  }
+
+  // Platforms without buttons show them as "1. Option": a typed number (or the exact label) picks it.
+  const typed = typedButton(input.session, flowById, input.event.text);
+  if (typed && input.session && input.session.status !== "paused") {
+    const flow = flowById.get(input.session.flowId)!;
+    return {
+      ...toEngineResult(
+        executeFrom(flow.definition, { ...input.session, stepId: typed.next, awaitingInput: false, resumeAt: null }, contact, now, input.flows),
+        inboundSaved,
+      ),
+      clicked: { flowId: flow.id, stepId: typed.stepId },
+    };
   }
 
   const answer = input.event.text || input.event.contactPhone || null;

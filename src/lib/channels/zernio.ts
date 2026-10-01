@@ -126,7 +126,7 @@ export type ZernioMessageBody = Record<string, unknown>;
 /**
  * Turn one engine reply into Zernio send bodies. Zernio takes text + one attachment + either
  * buttons (max 3) or quick replies (max 13). Platforms without buttons get them as numbered text,
- * and the parser maps a typed number back to the button.
+ * and the engine (typedButton) maps a typed number or label back to the button.
  */
 export function buildZernioMessages(reply: OutboundReply, platform: string | null | undefined): ZernioMessageBody[] {
   const meta = zernioPlatformMeta(platform);
@@ -150,7 +150,8 @@ export function buildZernioMessages(reply: OutboundReply, platform: string | nul
   if (overflow.length > 0) {
     message = [
       message,
-      ...overflow.map((button, index) => (button.url ? `${button.text}: ${button.url}` : `${index + 1}. ${button.text}`)),
+      // Numbered by position in the full list, so a typed number maps back to the same button.
+      ...overflow.map((button, index) => (button.url ? `${button.text}: ${button.url}` : `${native.length + index + 1}. ${button.text}`)),
     ]
       .filter(Boolean)
       .join("\n");

@@ -1,4 +1,4 @@
-import { incrWithTtl, lpush, rpop } from "@/lib/redis";
+import { delKey, incrWithTtl, lpush, rpop } from "@/lib/redis";
 import { workerMode } from "@/lib/env";
 
 export type WebhookJob = {
@@ -20,11 +20,18 @@ const WEBHOOK_KEY = "relay:q:webhook";
 const BROADCAST_KEY = "relay:q:broadcast";
 
 export async function enqueueWebhook(job: WebhookJob) {
-  if (job.eventId) {
-    const seen = await incrWithTtl(`relay:event:${job.botId}:${job.eventId}`, 60 * 60 * 24);
+  const dedupeKey = job.eventId ? `relay:event:${job.botId}:${job.eventId}` : null;
+  if (dedupeKey) {
+    const seen = await incrWithTtl(dedupeKey, 60 * 60 * 24);
     if (seen > 1) return false;
   }
-  await lpush(WEBHOOK_KEY, JSON.stringify(job));
+  try {
+    await lpush(WEBHOOK_KEY, JSON.stringify(job));
+  } catch (error) {
+    // Let the provider's retry through: it carries the same event id.
+    if (dedupeKey) await delKey(dedupeKey).catch(() => undefined);
+    throw error;
+  }
   return true;
 }
 

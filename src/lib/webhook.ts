@@ -33,6 +33,7 @@ import { log } from "@/lib/logger";
 import {
   findContactByTelegram,
   isBotPaused,
+  resumeContactAutomation,
   loadActiveFlows,
   loadActiveSession,
   persistContact,
@@ -40,7 +41,7 @@ import {
   saveMessage,
 } from "@/lib/store";
 import type { TelegramUpdate } from "@/lib/telegram";
-import type { ContactRecord, OutboundReply } from "@/lib/types";
+import type { ContactRecord, FlowSessionState, OutboundReply } from "@/lib/types";
 
 type BotRow = typeof bots.$inferSelect;
 
@@ -81,7 +82,11 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
 
   const externalUserId = inbound.externalUserId;
   const existing = await findContactByTelegram(botId, externalUserId);
-  const session = existing ? await loadActiveSession(existing.id) : null;
+  let session = existing ? await loadActiveSession(existing.id) : null;
+  // A takeover pause that has run out resumes the flow it paused (Live Chat "Resume" does the same by hand).
+  if (existing && session?.status === "paused" && existing.botPausedUntil && !isBotPaused({ botPausedUntil: existing.botPausedUntil })) {
+    session = await resumeContactAutomation(existing.id);
+  }
 
   let text = inbound.text ?? null;
   // Meta channels have no /start. A first message that equals a growth-link slug (wa.me pre-filled text)
@@ -123,11 +128,11 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
   };
   const kind = inbound.kind ?? "message";
 
-  // Live Chat takeover: a teammate (or an AI hand-off) is handling this person. Log the message and
-  // leave it for them; comments still run their automations because they are public.
+  // Live Chat takeover: a teammate (or an AI hand-off) is handling this person. Log the message or
+  // comment and leave it for them — no flow, keyword, comment automation or AI reply.
   const paused = Boolean(existing?.botPausedUntil && isBotPaused({ botPausedUntil: existing.botPausedUntil }));
   let result: EngineResult =
-    paused && kind !== "comment" && !startParam
+    paused && !startParam
       ? { contact: { ...existing!, inboxStatus: "open" }, session, replies: [], inboundSaved: true, effects: [] }
       : processInboundEvent({ contact: prepared, session, flows, event: { ...baseEvent, text } });
 
@@ -213,7 +218,9 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
 
   let replies = result.replies;
   if (kind === "comment" && inbound.comment && account.channel === "zernio" && inbound.channelAccountId) {
-    replies = await answerComment(botId, account, contact, inbound, result.publicReply ?? null, replies);
+    const answered = await answerComment(botId, account, contact, inbound, result.publicReply ?? null, replies);
+    replies = [];
+    if (answered.session !== undefined) await persistSession(contact.id, answered.session);
   }
   await deliverReplies({ botId, account, contact, replies });
 
@@ -229,7 +236,8 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
     (kind === "message" || kind === "story_reply") &&
     Boolean(text?.trim()) &&
     !text!.trim().startsWith("/") &&
-    (!result.session || (result.session.status === "active" && !result.session.awaitingInput));
+    // Not while a flow waits on them or a delayed follow-up is pending.
+    (!result.session || (result.session.status === "active" && !result.session.awaitingInput && !result.session.resumeAt));
   let aiAnswered = false;
   if (unanswered && !paused && readAiSettings(bot.settings).autoReply) {
     try {
@@ -265,8 +273,9 @@ function inboundLabel(kind: string, text: string | null) {
 /**
  * Comment → DM. The public reply goes under the comment; the first flow message goes out as a
  * private reply (the only DM Instagram/Facebook allow before the person writes back). Anything after
- * it waits: ManyChat-style flows put a button on the opening message and continue from the tap.
+ * it waits for a tap: the flow's own button, or a Continue button Relay adds when there is none.
  * Platforms without private replies (TikTok, YouTube, LinkedIn…) only get the public reply.
+ * Returns the session to store (undefined keeps the engine's).
  */
 async function answerComment(
   botId: string,
@@ -275,7 +284,7 @@ async function answerComment(
   inbound: NormalizedInbound,
   publicReply: string | null,
   replies: OutboundReply[],
-) {
+): Promise<{ session: FlowSessionState | null | undefined }> {
   const ref = {
     accountId: inbound.channelAccountId!,
     postId: inbound.comment!.postId,
@@ -292,11 +301,24 @@ async function answerComment(
     }
   }
   const [opening, ...rest] = replies;
-  if (!opening) return [];
+  if (!opening) return { session: undefined };
   const supportsPrivate = ref.platform === "instagram" || ref.platform === "facebook";
-  if (!supportsPrivate) return [];
+  // TikTok, YouTube, LinkedIn…: only the public reply is possible, so do not leave a flow running.
+  if (!supportsPrivate) return { session: null };
+  // One private reply is allowed until the person answers. If the opening message has no button,
+  // add a Continue button that resumes the flow at the next message instead of dropping it.
+  const hasCallback = (opening.buttons ?? []).some((button) => button.data?.startsWith("n:"));
+  const held = rest.find((reply) => reply.stepId);
+  const withContinue =
+    !hasCallback && held?.stepId
+      ? { ...opening, buttons: [...(opening.buttons ?? []), { text: "Continue", data: `n:${held.stepId}` }] }
+      : opening;
+  let session: FlowSessionState | null | undefined;
+  if (!hasCallback && held?.stepId && opening.flowId) {
+    session = { id: crypto.randomUUID(), contactId: contact.id, flowId: opening.flowId, stepId: held.stepId, awaitingInput: false, status: "active" };
+  }
   try {
-    const personalized = { ...opening, text: interpolateTemplate(opening.text, contact) };
+    const personalized = { ...withContinue, text: interpolateTemplate(withContinue.text, contact) };
     const sent = await sendZernioPrivateReply(account.token, ref, personalized);
     await saveMessage({
       botId,
@@ -311,11 +333,9 @@ async function answerComment(
     }
   } catch (error) {
     log.warn("Private reply failed", error instanceof Error ? error.message : error);
+    return { session: null };
   }
-  if (rest.length > 0) {
-    log.info(`Comment flow held ${rest.length} message(s) until the contact replies (one private reply allowed)`);
-  }
-  return [];
+  return { session };
 }
 
 /** Telegram does not echo the button text, so read it back from the flow that drew the button. */
