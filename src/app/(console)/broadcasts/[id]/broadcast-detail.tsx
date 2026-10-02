@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { DuplicateButton } from "./duplicate-button";
 import { SendTest } from "./send-test";
 import { cn } from "@/lib/utils";
 
@@ -49,9 +50,12 @@ export function BroadcastDetail({
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
-      <div>
-        <h1 className="font-heading text-3xl tracking-tight">{broadcast.name}</h1>
-        <p className="text-sm text-muted-foreground">Status: {broadcast.status}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-heading text-3xl tracking-tight break-words">{broadcast.name}</h1>
+          <p className="text-sm text-muted-foreground">Status: {broadcast.status.replace(/_/g, " ")}</p>
+        </div>
+        <DuplicateButton broadcastId={broadcast.id} />
       </div>
       {notice === "queued" ? (
         <p className="text-sm text-muted-foreground">Broadcast queued. Sends are rate-limited per account.</p>
