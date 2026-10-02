@@ -116,13 +116,13 @@ export function BroadcastDetail({
               return rows.map((row) => (
                 <div key={row.variant} className="flex items-center gap-3 text-sm">
                   <span className="w-20 font-medium">Version {row.variant.toUpperCase()}</span>
-                  <div className="h-2 flex-1 rounded-full bg-muted">
+                  <div className="h-2 min-w-12 flex-1 rounded-full bg-muted">
                     <div className="h-full rounded-full bg-[#00c853]" style={{ width: `${Math.round(row.rate * 100)}%` }} />
                   </div>
-                  <span className="w-40 text-right tabular-nums text-muted-foreground">
+                  <span className="shrink-0 text-right tabular-nums text-muted-foreground sm:w-40">
                     {Math.round(row.rate * 100)}% · {row.replied}/{row.sent} replied
                   </span>
-                  {leader === row.variant ? <span className="rounded-full bg-[#ecfdf3] px-2 py-0.5 text-[11px] font-medium text-[#05603a]">Leading</span> : <span className="w-[58px]" />}
+                  {leader === row.variant ? <span className="rounded-full bg-[#ecfdf3] px-2 py-0.5 text-[11px] font-medium text-[#05603a]">Leading</span> : <span className="hidden w-[58px] sm:inline-block" />}
                 </div>
               ));
             })()}
