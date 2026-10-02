@@ -648,6 +648,9 @@ function runSocialTrigger(contact: ContactRecord, input: InboundInput, now: numb
   };
 }
 
+/** Internal field: when the "once per 24 hours" default reply last answered this person. */
+export const DEFAULT_REPLY_FIELD = "_dr_at";
+
 export function processInboundEvent(input: {
   contact: ContactRecord | null;
   session: FlowSessionState | null;
@@ -842,6 +845,14 @@ export function processInboundEvent(input: {
   const matched = matchFlowTrigger(input.flows, input.event.text);
   if (matched?.triggerType === "start" && contact.welcomed) {
     return { contact, session: input.session, replies: [], inboundSaved, effects: [] };
+  }
+  // ManyChat Default Reply frequency: "once per 24 hours" stays quiet after it has answered someone.
+  if (matched?.triggerType === "default" && matched.definition.trigger?.defaultFrequency === "daily") {
+    const last = Date.parse(contact.customFields[DEFAULT_REPLY_FIELD] ?? "");
+    if (Number.isFinite(last) && now - last < 86_400_000) {
+      return { contact, session: input.session, replies: [], inboundSaved, effects: [] };
+    }
+    contact = { ...contact, customFields: { ...contact.customFields, [DEFAULT_REPLY_FIELD]: new Date(now).toISOString() } };
   }
   if (matched) {
     const nextContact = matched.triggerType === "start" ? { ...contact, welcomed: true } : contact;

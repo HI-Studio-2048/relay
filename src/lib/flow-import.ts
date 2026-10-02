@@ -37,6 +37,7 @@ function cleanDefinition(definition: FlowDefinition, steps: FlowDefinition["step
         ...(trigger.excludeReplies ? { excludeReplies: true } : {}),
         ...(trigger.hideAfterReply ? { hideAfterReply: true } : {}),
         ...(trigger.aiPublicReply ? { aiPublicReply: true } : {}),
+        ...(trigger.defaultFrequency === "daily" ? { defaultFrequency: "daily" as const } : {}),
       }
     : undefined;
   const rawNotes = (definition.canvas as { notes?: unknown } | undefined)?.notes;

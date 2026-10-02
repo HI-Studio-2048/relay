@@ -277,9 +277,22 @@ export function NodeInspector({
             </p>
           ) : null}
           {meta.triggerType === "default" ? (
-            <p className="text-[11px] leading-snug text-muted-foreground">
-              Runs when a message does not match /start, a command, or a keyword.
-            </p>
+            <div className="space-y-1">
+              <Label>How often</Label>
+              <select
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                value={meta.trigger?.defaultFrequency ?? "always"}
+                onChange={(event) =>
+                  onMetaChange({ trigger: { ...(meta.trigger ?? {}), defaultFrequency: event.target.value === "daily" ? "daily" : "always" } })
+                }
+              >
+                <option value="always">Every time</option>
+                <option value="daily">Once per 24 hours per person</option>
+              </select>
+              <p className="text-[11px] leading-snug text-muted-foreground">
+                Runs when a message does not match /start, a command, a keyword or an AI intent.
+              </p>
+            </div>
           ) : null}
           {meta.triggerType.startsWith("keyword") ? (
             <p className="text-[11px] leading-snug text-muted-foreground">

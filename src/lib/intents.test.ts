@@ -54,3 +54,25 @@ describe("AI public comment replies", () => {
     }
   });
 });
+
+describe("default reply frequency", () => {
+  it("answers at most once per 24 hours when set to daily", async () => {
+    const { processInboundEvent } = await import("@/lib/flow-engine");
+    const flows = [
+      {
+        id: "fallback",
+        triggerType: "default" as const,
+        triggerValue: null,
+        isActive: true,
+        definition: { startStepId: "a", steps: [{ id: "a", type: "end" as const, text: "Not sure — a human will reply soon." }], trigger: { defaultFrequency: "daily" as const } },
+      },
+    ];
+    const t0 = Date.UTC(2026, 0, 1, 9);
+    const first = processInboundEvent({ contact: null, session: null, flows, event: { telegramUserId: "1", text: "hmm" }, now: t0 });
+    expect(first.replies).toHaveLength(1);
+    const second = processInboundEvent({ contact: first.contact, session: first.session, flows, event: { telegramUserId: "1", text: "hello?" }, now: t0 + 3_600_000 });
+    expect(second.replies).toHaveLength(0);
+    const nextDay = processInboundEvent({ contact: second.contact, session: second.session, flows, event: { telegramUserId: "1", text: "hi" }, now: t0 + 25 * 3_600_000 });
+    expect(nextDay.replies).toHaveLength(1);
+  });
+});

@@ -26,6 +26,8 @@ export type SocialTriggerConfig = {
   hideAfterReply?: boolean;
   /** Claude writes each public reply (in the brand voice, about that comment); presets are the fallback. */
   aiPublicReply?: boolean;
+  /** Default reply only: answer every unmatched message, or at most once per 24 hours per person. */
+  defaultFrequency?: "always" | "daily";
 };
 
 /** Account-wide comment moderation, stored on bots.settings.moderation. */
