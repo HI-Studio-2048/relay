@@ -34,7 +34,24 @@ type FlowRow = {
   folder: string | null;
   updatedAt: string;
   stats: FlowStats | null;
+  /** Runs per day, last 14 days. */
+  trend: number[] | null;
 };
+
+/** Tiny 14-day runs chart. */
+function Sparkline({ values }: { values: number[] | null }) {
+  if (!values || values.every((value) => value === 0)) return <span className="text-[11px] text-[#c5cdd6]">—</span>;
+  const max = Math.max(...values, 1);
+  const width = 84;
+  const height = 22;
+  const step = width / (values.length - 1);
+  const points = values.map((value, index) => `${(index * step).toFixed(1)},${(height - 2 - (value / max) * (height - 4)).toFixed(1)}`).join(" ");
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-label={`Runs per day: ${values.join(", ")}`} className="inline-block">
+      <polyline points={points} fill="none" stroke="#0084ff" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 const GROUPS: { value: string; label: string; match: (type: string) => boolean }[] = [
   { value: "all", label: "All", match: () => true },
@@ -321,6 +338,7 @@ export function FlowsBoard({ botId, flows }: { botId: string; flows: FlowRow[] }
             <thead>
               <tr className="border-b border-[#e5e7eb] text-left text-[11px] font-semibold tracking-wide text-[#8b95a1] uppercase">
                 <th className="px-4 py-2.5">Flow</th>
+                <th className="px-3 py-2.5 text-right">14 days</th>
                 <th className="px-3 py-2.5 text-right">Runs</th>
                 <th className="px-3 py-2.5 text-right">CTR</th>
                 <th className="px-3 py-2.5 text-right">Completed</th>
@@ -337,6 +355,9 @@ export function FlowsBoard({ botId, flows }: { botId: string; flows: FlowRow[] }
                       <p className="font-medium text-[#1b1f24]">{flow.name}</p>
                       <p className="truncate text-[12px] text-[#6b7280]">{triggerLabel(flow)}</p>
                     </Link>
+                  </td>
+                  <td className="px-3 py-2.5 text-right">
+                    <Sparkline values={flow.trend} />
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{flow.stats?.runs ?? 0}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{flow.stats?.clicks ? pct(flow.stats.ctr) : "—"}</td>

@@ -165,3 +165,24 @@ export async function lastTouchFlow(contactId: string, days = 7) {
     .limit(1);
   return row?.flowId ?? null;
 }
+
+/** Runs per flow per day (UTC), oldest first, for the Flows board sparklines. */
+export async function dailyRunsByFlow(botId: string, days = 14): Promise<Record<string, number[]>> {
+  const db = await getDb();
+  const start = new Date(Date.now() - (days - 1) * 86_400_000);
+  start.setUTCHours(0, 0, 0, 0);
+  const day = sql<string>`to_char(${flowEvents.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`;
+  const rows = await db
+    .select({ flowId: flowEvents.flowId, day, count: sql<number>`count(*)::int` })
+    .from(flowEvents)
+    .where(and(eq(flowEvents.botId, botId), eq(flowEvents.kind, "start"), gte(flowEvents.createdAt, start)))
+    .groupBy(flowEvents.flowId, day);
+  const keys = Array.from({ length: days }, (_, index) => new Date(start.getTime() + index * 86_400_000).toISOString().slice(0, 10));
+  const result: Record<string, number[]> = {};
+  for (const row of rows) {
+    const series = (result[row.flowId] ??= new Array<number>(days).fill(0));
+    const index = keys.indexOf(row.day);
+    if (index >= 0) series[index] = Number(row.count);
+  }
+  return result;
+}

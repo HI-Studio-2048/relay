@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { statsByFlow } from "@/lib/analytics";
+import { dailyRunsByFlow, statsByFlow } from "@/lib/analytics";
 import { currentBot } from "@/lib/current-bot";
 import { getDb } from "@/lib/db";
 import { flows } from "@/lib/db/schema";
@@ -13,7 +13,7 @@ export default async function FlowsPage() {
     return <p className="text-sm text-muted-foreground">Connect an account first.</p>;
   }
   const db = await getDb();
-  const [rows, stats] = await Promise.all([db.select().from(flows).where(eq(flows.botId, bot.id)), statsByFlow(bot.id)]);
+  const [rows, stats, trends] = await Promise.all([db.select().from(flows).where(eq(flows.botId, bot.id)), statsByFlow(bot.id), dailyRunsByFlow(bot.id)]);
   return (
     <FlowsBoard
       botId={bot.id}
@@ -28,6 +28,7 @@ export default async function FlowsPage() {
           folder: flow.folder ?? null,
           updatedAt: new Date(flow.updatedAt).toISOString(),
           stats: stats[flow.id] ?? null,
+          trend: trends[flow.id] ?? null,
         }))}
     />
   );
