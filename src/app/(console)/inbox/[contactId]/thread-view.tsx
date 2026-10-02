@@ -375,6 +375,24 @@ export function ThreadView({
     }
   };
 
+  const [summarizing, setSummarizing] = useState(false);
+  /** Claude reads the thread and adds a dated one-line summary to the team notes. */
+  const summarizeToNotes = async () => {
+    setSummarizing(true);
+    try {
+      const data = await api<{ assist: Assist }>(`/api/inbox/${contactId}/assist`, { method: "POST" });
+      const line = `${new Date().toLocaleDateString()} · ${data.assist.summary} (${data.assist.intent}, ${data.assist.sentiment})`;
+      const next = [notes.trim(), line].filter(Boolean).join("\n");
+      setNotes(next);
+      await patchContact({ notes: next });
+      toast.success("Summary added to notes");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "AI is unavailable");
+    } finally {
+      setSummarizing(false);
+    }
+  };
+
   const suggest = async () => {
     setAssisting(true);
     try {
@@ -790,7 +808,18 @@ export function ThreadView({
           </section>
 
           <section className="space-y-2 p-4">
-            <p className="text-[11px] font-semibold tracking-wide text-[#8b95a1] uppercase">Notes</p>
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold tracking-wide text-[#8b95a1] uppercase">Notes</p>
+              <button
+                type="button"
+                disabled={summarizing || messages.length === 0}
+                onClick={() => void summarizeToNotes()}
+                className="flex items-center gap-1 text-[11px] font-medium text-[#a21caf] hover:underline disabled:opacity-50"
+              >
+                <Sparkles className={cn("size-3", summarizing && "animate-pulse")} />
+                {summarizing ? "Summarizing…" : "Summarize"}
+              </button>
+            </div>
             <textarea
               rows={4}
               value={notes}
