@@ -10,6 +10,7 @@ import { PlatformBadge } from "@/components/chrome/platform-badge";
 import { useTeam } from "@/components/use-team";
 import { api } from "@/lib/client";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 type Thread = {
   contactId: string;
@@ -80,6 +81,41 @@ export function ConversationList() {
   const [filter, setFilter] = useState<Filter>("open");
   const [query, setQuery] = useState("");
   const [tagFilter, setTagFilter] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const toggleSelected = (id: string) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const bulk = async (action: "done" | "assign", memberId?: string | null) => {
+    setBulkBusy(true);
+    const ids = [...selected];
+    const results = await Promise.allSettled(
+      ids.map((id) =>
+        action === "done"
+          ? api(`/api/contacts/${id}`, { method: "PATCH", body: JSON.stringify({ inboxStatus: "closed" }) })
+          : api(`/api/inbox/${id}/assign`, { method: "POST", body: JSON.stringify({ memberId: memberId ?? null }) }),
+      ),
+    );
+    const failed = results.filter((result) => result.status === "rejected").length;
+    if (failed) toast.error(`${failed} of ${ids.length} could not be updated`);
+    else toast.success(action === "done" ? `Marked ${ids.length} done` : `Assigned ${ids.length}`);
+    setSelected(new Set());
+    setBulkBusy(false);
+    setThreads((current) =>
+      (current ?? []).map((thread) =>
+        !ids.includes(thread.contactId)
+          ? thread
+          : action === "done"
+            ? { ...thread, status: "closed", needsReply: false }
+            : { ...thread, assignedTo: memberId ?? null },
+      ),
+    );
+  };
   const allTags = useMemo(() => [...new Set((threads ?? []).flatMap((thread) => thread.tags ?? []))].sort((a, b) => a.localeCompare(b)), [threads]);
   const { team, me, setMe, byId } = useTeam();
   const router = useRouter();
@@ -283,6 +319,34 @@ export function ConversationList() {
           ))}
         </div>
       </div>
+      {selected.size > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 border-b border-[#e5e7eb] bg-[#eef6ff] px-3 py-2 text-[12px]">
+          <span className="font-medium text-[#0b63c5]">{selected.size} selected</span>
+          <button type="button" disabled={bulkBusy} onClick={() => void bulk("done")} className="rounded-md bg-white px-2 py-1 ring-1 ring-[#e5e7eb] hover:bg-[#f9fafb]">
+            Mark done
+          </button>
+          {team.length > 0 ? (
+            <select
+              aria-label="Assign selected"
+              value=""
+              disabled={bulkBusy}
+              onChange={(event) => void bulk("assign", event.target.value === "none" ? null : event.target.value)}
+              className="rounded-md bg-white px-1.5 py-1 ring-1 ring-[#e5e7eb]"
+            >
+              <option value="">Assign to…</option>
+              <option value="none">Unassigned</option>
+              {team.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          <button type="button" onClick={() => setSelected(new Set())} className="ml-auto text-[#6b7280] hover:text-[#1b1f24]">
+            Clear
+          </button>
+        </div>
+      ) : null}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {threads === null ? (
           <p className="p-4 text-[13px] text-[#6b7280]">Loading…</p>
@@ -292,8 +356,18 @@ export function ConversationList() {
           </p>
         ) : (
           visible.map((thread) => (
+            <div key={thread.contactId} className="group relative">
+            <input
+              type="checkbox"
+              aria-label={`Select ${thread.name}`}
+              checked={selected.has(thread.contactId)}
+              onChange={() => toggleSelected(thread.contactId)}
+              className={cn(
+                "absolute top-3 left-1 z-10 size-3.5 accent-[#0084ff]",
+                selected.size > 0 ? "block" : "hidden group-hover:block",
+              )}
+            />
             <Link
-              key={thread.contactId}
               href={`/inbox/${thread.contactId}`}
               className={cn(
                 "flex gap-3 border-b border-[#f0f2f4] px-3 py-2.5 hover:bg-[#f7f9fb]",
@@ -340,6 +414,7 @@ export function ConversationList() {
                 </div>
               </div>
             </Link>
+            </div>
           ))
         )}
       </div>
