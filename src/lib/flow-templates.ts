@@ -370,6 +370,32 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
     },
   },
   {
+    id: "stripe-checkout",
+    name: "Sell in the DMs (Stripe)",
+    description: "DM BUY to get the offer and a Stripe Payment Link. Paid checkouts come back as a Purchase goal with revenue, credited to this flow.",
+    category: "Sales",
+    channels: ["instagram", "facebook", "whatsapp", "telegram"],
+    triggerType: "keyword_contains",
+    triggerValue: "buy, order, checkout",
+    definition: {
+      startStepId: "offer",
+      steps: [
+        {
+          id: "offer",
+          type: "text",
+          text: "Great choice {{first_name|friend}}! The Starter Kit is $49 and ships in 2 days 📦",
+          buttons: [
+            { text: "Pay securely", url: "https://buy.stripe.com/test_your_link?client_reference_id={{contact_id}}" },
+            { text: "I have a question", next: "question" },
+          ],
+        },
+        { id: "question", type: "tag", tagName: "checkout-question", action: "add", next: "handoff" },
+        { id: "handoff", type: "notify", text: "{{name}} has a question before buying", next: "reply" },
+        { id: "reply", type: "end", text: "No problem — a teammate will answer here in a moment." },
+      ],
+    },
+  },
+  {
     id: "drop-waitlist",
     name: "Product drop waitlist",
     description: "DM DROP to join the waitlist; subscribers get the broadcast when it goes live.",
