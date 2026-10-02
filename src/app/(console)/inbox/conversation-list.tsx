@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlarmClock, Bell, BellOff, Search } from "lucide-react";
 import { useBot } from "@/components/bot-provider";
 import { ContactAvatar } from "@/components/chrome/avatar";
-import { PlatformBadge } from "@/components/chrome/platform-badge";
+import { PlatformBadge, zernioPlatformLabel } from "@/components/chrome/platform-badge";
 import { useTeam } from "@/components/use-team";
 import { api } from "@/lib/client";
 import { cn } from "@/lib/utils";
@@ -81,6 +81,11 @@ export function ConversationList() {
   const [filter, setFilter] = useState<Filter>("open");
   const [query, setQuery] = useState("");
   const [tagFilter, setTagFilter] = useState("");
+  const [platformFilter, setPlatformFilter] = useState("");
+  const allPlatforms = useMemo(
+    () => [...new Set((threads ?? []).map((thread) => thread.platform).filter((value): value is string => Boolean(value)))].sort(),
+    [threads],
+  );
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const toggleSelected = (id: string) =>
@@ -92,9 +97,10 @@ export function ConversationList() {
     });
 
   // A new filter, tag or search starts a fresh selection, so bulk actions never touch hidden chats.
-  const [selectionKey, setSelectionKey] = useState(`${filter}|${tagFilter}|${query}`);
-  if (selectionKey !== `${filter}|${tagFilter}|${query}`) {
-    setSelectionKey(`${filter}|${tagFilter}|${query}`);
+  const viewKey = `${filter}|${tagFilter}|${platformFilter}|${query}`;
+  const [selectionKey, setSelectionKey] = useState(viewKey);
+  if (selectionKey !== viewKey) {
+    setSelectionKey(viewKey);
     setSelected(new Set());
   }
 
@@ -206,6 +212,7 @@ export function ConversationList() {
       if (filter === "closed" && thread.status !== "closed") return false;
       if (filter === "snoozed" && thread.status !== "snoozed") return false;
       if (tagFilter && !(thread.tags ?? []).includes(tagFilter)) return false;
+      if (platformFilter && thread.platform !== platformFilter) return false;
       if (filter === "unanswered" && !thread.needsReply) return false;
       if (filter === "mine" && !(thread.status === "open" && me && thread.assignedTo === me)) return false;
       if (filter === "unassigned" && !(thread.status === "open" && !thread.assignedTo)) return false;
@@ -216,7 +223,7 @@ export function ConversationList() {
         thread.lastBody.toLowerCase().includes(needle)
       );
     });
-  }, [threads, filter, query, me, tagFilter]);
+  }, [threads, filter, query, me, tagFilter, platformFilter]);
 
   useEffect(() => {
     const waiting = counts.unanswered;
@@ -295,20 +302,39 @@ export function ConversationList() {
             {notify ? <Bell className="size-3.5" /> : <BellOff className="size-3.5" />}
           </button>
         </div>
-        {allTags.length > 0 ? (
-          <select
-            aria-label="Filter by tag"
-            value={tagFilter}
-            onChange={(event) => setTagFilter(event.target.value)}
-            className="w-full rounded-lg border border-[#e5e7eb] bg-white px-2 py-1 text-[12px] text-[#1b1f24]"
-          >
-            <option value="">Any tag</option>
-            {allTags.map((tag) => (
-              <option key={tag} value={tag}>
-                #{tag}
-              </option>
-            ))}
-          </select>
+        {allTags.length > 0 || allPlatforms.length > 1 ? (
+          <div className="flex gap-2">
+            {allPlatforms.length > 1 ? (
+              <select
+                aria-label="Filter by network"
+                value={platformFilter}
+                onChange={(event) => setPlatformFilter(event.target.value)}
+                className="min-w-0 flex-1 rounded-lg border border-[#e5e7eb] bg-white px-2 py-1 text-[12px] text-[#1b1f24]"
+              >
+                <option value="">All networks</option>
+                {allPlatforms.map((platform) => (
+                  <option key={platform} value={platform}>
+                    {zernioPlatformLabel(platform)}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            {allTags.length > 0 ? (
+              <select
+                aria-label="Filter by tag"
+                value={tagFilter}
+                onChange={(event) => setTagFilter(event.target.value)}
+                className="min-w-0 flex-1 rounded-lg border border-[#e5e7eb] bg-white px-2 py-1 text-[12px] text-[#1b1f24]"
+              >
+                <option value="">Any tag</option>
+                {allTags.map((tag) => (
+                  <option key={tag} value={tag}>
+                    #{tag}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </div>
         ) : null}
         <div className="flex gap-1 overflow-x-auto">
           {FILTERS.filter((item) => !item.team || team.length > 0).map((item) => (
