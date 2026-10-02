@@ -42,6 +42,19 @@ describe("interpolateTemplate", () => {
     expect(interpolateTemplate("{{unknown}} stays", contact)).toBe("{{unknown}} stays");
     expect(interpolateTemplate("{{unknown|ok}}", contact)).toBe("ok");
   });
+
+  it("encodes values inside URLs so they can't add or cut query params", () => {
+    const sneaky = { ...contact, firstName: "x&client_reference_id=other#" };
+    expect(interpolateTemplate("https://buy.stripe.com/a?n={{first_name}}&client_reference_id={{contact_id}}", sneaky, {}, "url")).toBe(
+      "https://buy.stripe.com/a?n=x%26client_reference_id%3Dother%23&client_reference_id=c",
+    );
+    expect(interpolateTemplate("{{company}}", { ...contact, customFields: { company: "https://acme.test/x" } }, {}, "url")).toBe("https://acme.test/x");
+  });
+
+  it("lets a custom contact_id field win over the built-in", () => {
+    expect(interpolateTemplate("{{contact_id}}", { ...contact, customFields: { contact_id: "mc-77" } })).toBe("mc-77");
+    expect(interpolateTemplate("{{contact_id}}", contact)).toBe("c");
+  });
 });
 
 describe("bot fields", () => {

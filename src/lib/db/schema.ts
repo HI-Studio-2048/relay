@@ -365,15 +365,16 @@ export const flowEvents = pgTable("flow_events", {
   botId: text("bot_id")
     .notNull()
     .references(() => bots.id, { onDelete: "cascade" }),
-  flowId: text("flow_id")
-    .notNull()
-    .references(() => flows.id, { onDelete: "cascade" }),
+  /** Null for goals not tied to a flow (e.g. a Stripe payment with no recent flow). */
+  flowId: text("flow_id").references(() => flows.id, { onDelete: "cascade" }),
   stepId: text("step_id"),
   contactId: text("contact_id").references(() => contacts.id, { onDelete: "set null" }),
   kind: text("kind").notNull(),
   /** Goal events: the goal name and its value (revenue). */
   name: text("name"),
   value: doublePrecision("value"),
+  /** ISO currency of `value` (lowercase), when known. */
+  currency: text("currency"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -443,4 +444,18 @@ export const activityLog = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("activity_log_bot_idx").on(table.botId, table.createdAt)],
+);
+
+/** Provider event ids already handled (e.g. Stripe retries), so a redelivery is a no-op. */
+export const processedEvents = pgTable(
+  "processed_events",
+  {
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    source: text("source").notNull(),
+    eventId: text("event_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.botId, table.source, table.eventId] })],
 );

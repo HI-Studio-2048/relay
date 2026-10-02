@@ -82,7 +82,7 @@ export async function applyFlowEffects(input: {
   for (const effect of input.effects) {
     try {
       if (effect.type === "http") {
-        const url = interpolateTemplate(effect.url, input.contact).trim();
+        const url = interpolateTemplate(effect.url, input.contact, {}, "url").trim();
         if (!/^https:\/\//i.test(url)) {
           log.warn("HTTP step skipped: URL must be https");
           continue;

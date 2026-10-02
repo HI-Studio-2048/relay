@@ -308,4 +308,13 @@ CREATE TABLE IF NOT EXISTS activity_log (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS activity_log_bot_idx ON activity_log(bot_id, created_at);
+ALTER TABLE flow_events ALTER COLUMN flow_id DROP NOT NULL;
+ALTER TABLE flow_events ADD COLUMN IF NOT EXISTS currency text;
+CREATE TABLE IF NOT EXISTS processed_events (
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  source text NOT NULL,
+  event_id text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (bot_id, source, event_id)
+);
 `;

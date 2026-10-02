@@ -613,3 +613,22 @@ export async function seedBotDefaults(botId: string) {
     ]);
   }
 }
+
+/**
+ * Add one tag without rewriting the whole contact (so a field or tag saved concurrently is not lost),
+ * then fire tag rules and the webhook if the tag is new.
+ */
+export async function addContactTag(botId: string, contactId: string, tagName: string) {
+  const db = await getDb();
+  let [tag] = await db.select().from(tags).where(and(eq(tags.botId, botId), eq(tags.name, tagName))).limit(1);
+  if (!tag) {
+    await db.insert(tags).values({ id: crypto.randomUUID(), botId, name: tagName, color: "#c4a574" }).onConflictDoNothing();
+    [tag] = await db.select().from(tags).where(and(eq(tags.botId, botId), eq(tags.name, tagName))).limit(1);
+  }
+  if (!tag) return false;
+  const added = await db.insert(contactTags).values({ contactId, tagId: tag.id }).onConflictDoNothing().returning();
+  if (added.length === 0) return false;
+  const record = await loadContactRecord(contactId);
+  if (record) await fireContactRules(botId, { ...record, tags: record.tags.filter((name) => name !== tagName) }, record);
+  return true;
+}

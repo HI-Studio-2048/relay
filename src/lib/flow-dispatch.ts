@@ -37,19 +37,20 @@ export async function deliverReplies(input: {
   for (const reply of input.replies) {
     await acquireSendSlot(input.botId, input.contact.telegramUserId);
     const fill = (value: string) => interpolateTemplate(value, input.contact, botValues);
+    const fillUrl = (value: string) => interpolateTemplate(value, input.contact, botValues, "url");
     const personalized = {
       ...reply,
       text: fill(reply.text),
       // Link buttons can carry variables too (e.g. a Stripe Payment Link with {{contact_id}}).
-      ...(reply.buttons ? { buttons: reply.buttons.map((button) => (button.url ? { ...button, url: fill(button.url) } : button)) } : {}),
+      ...(reply.buttons ? { buttons: reply.buttons.map((button) => (button.url ? { ...button, url: fillUrl(button.url) } : button)) } : {}),
       ...(reply.cards
         ? {
             cards: reply.cards.map((card) => ({
               ...card,
               title: fill(card.title),
               ...(card.subtitle ? { subtitle: fill(card.subtitle) } : {}),
-              ...(card.url ? { url: fill(card.url) } : {}),
-              ...(card.buttons ? { buttons: card.buttons.map((button) => (button.url ? { ...button, url: fill(button.url) } : button)) } : {}),
+              ...(card.url ? { url: fillUrl(card.url) } : {}),
+              ...(card.buttons ? { buttons: card.buttons.map((button) => (button.url ? { ...button, url: fillUrl(button.url) } : button)) } : {}),
             })),
           }
         : {}),

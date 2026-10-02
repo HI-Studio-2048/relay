@@ -5,7 +5,13 @@ import type { ContactRecord } from "@/lib/types";
  * {{name}} / {{field:key}}, any custom field by bare key ({{company}}), and a fallback after a pipe
  * for empty values: {{first_name|there}}.
  */
-export function interpolateTemplate(template: string, contact: ContactRecord, extra: Record<string, string> = {}): string {
+export function interpolateTemplate(
+  template: string,
+  contact: ContactRecord,
+  extra: Record<string, string> = {},
+  /** "url": percent-encode values placed after the start, so a name or answer can't add or cut query params. */
+  mode: "text" | "url" = "text",
+): string {
   const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim();
   const builtins: Record<string, string> = {
     name,
@@ -22,14 +28,18 @@ export function interpolateTemplate(template: string, contact: ContactRecord, ex
     contact_id: contact.id,
     ...extra,
   };
-  return template.replace(/\{\{\s*([a-z0-9_:.]+)\s*(?:\|([^}]*))?\}\}/gi, (match, rawKey: string, fallback?: string) => {
+  return template.replace(/\{\{\s*([a-z0-9_:.]+)\s*(?:\|([^}]*))?\}\}/gi, (match, rawKey: string, fallback: string | undefined, offset: number) => {
     const key = rawKey.toLowerCase();
     let value: string | undefined;
     if (key.startsWith("field:")) value = contact.customFields[rawKey.slice("field:".length)] ?? "";
+    // A custom field named contact_id (common in ManyChat imports) keeps winning over the built-in.
+    else if (key === "contact_id" && rawKey in contact.customFields) value = contact.customFields[rawKey];
     else if (key in builtins) value = builtins[key];
     else if (rawKey in contact.customFields) value = contact.customFields[rawKey];
     else if (fallback === undefined) return match;
-    return value?.trim() ? value : (fallback ?? "").trim();
+    const filled = value?.trim() ? value : (fallback ?? "").trim();
+    // A variable that is the whole start of a URL is the URL itself; anything later is a path or query value.
+    return mode === "url" && offset > 0 ? encodeURIComponent(filled) : filled;
   });
 }
 

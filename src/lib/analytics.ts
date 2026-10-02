@@ -8,12 +8,13 @@ export type FlowEventKind = "start" | "sent" | "click" | "complete" | "goal";
 
 export type FlowEventInput = {
   botId: string;
-  flowId: string;
+  flowId: string | null;
   stepId?: string | null;
   contactId?: string | null;
   kind: FlowEventKind;
   name?: string | null;
   value?: number | null;
+  currency?: string | null;
 };
 
 /** Best effort: analytics never block or fail a conversation. */
@@ -31,6 +32,7 @@ export async function recordFlowEvents(events: FlowEventInput[]) {
         kind: event.kind,
         name: event.name ?? null,
         value: event.value ?? null,
+        currency: event.currency ?? null,
       })),
     );
   } catch (error) {
@@ -63,7 +65,7 @@ export type FlowStats = {
 
 const EMPTY: FlowStats = { runs: 0, people: 0, sent: 0, clicks: 0, completed: 0, ctr: 0, completionRate: 0, conversions: 0, revenue: 0 };
 
-type Row = { flowId: string; stepId: string | null; kind: string; count: number; people: number; value: number };
+type Row = { flowId: string | null; stepId: string | null; kind: string; count: number; people: number; value: number };
 
 function summarize(rows: Row[], buttonSteps: Set<string>): FlowStats {
   const total = (kind: string) => rows.filter((row) => row.kind === kind).reduce((sum, row) => sum + row.count, 0);
@@ -180,6 +182,7 @@ export async function dailyRunsByFlow(botId: string, days = 14): Promise<Record<
   const keys = Array.from({ length: days }, (_, index) => new Date(start.getTime() + index * 86_400_000).toISOString().slice(0, 10));
   const result: Record<string, number[]> = {};
   for (const row of rows) {
+    if (!row.flowId) continue;
     const series = (result[row.flowId] ??= new Array<number>(days).fill(0));
     const index = keys.indexOf(row.day);
     if (index >= 0) series[index] = Number(row.count);

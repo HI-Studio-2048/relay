@@ -33,3 +33,13 @@ export function readStripe(settings: Record<string, unknown> | null | undefined)
     tag: typeof raw.tag === "string" ? raw.tag.trim().slice(0, 60) : "customer",
   };
 }
+
+/** Stripe amounts are in the currency's minor unit; most have 2 decimals, these have 0 or 3. */
+const ZERO_DECIMAL = new Set(["bif", "clp", "djf", "gnf", "jpy", "kmf", "krw", "mga", "pyg", "rwf", "ugx", "vnd", "vuv", "xaf", "xof", "xpf"]);
+const THREE_DECIMAL = new Set(["bhd", "jod", "kwd", "omr", "tnd"]);
+
+export function stripeAmount(minor: number, currency: string | undefined) {
+  const code = (currency ?? "").toLowerCase();
+  const exponent = ZERO_DECIMAL.has(code) ? 0 : THREE_DECIMAL.has(code) ? 3 : 2;
+  return minor / 10 ** exponent;
+}
