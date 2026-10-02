@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/client";
+import { AiPlayground } from "@/components/ai-playground";
 import type { BotAiSettings, ConversationInsights } from "@/lib/ai";
 
 const EXAMPLES = [
@@ -253,6 +254,8 @@ export function AiSettingsForm({
           </Button>
         </div>
       </Panel>
+
+      {configured ? <AiPlayground botId={botId} settings={settings} /> : null}
 
       <Panel tone="start" icon={MessageSquareDashed} label="Auto-reply" title="Answer messages no flow or keyword catches">
         <label className="flex items-center gap-2 text-[13px]">
