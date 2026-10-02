@@ -44,5 +44,7 @@ export default async function ContactsPage() {
       },
     }))
     .sort((a, b) => (b.lastInboundAt ?? b.createdAt).localeCompare(a.lastInboundAt ?? a.createdAt));
-  return <ContactsClient botId={bot.id} initialRows={rows} options={options} flows={flowRows} />;
+  // One clock for server and client render, so "5m ago" labels hydrate identically.
+  const renderedAt = new Date().getTime();
+  return <ContactsClient botId={bot.id} initialRows={rows} options={options} flows={flowRows} renderedAt={renderedAt} />;
 }

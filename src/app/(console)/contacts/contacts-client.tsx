@@ -48,11 +48,13 @@ export function ContactsClient({
   initialRows,
   options,
   flows,
+  renderedAt,
 }: {
   botId: string;
   initialRows: ContactRow[];
   options: SegmentOptions;
   flows: { id: string; name: string }[];
+  renderedAt: number;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -65,7 +67,7 @@ export function ContactsClient({
   const [busy, setBusy] = useState(false);
   const [importing, setImporting] = useState(false);
   // One clock per page load keeps filtering and "x ago" consistent (and render pure).
-  const [now] = useState(() => Date.now());
+  const now = renderedAt;
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();

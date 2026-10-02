@@ -414,7 +414,9 @@ export function ConversationList() {
                   <p className={cn("truncate text-[13px] text-[#1b1f24]", thread.needsReply ? "font-semibold" : "font-medium")}>
                     {thread.name}
                   </p>
-                  <span className="shrink-0 text-[11px] text-[#8b95a1]">{relativeTime(thread.lastAt)}</span>
+                  <span className="shrink-0 text-[11px] text-[#8b95a1]" suppressHydrationWarning>
+                    {relativeTime(thread.lastAt)}
+                  </span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <p className={cn("min-w-0 flex-1 truncate text-[12px]", thread.needsReply ? "text-[#1b1f24]" : "text-[#6b7280]")}>
