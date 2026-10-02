@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Copy, KeyRound, Trash2, Webhook } from "lucide-react";
 import { toast } from "sonner";
+import { WEBHOOK_EVENTS } from "@/lib/webhook-events";
 import { Panel } from "@/components/chrome/panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,17 +22,7 @@ type Subscription = {
   lastDeliveredAt: string | null;
 };
 
-/** Mirrors WEBHOOK_EVENTS in lib/developer.ts (kept here so the page stays browser-only). */
-const EVENTS = [
-  { value: "contact.created", label: "New contact" },
-  { value: "message.received", label: "Message or comment received" },
-  { value: "contact.tag_added", label: "Tag added" },
-  { value: "contact.tag_removed", label: "Tag removed" },
-  { value: "contact.field_set", label: "Field set (incl. email / phone)" },
-  { value: "contact.subscribed", label: "Subscribed to a list" },
-  { value: "flow.completed", label: "Flow completed" },
-  { value: "conversation.handoff", label: "AI handed off to a human" },
-];
+const EVENTS = WEBHOOK_EVENTS;
 
 const copy = (text: string) => {
   void navigator.clipboard.writeText(text).then(() => toast.success("Copied"));

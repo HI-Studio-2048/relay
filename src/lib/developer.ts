@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db";
 import { apiKeys, webhookSubscriptions } from "@/lib/db/schema";
 import { log } from "@/lib/logger";
 import type { ContactRecord } from "@/lib/types";
+import { WEBHOOK_EVENTS } from "@/lib/webhook-events";
 
 /** The contact shape the public API and webhooks expose (internal `_` fields hidden). */
 export function publicContact(contact: ContactRecord) {
@@ -24,19 +25,7 @@ export function publicContact(contact: ContactRecord) {
 }
 
 /** Events Relay can push to your endpoints. */
-export const WEBHOOK_EVENTS = [
-  { value: "contact.created", label: "New contact" },
-  { value: "message.received", label: "Message or comment received" },
-  { value: "contact.tag_added", label: "Tag added" },
-  { value: "contact.tag_removed", label: "Tag removed" },
-  { value: "contact.field_set", label: "Field set (incl. email / phone captured)" },
-  { value: "contact.subscribed", label: "Subscribed to a list" },
-  { value: "flow.completed", label: "Flow completed" },
-  { value: "conversation.handoff", label: "AI handed off to a human" },
-  { value: "conversation.closed", label: "Conversation marked Done in Live Chat" },
-  { value: "conversation.rated", label: "Customer rated a conversation (CSAT)" },
-  { value: "goal.reached", label: "Flow goal reached (conversion)" },
-] as const;
+export { WEBHOOK_EVENTS };
 
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number]["value"];
 
