@@ -44,6 +44,24 @@ export function ComposeBroadcast({
   const [text, setText] = useState("");
   const [abTest, setAbTest] = useState(false);
   const [textB, setTextB] = useState("");
+  const [goal, setGoal] = useState("");
+  const [drafting, setDrafting] = useState(false);
+
+  const draft = async () => {
+    if (!goal.trim()) return;
+    setDrafting(true);
+    try {
+      const data = await api<{ a: string; b: string }>("/api/broadcasts/draft", { method: "POST", body: JSON.stringify({ botId, goal }) });
+      setText(data.a);
+      setTextB(data.b);
+      setAbTest(true);
+      toast.success("Two versions written — edit them, then A/B test");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "AI is unavailable");
+    } finally {
+      setDrafting(false);
+    }
+  };
   const [preview, setPreview] = useState<{ count: number; sample: string[] }>({ count: initialEveryone, sample: [] });
   const [saving, setSaving] = useState(false);
   const router = useRouter();
@@ -167,6 +185,17 @@ export function ComposeBroadcast({
         </div>
         {content === "text" ? (
           <div className="space-y-1">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                value={goal}
+                onChange={(event) => setGoal(event.target.value)}
+                placeholder="✨ What is it for? e.g. fall sale, 20% off this weekend only"
+                className="h-8 flex-1 rounded-lg border border-[#f0abfc] bg-[#fdf4ff] px-2.5 text-[13px] outline-none focus:border-[#d946ef]"
+              />
+              <Button type="button" size="sm" variant="outline" disabled={drafting || !goal.trim()} onClick={() => void draft()}>
+                {drafting ? "Writing…" : "Write it with AI"}
+              </Button>
+            </div>
             <Textarea rows={6} value={text} onChange={(event) => setText(event.target.value)} placeholder="Hey {{first_name|there}}! …" />
             <p className="text-[11px] text-muted-foreground">
               Variables: {"{{first_name}}"}, {"{{email}}"}, any custom field like {"{{company}}"}, with fallbacks {"{{first_name|there}}"}.

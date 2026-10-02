@@ -349,6 +349,29 @@ export async function writeWeeklyDigest(input: { brandName: string; facts: Recor
   });
 }
 
+const BroadcastDraftSchema = z.object({
+  version_a: z.string().describe("The broadcast message."),
+  version_b: z.string().describe("A genuinely different angle (hook, offer framing or call to action) for an A/B test."),
+});
+
+/** Compose broadcast "✨ Write it": two DM-sized versions in the brand voice. */
+export async function draftBroadcast(input: { goal: string; settings: BotAiSettings; brandName: string }) {
+  const result = await parse(BroadcastDraftSchema, {
+    system: [
+      `You write broadcast DMs that ${input.brandName} sends to subscribers on Instagram, Messenger, WhatsApp and other chat apps.`,
+      input.settings.persona?.trim() ? `Brand voice:\n${input.settings.persona.trim()}` : "",
+      input.settings.knowledge?.trim() ? `Facts you may use:\n${input.settings.knowledge.trim().slice(0, 4000)}` : "",
+      "Rules: under 300 characters each, personal ({{first_name|there}} works), one clear call to action, at most two emoji, no hashtags, never invent prices or dates that the goal or facts do not give.",
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+    effort: "low",
+    maxTokens: 3000,
+    user: `<goal>\n${input.goal.slice(0, 1000)}\n</goal>`,
+  });
+  return { a: result.version_a.trim(), b: result.version_b.trim() };
+}
+
 export const REWRITE_STYLES = {
   shorter: "Make it shorter and punchier. DM-sized.",
   friendlier: "Make it warmer and friendlier, still professional.",
