@@ -13,6 +13,7 @@ import { PlatformDot, zernioPlatformLabel } from "@/components/chrome/platform-b
 import { BotFieldsCard } from "@/components/bot-fields-card";
 import { TeamCard } from "@/components/team-card";
 import { AlertsCard } from "@/components/alerts-card";
+import { StripeCard } from "@/components/stripe-card";
 import { FieldsCard } from "@/components/fields-card";
 import { TagsCard } from "@/components/tags-card";
 
@@ -295,6 +296,7 @@ export default function SetupPage() {
 
       {bot ? <BotFieldsCard botId={bot.id} /> : null}
       {bot ? <AlertsCard botId={bot.id} /> : null}
+      {bot ? <StripeCard botId={bot.id} /> : null}
       {bot ? <FieldsCard botId={bot.id} /> : null}
       {bot ? <TagsCard botId={bot.id} /> : null}
 

@@ -17,6 +17,7 @@ Origin is the source of truth for this project.
 7. **Broadcasts** — segments (tag, field, platform, list, last message within N hours, join date), send a message or a whole flow, schedule, **smart send time** (each person gets it at the hour they usually message, within 24h), **A/B tests** (two versions, 50/50 split, reply rate within 48h), **send a test** to yourself first, and an explicit confirm before anything queues.
 8. **Growth** — trackable links (`/go/<slug>`), QR codes, attribution; Instagram ice breakers, Messenger menu, business hours with an away message.
 9. **Analytics** — overview dashboard with an **AI weekly digest** (what happened, what to do next), a getting-started checklist, a Live Chat team report (replies, conversations, median first response and CSAT per teammate), per-flow runs / CTR / completion / conversions / revenue, AI conversation insights.
+10. **Payments** — Stripe Payment Links in flows (`?client_reference_id={{contact_id}}`); a signed Stripe webhook turns each checkout into a goal with the amount, credited to the flow that sent the link, plus a buyer tag.
 10. **Team alerts** — AI hand-offs, Notify admin steps and rule alerts post to Slack, Discord or Teams with a link to the chat.
 11. **API & webhooks** — `/api/v1` with API keys; signed outgoing webhooks for Zapier, Make or your backend.
 

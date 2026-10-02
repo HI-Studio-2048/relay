@@ -10,6 +10,7 @@ const PUBLIC_PREFIXES = [
   "/api/telegram/webhook",
   "/api/meta/webhook",
   "/api/zernio/webhook",
+  "/api/stripe/webhook",
   "/api/v1",
   "/go",
   "/widget",

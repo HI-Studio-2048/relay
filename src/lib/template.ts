@@ -18,6 +18,8 @@ export function interpolateTemplate(template: string, contact: ContactRecord, ex
     telegram_id: contact.telegramUserId,
     user_id: contact.telegramUserId,
     platform: contact.platform ?? "",
+    // For payment links: ?client_reference_id={{contact_id}} lets Stripe report the purchase back.
+    contact_id: contact.id,
     ...extra,
   };
   return template.replace(/\{\{\s*([a-z0-9_:.]+)\s*(?:\|([^}]*))?\}\}/gi, (match, rawKey: string, fallback?: string) => {

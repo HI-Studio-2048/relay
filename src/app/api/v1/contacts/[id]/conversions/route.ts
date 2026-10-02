@@ -1,11 +1,6 @@
-import { eq } from "drizzle-orm";
-import { lastTouchFlow, recordFlowEvents } from "@/lib/analytics";
 import { apiHandler, ownedContactId } from "@/lib/api-v1";
-import { getDb } from "@/lib/db";
-import { flows } from "@/lib/db/schema";
+import { recordConversion } from "@/lib/conversions";
 import { json, readJson, type RouteParams } from "@/lib/http";
-import { runRules } from "@/lib/rules";
-import { loadContactRecord } from "@/lib/store";
 
 /**
  * POST /api/v1/contacts/:id/conversions { name, value?, flow_id? }
@@ -19,15 +14,7 @@ export async function POST(request: Request, context: RouteParams<{ id: string }
     const name = body.name?.trim().slice(0, 80) || "Conversion";
     const value = body.value === undefined || body.value === null ? null : Number(body.value);
     if (value !== null && !Number.isFinite(value)) return json({ error: "value must be a number" }, 400);
-    let flowId: string | null = body.flow_id ?? (await lastTouchFlow(id));
-    if (flowId) {
-      const db = await getDb();
-      const [flow] = await db.select({ botId: flows.botId }).from(flows).where(eq(flows.id, flowId)).limit(1);
-      if (!flow || flow.botId !== botId) flowId = null;
-    }
-    if (flowId) await recordFlowEvents([{ botId, flowId, contactId: id, kind: "goal", name, value }]);
-    const contact = await loadContactRecord(id);
-    if (contact) await runRules(botId, contact, [{ type: "goal_reached", value: name }]);
+    const flowId = await recordConversion({ botId, contactId: id, name, value, flowId: body.flow_id ?? null });
     return json({ ok: true, attributed_flow_id: flowId });
   });
 }
