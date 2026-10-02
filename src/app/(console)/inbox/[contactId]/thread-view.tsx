@@ -376,13 +376,18 @@ export function ThreadView({
   };
 
   const [summarizing, setSummarizing] = useState(false);
+  const notesRef = useRef(notes);
+  useEffect(() => {
+    notesRef.current = notes;
+  }, [notes]);
   /** Claude reads the thread and adds a dated one-line summary to the team notes. */
   const summarizeToNotes = async () => {
     setSummarizing(true);
     try {
       const data = await api<{ assist: Assist }>(`/api/inbox/${contactId}/assist`, { method: "POST" });
       const line = `${new Date().toLocaleDateString()} · ${data.assist.summary} (${data.assist.intent}, ${data.assist.sentiment})`;
-      const next = [notes.trim(), line].filter(Boolean).join("\n");
+      // Append to whatever is in the box now: the teammate may have typed while the AI was thinking.
+      const next = [notesRef.current.trim(), line].filter(Boolean).join("\n");
       setNotes(next);
       await patchContact({ notes: next });
       toast.success("Summary added to notes");

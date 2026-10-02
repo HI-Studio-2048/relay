@@ -10,7 +10,20 @@ const store = (globalForPresence.relayPresence ??= new Map());
 const VIEW_TTL = 12_000;
 const TYPING_TTL = 6_000;
 
+let touches = 0;
+
+/** Drop everything stale so conversations nobody reopens do not stay in memory. */
+function sweep(now: number) {
+  for (const [contactId, viewers] of store) {
+    for (const [agentId, seen] of viewers) if (now - seen.at > VIEW_TTL) viewers.delete(agentId);
+    if (viewers.size === 0) store.delete(contactId);
+  }
+}
+
 export function touchPresence(contactId: string, agentId: string, typing: boolean, now = Date.now()) {
+  touches += 1;
+  if (touches % 200 === 0) sweep(now);
+  if (contactId.length > 64 || agentId.length > 64) return;
   const viewers = store.get(contactId) ?? new Map<string, Seen>();
   const previous = viewers.get(agentId);
   viewers.set(agentId, { at: now, typingAt: typing ? now : previous?.typingAt ?? null });

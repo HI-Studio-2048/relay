@@ -773,7 +773,9 @@ export function processInboundEvent(input: {
         );
       }
       try {
-        contact = applyCapturedValue(contact, parseCaptureField(step.field), normalizeReply(step.replyType, answer, step.retryMessage));
+        // Reply types apply to custom fields only; name / email / phone have their own checks.
+        const typed = step.field.startsWith("custom:") ? normalizeReply(step.replyType, answer, step.retryMessage) : answer;
+        contact = applyCapturedValue(contact, parseCaptureField(step.field), typed);
         const executed = executeFrom(
           flow.definition,
           { ...input.session, stepId: step.next, awaitingInput: false, formIndex: undefined },

@@ -837,8 +837,8 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
         field: node.data.field,
         prompt: node.data.prompt,
         ...(node.data.skippable ? { skippable: true } : {}),
-        ...(node.data.replyType && node.data.replyType !== "text" ? { replyType: node.data.replyType } : {}),
-        ...(node.data.retryMessage?.trim() ? { retryMessage: node.data.retryMessage } : {}),
+        ...(node.data.field.startsWith("custom:") && node.data.replyType && node.data.replyType !== "text" ? { replyType: node.data.replyType } : {}),
+        ...(node.data.field.startsWith("custom:") && node.data.retryMessage?.trim() ? { retryMessage: node.data.retryMessage } : {}),
         next: nextFromHandle(graph.edges, node.id, "next") ?? "",
       });
       continue;

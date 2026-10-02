@@ -98,6 +98,10 @@ describe("user input reply types", () => {
     const { normalizeReply } = await import("@/lib/lead-capture");
     expect(normalizeReply("number", " $1,200 ")).toBe("1200");
     expect(normalizeReply("number", "2.5")).toBe("2.5");
+    expect(normalizeReply("number", "1,5")).toBe("1.5");
+    expect(normalizeReply("number", "12,50 €")).toBe("12.5");
+    expect(normalizeReply("number", "1,250")).toBe("1250");
+    expect(() => normalizeReply("date", "1/1/0099")).toThrow("4-digit year");
     expect(() => normalizeReply("number", "a lot")).toThrow("Please reply with a number");
     expect(() => normalizeReply("number", "lots", "Just the number please 🙏")).toThrow("Just the number please 🙏");
     expect(normalizeReply("date", "2026-03-14")).toBe("2026-03-14");

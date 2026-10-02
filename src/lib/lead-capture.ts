@@ -65,7 +65,9 @@ export function normalizeReply(type: ReplyType | undefined, raw: string, retry?:
   };
   if (!type || type === "text") return value;
   if (type === "number") {
-    const cleaned = value.replace(/[\s,$€£%]/g, "");
+    // "1,5" (one comma, 1–2 decimals, no dot) is a decimal comma; other commas are thousands separators.
+    const decimalComma = /^[^.,]*\d,\d{1,2}$/.test(value.replace(/[\s$€£%]/g, ""));
+    const cleaned = (decimalComma ? value.replace(",", ".") : value).replace(/[\s,$€£%]/g, "");
     if (!/^-?\d+(\.\d+)?$/.test(cleaned)) fail("Please reply with a number, like 25.");
     return String(Number(cleaned));
   }
@@ -95,7 +97,9 @@ export function normalizeReply(type: ReplyType | undefined, raw: string, retry?:
     year = words[5] ? Number(words[5]) : new Date().getUTCFullYear();
   }
   if (!year || !month || !day) return fail("Please send a date, like 2026-03-14.");
-  const date = new Date(Date.UTC(year, month - 1, day));
+  if (year < 1000 || year > 9999) return fail("Please send a date with a 4-digit year, like 2026-03-14.");
+  const date = new Date(Date.UTC(2000, 0, 1));
+  date.setUTCFullYear(year, month - 1, day);
   if (date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return fail("That date does not exist — try again?");
   return date.toISOString().slice(0, 10);
 }

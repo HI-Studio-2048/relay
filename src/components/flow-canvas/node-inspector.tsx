@@ -1104,7 +1104,15 @@ function CaptureEditor({
       <FieldSelect
         field={data.field}
         customFields={customFields}
-        onChange={(field) => onChange({ ...data, field })}
+        onChange={(field) => {
+          const next = { ...data, field };
+          // Reply types only apply to custom fields; do not leave a stale "Number" on an email question.
+          if (!field.startsWith("custom:")) {
+            delete next.replyType;
+            delete next.retryMessage;
+          }
+          onChange(next);
+        }}
       />
       <div className="space-y-1">
         <Label>Prompt</Label>
