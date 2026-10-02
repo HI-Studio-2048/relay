@@ -13,6 +13,7 @@ const PAGES: Omit<Item, "kind" | "id">[] = [
   { label: "Overview", href: "/" },
   { label: "Inbox (Live Chat)", href: "/inbox" },
   { label: "Contacts", href: "/contacts" },
+  { label: "All accounts", href: "/accounts" },
   { label: "Flows", href: "/flows" },
   { label: "Keywords", href: "/keywords" },
   { label: "Starters & hours", href: "/starters" },

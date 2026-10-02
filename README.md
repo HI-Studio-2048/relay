@@ -20,6 +20,8 @@ Origin is the source of truth for this project.
 10. **Team alerts** — AI hand-offs, Notify admin steps and rule alerts post to Slack, Discord or Teams with a link to the chat.
 11. **API & webhooks** — `/api/v1` with API keys; signed outgoing webhooks for Zapier, Make or your backend.
 
+Agencies get an **All accounts** page: every brand side by side (contacts, new this week, chats waiting, flows on, conversions) with one-click switching.
+
 One process serves the web UI, the webhook, and the worker (`WORKER_MODE=all`).
 
 ## Local development
