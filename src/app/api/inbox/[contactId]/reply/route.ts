@@ -5,7 +5,9 @@ import { bots, contacts, messages } from "@/lib/db/schema";
 import { messagingWindow } from "@/lib/messaging-window";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
 import { acquireSendSlot } from "@/lib/rate-limit";
-import { pauseContactAutomation, saveMessage } from "@/lib/store";
+import { loadContactRecord, pauseContactAutomation, saveMessage } from "@/lib/store";
+import { interpolateTemplate } from "@/lib/flow-effects";
+import { botFieldValues } from "@/lib/template";
 import { agentIdFromCookieHeader, assignContact, findMember } from "@/lib/team";
 
 export async function POST(request: Request, context: RouteParams<{ contactId: string }>) {
@@ -27,8 +29,11 @@ export async function POST(request: Request, context: RouteParams<{ contactId: s
       .orderBy(desc(messages.createdAt))
       .limit(1);
     const window = messagingWindow(contact.platform, bot.channel, lastInbound?.at ?? null);
+    // Saved replies can carry {{first_name}}, {{field:x}} and {{bot.key}}: fill them in for this person.
+    const record = await loadContactRecord(contactId);
+    const text = body.text.includes("{{") && record ? interpolateTemplate(body.text.trim(), record, botFieldValues(bot.settings)) : body.text.trim();
     const sent = await sendChannelReply(accountFromRow(bot), channelTarget(contact), {
-      text: body.text.trim(),
+      text,
       source: "agent",
       // Direct Meta accounts: after 24 hours a human reply must carry the HUMAN_AGENT tag.
       ...(window.kind === "human_agent" ? { humanAgent: true } : {}),
@@ -38,7 +43,7 @@ export async function POST(request: Request, context: RouteParams<{ contactId: s
       contactId,
       direction: "outbound",
       source: "agent",
-      body: body.text.trim(),
+      body: text,
       telegramMessageId: sent.message_id || null,
       author: agent?.name ?? null,
     });
