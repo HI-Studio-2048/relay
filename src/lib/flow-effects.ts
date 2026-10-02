@@ -60,6 +60,11 @@ export async function applyFlowEffects(input: {
         ]);
         const { runRules } = await import("@/lib/rules");
         await runRules(input.botId, input.contact, [{ type: "goal_reached", value: effect.name }]);
+        const { emitWebhookSoon, publicContact } = await import("@/lib/developer");
+        emitWebhookSoon(input.botId, "goal.reached", {
+          contact: publicContact(input.contact),
+          goal: { name: effect.name, value: effect.value ?? null, flowId: effect.flowId },
+        });
         continue;
       }
 

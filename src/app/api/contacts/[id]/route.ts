@@ -4,6 +4,7 @@ import { contacts } from "@/lib/db/schema";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
 import { loadContactRecord, persistContact } from "@/lib/store";
 import { sendCsatSurvey } from "@/lib/csat-send";
+import { emitWebhookSoon, publicContact } from "@/lib/developer";
 
 export async function GET(_request: Request, context: RouteParams<{ id: string }>) {
   try {
@@ -49,7 +50,9 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
     };
     await persistContact(row!.botId, next);
     // Closing a conversation a teammate handled can ask the person to rate it (CSAT).
-    const surveyed = body.inboxStatus === "closed" && contact.inboxStatus !== "closed" ? await sendCsatSurvey(id) : false;
+    const closing = body.inboxStatus === "closed" && contact.inboxStatus !== "closed";
+    const surveyed = closing ? await sendCsatSurvey(id) : false;
+    if (closing) emitWebhookSoon(row!.botId, "conversation.closed", { contact: publicContact(next), surveyed });
     return json({ contact: await loadContactRecord(id), surveyed });
   } catch (error) {
     return fail(error);

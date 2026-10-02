@@ -101,6 +101,7 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
     // Only the first tap on the latest survey counts; repeat taps and stale buttons are ignored.
     if (!(await hasOpenCsatRequest(existing.id))) return;
     await saveMessage({ botId, contactId: existing.id, direction: "inbound", source: "user", body: ratingBody(rating) });
+    emitWebhookSoon(botId, "conversation.rated", { contact: publicContact(existing), score: rating, outOf: 3 });
     try {
       const thanks = readCsat(bot.settings).thanks;
       await sendChannelReply(account, channelTarget(existing), { text: thanks, source: "flow" });

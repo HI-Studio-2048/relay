@@ -33,6 +33,9 @@ export const WEBHOOK_EVENTS = [
   { value: "contact.subscribed", label: "Subscribed to a list" },
   { value: "flow.completed", label: "Flow completed" },
   { value: "conversation.handoff", label: "AI handed off to a human" },
+  { value: "conversation.closed", label: "Conversation marked Done in Live Chat" },
+  { value: "conversation.rated", label: "Customer rated a conversation (CSAT)" },
+  { value: "goal.reached", label: "Flow goal reached (conversion)" },
 ] as const;
 
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number]["value"];
