@@ -32,6 +32,7 @@ import type {
   ConditionRule,
   FormField,
   HttpMethod,
+  ReplyType,
   SetFieldMode,
   SubscribeAction,
   TagAction,
@@ -1099,6 +1100,28 @@ function CaptureEditor({
           onChange={(event) => onChange({ ...data, prompt: event.target.value })}
         />
       </div>
+      {data.field.startsWith("custom:") ? (
+        <div className="space-y-1">
+          <Label>Reply type</Label>
+          <select
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+            value={data.replyType ?? "text"}
+            onChange={(event) => onChange({ ...data, replyType: event.target.value as ReplyType })}
+          >
+            <option value="text">Any text</option>
+            <option value="number">Number</option>
+            <option value="date">Date</option>
+            <option value="url">Link (URL)</option>
+          </select>
+          {data.replyType && data.replyType !== "text" ? (
+            <Input
+              value={data.retryMessage ?? ""}
+              placeholder="If it doesn't fit, say… (optional)"
+              onChange={(event) => onChange({ ...data, retryMessage: event.target.value })}
+            />
+          ) : null}
+        </div>
+      ) : null}
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"

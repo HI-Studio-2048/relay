@@ -10,6 +10,7 @@ import type {
   FlowStep,
   FormField,
   HttpMethod,
+  ReplyType,
   SetFieldMode,
   SubscribeAction,
   TagAction,
@@ -99,7 +100,7 @@ export type CanvasNodeData =
   | { kind: "message"; text: string; media?: FlowMedia }
   | { kind: "media"; text: string; media?: FlowMedia }
   | { kind: "buttons"; text: string; buttons: CanvasButton[]; media?: FlowMedia }
-  | { kind: "capture"; field: CaptureField; prompt: string; skippable?: boolean }
+  | { kind: "capture"; field: CaptureField; prompt: string; skippable?: boolean; replyType?: ReplyType; retryMessage?: string }
   | { kind: "form"; intro: string; fields: FormField[] }
   | { kind: "tag"; tagName: string; action: TagAction }
   | { kind: "set_field"; field: CaptureField; value: string; mode?: SetFieldMode }
@@ -362,7 +363,14 @@ function nodeFromStep(step: FlowStep, position: { x: number; y: number }): Canva
       id: step.id,
       type: "capture",
       position,
-      data: { kind: "capture", field: step.field, prompt: step.prompt, ...(step.skippable ? { skippable: true } : {}) },
+      data: {
+        kind: "capture",
+        field: step.field,
+        prompt: step.prompt,
+        ...(step.skippable ? { skippable: true } : {}),
+        ...(step.replyType && step.replyType !== "text" ? { replyType: step.replyType } : {}),
+        ...(step.retryMessage ? { retryMessage: step.retryMessage } : {}),
+      },
     };
   }
   if (step.type === "tag") {
@@ -829,6 +837,8 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
         field: node.data.field,
         prompt: node.data.prompt,
         ...(node.data.skippable ? { skippable: true } : {}),
+        ...(node.data.replyType && node.data.replyType !== "text" ? { replyType: node.data.replyType } : {}),
+        ...(node.data.retryMessage?.trim() ? { retryMessage: node.data.retryMessage } : {}),
         next: nextFromHandle(graph.edges, node.id, "next") ?? "",
       });
       continue;
@@ -1041,6 +1051,8 @@ export function engineDefinition(definition: FlowDefinition): FlowDefinition {
           field: step.field,
           prompt: step.prompt,
           ...(step.skippable ? { skippable: true as const } : {}),
+          ...(step.replyType && step.replyType !== "text" ? { replyType: step.replyType } : {}),
+          ...(step.retryMessage ? { retryMessage: step.retryMessage } : {}),
           next: step.next,
         };
       }

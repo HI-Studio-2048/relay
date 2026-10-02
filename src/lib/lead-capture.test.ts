@@ -92,3 +92,48 @@ describe("lead capture flow", () => {
     expect(finished.replies.at(-1)?.text).toMatch(/on our list/);
   });
 });
+
+describe("user input reply types", () => {
+  it("normalizes numbers, dates and links", async () => {
+    const { normalizeReply } = await import("@/lib/lead-capture");
+    expect(normalizeReply("number", " $1,200 ")).toBe("1200");
+    expect(normalizeReply("number", "2.5")).toBe("2.5");
+    expect(() => normalizeReply("number", "a lot")).toThrow("Please reply with a number");
+    expect(() => normalizeReply("number", "lots", "Just the number please 🙏")).toThrow("Just the number please 🙏");
+    expect(normalizeReply("date", "2026-03-14")).toBe("2026-03-14");
+    expect(normalizeReply("date", "14/03/2026")).toBe("2026-03-14");
+    expect(normalizeReply("date", "March 14, 2026")).toBe("2026-03-14");
+    expect(normalizeReply("date", "14 mar 2026")).toBe("2026-03-14");
+    expect(() => normalizeReply("date", "31/02/2026")).toThrow("does not exist");
+    expect(() => normalizeReply("date", "soon")).toThrow();
+    expect(normalizeReply("url", "example.com/shop")).toBe("https://example.com/shop");
+    expect(() => normalizeReply("url", "not a link")).toThrow();
+    expect(normalizeReply(undefined, " hi ")).toBe("hi");
+  });
+});
+
+describe("user input reply types in a flow", () => {
+  it("asks again until the answer fits, then saves it", () => {
+    const flows: FlowRecord[] = [
+      {
+        id: "budget",
+        triggerType: "keyword",
+        triggerValue: "budget",
+        isActive: true,
+        definition: {
+          startStepId: "ask",
+          steps: [
+            { id: "ask", type: "capture", field: "custom:budget", prompt: "Budget?", replyType: "number", retryMessage: "Numbers only 🙏", next: "done" },
+            { id: "done", type: "end", text: "Got {{budget}}" },
+          ],
+        },
+      },
+    ];
+    const first = processInboundEvent({ contact: null, session: null, flows, event: { telegramUserId: "9", text: "budget" } });
+    const wrong = processInboundEvent({ contact: first.contact, session: first.session, flows, event: { telegramUserId: "9", text: "not sure" } });
+    expect(wrong.replies[0]!.text).toBe("Numbers only 🙏");
+    expect(wrong.session?.stepId).toBe("ask");
+    const right = processInboundEvent({ contact: wrong.contact, session: wrong.session, flows, event: { telegramUserId: "9", text: "$5,000" } });
+    expect(right.contact.customFields.budget).toBe("5000");
+  });
+});

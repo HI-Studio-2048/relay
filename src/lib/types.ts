@@ -88,6 +88,8 @@ export type ConditionRule = {
 /** Set field: write a value, or treat the field as a number and add/subtract (ManyChat "increase by"). */
 export type SetFieldMode = "set" | "add" | "subtract";
 
+export type ReplyType = "text" | "number" | "date" | "url";
+
 export type FormField = {
   field: CaptureField;
   prompt: string;
@@ -131,6 +133,10 @@ export type FlowStep =
       type: "capture";
       field: CaptureField;
       prompt: string;
+      /** ManyChat reply types: check the answer before saving it. */
+      replyType?: ReplyType;
+      /** Said when the answer does not fit the reply type. */
+      retryMessage?: string;
       /** ManyChat "Skip" button: the contact can move on without answering. */
       skippable?: boolean;
       next: string;

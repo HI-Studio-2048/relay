@@ -1,4 +1,4 @@
-import { applyCapturedValue, assignFieldValue, parseCaptureField } from "@/lib/lead-capture";
+import { applyCapturedValue, assignFieldValue, normalizeReply, parseCaptureField } from "@/lib/lead-capture";
 import {
   compareKeywordPriority,
   isKeywordTrigger,
@@ -773,7 +773,7 @@ export function processInboundEvent(input: {
         );
       }
       try {
-        contact = applyCapturedValue(contact, parseCaptureField(step.field), answer);
+        contact = applyCapturedValue(contact, parseCaptureField(step.field), normalizeReply(step.replyType, answer, step.retryMessage));
         const executed = executeFrom(
           flow.definition,
           { ...input.session, stepId: step.next, awaitingInput: false, formIndex: undefined },
