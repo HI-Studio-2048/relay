@@ -1,15 +1,35 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { customFields } from "@/lib/db/schema";
+import { contactFieldValues, customFields, flows } from "@/lib/db/schema";
 import { json, fail, readJson } from "@/lib/http";
 
 export async function GET(request: Request) {
   try {
-    const botId = new URL(request.url).searchParams.get("botId");
+    const url = new URL(request.url);
+    const botId = url.searchParams.get("botId");
     if (!botId) return json({ error: "botId is required" }, 400);
     const db = await getDb();
-    const rows = await db.select().from(customFields).where(eq(customFields.botId, botId));
-    return json({ fields: rows.filter((field) => !field.key.startsWith("_")) });
+    const [rows, counts, flowRows] = await Promise.all([
+      db.select().from(customFields).where(eq(customFields.botId, botId)),
+      db
+        .select({ fieldId: contactFieldValues.fieldId, count: sql<number>`count(*)::int` })
+        .from(contactFieldValues)
+        .innerJoin(customFields, eq(customFields.id, contactFieldValues.fieldId))
+        .where(eq(customFields.botId, botId))
+        .groupBy(contactFieldValues.fieldId),
+      url.searchParams.get("usage") ? db.select({ definition: flows.definition }).from(flows).where(eq(flows.botId, botId)) : Promise.resolve([]),
+    ]);
+    const flowTexts = flowRows.map((flow) => JSON.stringify(flow.definition));
+    return json({
+      fields: rows
+        .filter((field) => !field.key.startsWith("_"))
+        .map((field) => ({
+          ...field,
+          contacts: counts.find((row) => row.fieldId === field.id)?.count ?? 0,
+          // Flows that read or write it: "custom:key" in a step, or {{key}} / {{field:key}} in text.
+          flows: flowTexts.filter((text) => text.includes(`custom:${field.key}"`) || text.includes(`{{${field.key}`) || text.includes(`{{field:${field.key}`)).length,
+        })),
+    });
   } catch (error) {
     return fail(error);
   }
