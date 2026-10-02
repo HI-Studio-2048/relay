@@ -57,7 +57,10 @@ async function handOff(botId: string, account: ChannelAccount, contact: ContactR
   if (assignee) await assignContact(contact.id, assignee.id);
   await persistContact(botId, { ...contact, inboxStatus: "open" }, { skipRules: true });
   emitWebhookSoon(botId, "conversation.handoff", { contact: publicContact(contact), reply: text });
-  await notifyAdmin(`AI handed off ${[contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.username || "a contact"} to a human.`).catch(() => false);
+  await notifyAdmin(`AI handed off ${[contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.username || "a contact"} to a human.`, {
+    botId,
+    contactId: contact.id,
+  }).catch(() => false);
 }
 
 /** AI Step: one Claude turn for a contact parked on an `ai` step. Continues the flow when the goal is met. */

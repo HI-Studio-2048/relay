@@ -55,3 +55,14 @@ describe("bot fields", () => {
     expect(interpolateTemplate("Use {{bot.promo_code}}, {{first_name}}! {{bot.missing|none}}", contact, values)).toBe("Use SPRING20, Ada! none");
   });
 });
+
+describe("team alerts", () => {
+  it("formats per service and only accepts https in production-like checks", async () => {
+    const { alertPayload, readAlerts } = await import("@/lib/flow-effects");
+    expect(alertPayload("https://hooks.slack.com/services/x", "Hand-off", "https://relay.app/inbox/1")).toEqual({ text: "Hand-off\nhttps://relay.app/inbox/1" });
+    expect(alertPayload("https://discord.com/api/webhooks/1/abc", "Hand-off")).toEqual({ content: "Hand-off" });
+    expect(readAlerts({ alerts: { webhookUrl: " https://hooks.slack.com/services/x " } })).toEqual({ webhookUrl: "https://hooks.slack.com/services/x" });
+    expect(readAlerts({ alerts: { webhookUrl: "javascript:alert(1)" } })).toEqual({ webhookUrl: "" });
+    expect(readAlerts(null)).toEqual({ webhookUrl: "" });
+  });
+});

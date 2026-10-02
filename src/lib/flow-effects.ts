@@ -1,8 +1,9 @@
+import { eq } from "drizzle-orm";
 import { channelTarget, sendChannelTyping, channelOf, type ChannelAccount } from "@/lib/channels";
 import { decryptSecret } from "@/lib/crypto";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
-import { adminTelegramChatId } from "@/lib/env";
+import { adminTelegramChatId, publicUrl } from "@/lib/env";
 import { log } from "@/lib/logger";
 import { saveMessage } from "@/lib/store";
 import { sendMessage } from "@/lib/telegram";
@@ -13,9 +14,57 @@ import { interpolateTemplate } from "@/lib/template";
 export { interpolateTemplate };
 
 /** Admin alerts always go out over Telegram: the first connected Telegram bot delivers them. */
-export async function notifyAdmin(text: string) {
+/** Team alerts: a Slack / Discord / Teams-compatible incoming webhook stored per account. */
+export function readAlerts(settings: Record<string, unknown> | null | undefined): { webhookUrl: string } {
+  const raw = (settings?.alerts ?? {}) as { webhookUrl?: unknown };
+  const url = typeof raw.webhookUrl === "string" ? raw.webhookUrl.trim() : "";
+  // Plain http only outside production, so a local receiver can be wired up while developing.
+  const allowed = /^https:\/\//i.test(url) || (process.env.NODE_ENV !== "production" && /^http:\/\//i.test(url));
+  return { webhookUrl: allowed ? url.slice(0, 500) : "" };
+}
+
+/** Body shape per service: Discord wants `content`, Slack and most others accept `text`. */
+export function alertPayload(url: string, text: string, link?: string | null) {
+  const full = link ? `${text}\n${link}` : text;
+  return /discord(app)?\.com\/api\/webhooks/i.test(url) ? { content: full.slice(0, 1900) } : { text: full.slice(0, 3000) };
+}
+
+async function postAlert(botId: string, text: string, link?: string | null) {
+  const db = await getDb();
+  const [bot] = await db.select({ settings: bots.settings }).from(bots).where(eq(bots.id, botId)).limit(1);
+  const { webhookUrl } = readAlerts(bot?.settings);
+  if (!webhookUrl) return false;
+  if (process.env.NODE_ENV === "production") {
+    const { resolvesPublic } = await import("@/lib/web-import");
+    if (!(await resolvesPublic(new URL(webhookUrl).hostname))) return false;
+  }
+  const response = await fetch(webhookUrl, {
+    method: "POST",
+    redirect: "error",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(alertPayload(webhookUrl, text, link)),
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) log.warn("Team alert webhook failed", response.status);
+  return response.ok;
+}
+
+/**
+ * Tell the team: the account's alert webhook (Slack, Discord…) when set, plus the Telegram admin chat
+ * when configured. Pass the contact to include a link to their conversation.
+ */
+export async function notifyAdmin(text: string, target?: { botId: string; contactId?: string | null }) {
+  let delivered = false;
+  if (target?.botId) {
+    const origin = publicUrl();
+    const link = origin && target.contactId ? `${origin}/inbox/${target.contactId}` : null;
+    delivered = await postAlert(target.botId, text, link).catch((error) => {
+      log.warn("Team alert failed", error instanceof Error ? error.message : error);
+      return false;
+    });
+  }
   const adminChat = adminTelegramChatId();
-  if (!adminChat) return false;
+  if (!adminChat) return delivered;
   const db = await getDb();
   const rows = await db.select().from(bots);
   const telegram = rows.find((row) => channelOf(row.channel) === "telegram");
@@ -97,7 +146,7 @@ export async function applyFlowEffects(input: {
         source: "flow",
         body: `Admin notify: ${text}`,
       });
-      await notifyAdmin(text);
+      await notifyAdmin(text, { botId: input.botId, contactId: input.contact.id });
     } catch (error) {
       log.warn("Flow effect failed", error instanceof Error ? error.message : error);
     }

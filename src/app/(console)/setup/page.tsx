@@ -12,6 +12,7 @@ import { api } from "@/lib/client";
 import { PlatformDot, zernioPlatformLabel } from "@/components/chrome/platform-badge";
 import { BotFieldsCard } from "@/components/bot-fields-card";
 import { TeamCard } from "@/components/team-card";
+import { AlertsCard } from "@/components/alerts-card";
 
 const GUIDES: Record<ChannelId, { title: string; steps: string[]; tokenLabel: string; accountLabel?: string }> = {
   zernio: {
@@ -291,6 +292,7 @@ export default function SetupPage() {
       ) : null}
 
       {bot ? <BotFieldsCard botId={bot.id} /> : null}
+      {bot ? <AlertsCard botId={bot.id} /> : null}
 
       <TeamCard />
 

@@ -105,7 +105,7 @@ export async function runRules(botId: string, start: ContactRecord, events: Rule
         continue;
       }
       if (rule.actionType === "notify_admin") {
-        await notifyAdmin(interpolateTemplate(value, contact));
+        await notifyAdmin(interpolateTemplate(value, contact), { botId, contactId: contact.id });
         continue;
       }
       if (rule.actionType === "start_flow") {
