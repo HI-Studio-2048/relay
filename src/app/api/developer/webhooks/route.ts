@@ -1,3 +1,4 @@
+import { logActivity } from "@/lib/activity";
 import { desc, eq } from "drizzle-orm";
 import { randomSecret } from "@/lib/crypto";
 import { getDb } from "@/lib/db";
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
       .insert(webhookSubscriptions)
       .values({ id: crypto.randomUUID(), botId: body.botId, url, secret: randomSecret(), events })
       .returning();
+    await logActivity(request, body.botId, "Added webhook", url);
     return json({ webhook: row });
   } catch (error) {
     return fail(error);

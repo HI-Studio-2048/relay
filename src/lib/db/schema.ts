@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import {
   boolean,
   doublePrecision,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -427,3 +428,19 @@ export const contactsRelations = relations(contacts, ({ one, many }) => ({
   fieldValues: many(contactFieldValues),
   messages: many(messages),
 }));
+
+/** Who did what: publishes, sends, erasures, merges, key changes. Shown under Settings → Activity. */
+export const activityLog = pgTable(
+  "activity_log",
+  {
+    id: text("id").primaryKey(),
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    actor: text("actor"),
+    action: text("action").notNull(),
+    detail: text("detail"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("activity_log_bot_idx").on(table.botId, table.createdAt)],
+);

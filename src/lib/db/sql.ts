@@ -298,4 +298,14 @@ CREATE TABLE IF NOT EXISTS flow_versions (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS flow_versions_flow_idx ON flow_versions(flow_id, created_at);
+
+CREATE TABLE IF NOT EXISTS activity_log (
+  id text PRIMARY KEY,
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  actor text,
+  action text NOT NULL,
+  detail text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS activity_log_bot_idx ON activity_log(bot_id, created_at);
 `;

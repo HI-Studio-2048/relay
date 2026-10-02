@@ -1,3 +1,4 @@
+import { logActivity } from "@/lib/activity";
 import { and, eq, inArray } from "drizzle-orm";
 import { canDispatchBroadcast } from "@/lib/broadcast";
 import { EmptyAudienceError, materializeBroadcast } from "@/lib/broadcast-dispatch";
@@ -58,6 +59,7 @@ export async function POST(request: Request, context: RouteParams<{ id: string }
         .where(and(eq(broadcasts.id, id), inArray(broadcasts.status, ["draft", "awaiting_confirm"])))
         .returning();
       if (!scheduled) return viaForm ? redirectTo("?error=INVALID_STATUS") : json({ error: "Already confirmed" }, 409);
+      await logActivity(request, broadcast.botId, "Scheduled broadcast", `${broadcast.name} for ${scheduledAt.toISOString().slice(0, 16).replace("T", " ")} UTC`);
       return viaForm ? redirectTo("?scheduled=1") : json({ broadcast: scheduled });
     }
 
@@ -76,6 +78,7 @@ export async function POST(request: Request, context: RouteParams<{ id: string }
       }
       throw error;
     }
+    await logActivity(request, broadcast.botId, "Sent broadcast", `${broadcast.name} to ${updated.totalCount} contacts${smartTiming ? " (smart time)" : ""}`);
     if (shouldRunWorker()) void drainJobs(5);
     return viaForm ? redirectTo("?queued=1") : json({ broadcast: updated });
   } catch (error) {

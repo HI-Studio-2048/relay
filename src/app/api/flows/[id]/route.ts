@@ -1,3 +1,4 @@
+import { logActivity } from "@/lib/activity";
 import { desc, eq, inArray } from "drizzle-orm";
 import { syncBotCommands } from "@/lib/bot-commands";
 import { assertConfirm } from "@/lib/broadcast";
@@ -74,6 +75,9 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
       .where(eq(flows.id, id))
       .returning();
     if (!flow) return json({ error: "Flow not found" }, 404);
+    if (body.isActive !== undefined && before && body.isActive !== before.isActive) {
+      await logActivity(request, flow.botId, body.isActive ? "Turned on flow" : "Turned off flow", flow.name);
+    }
     if (body.triggerType !== undefined || body.triggerValue !== undefined || body.isActive !== undefined || body.name) {
       await syncBotCommands(flow.botId);
     }
@@ -91,6 +95,7 @@ export async function DELETE(request: Request, context: RouteParams<{ id: string
     const db = await getDb();
     const [removed] = await db.delete(flows).where(eq(flows.id, id)).returning();
     if (removed?.triggerType === "command") await syncBotCommands(removed.botId);
+    if (removed) await logActivity(request, removed.botId, "Deleted flow", removed.name);
     return json({ ok: true });
   } catch (error) {
     return fail(error);

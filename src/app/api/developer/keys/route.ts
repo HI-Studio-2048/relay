@@ -1,3 +1,4 @@
+import { logActivity } from "@/lib/activity";
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { apiKeys } from "@/lib/db/schema";
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
       .insert(apiKeys)
       .values({ id: crypto.randomUUID(), botId: body.botId, name: body.name?.trim().slice(0, 60) || "API key", keyHash: hash, prefix })
       .returning();
+    await logActivity(request, body.botId, "Created API key", `${row!.name} (${prefix}…)`);
     return json({ key, record: { id: row!.id, name: row!.name, prefix, createdAt: row!.createdAt } });
   } catch (error) {
     return fail(error);

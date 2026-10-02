@@ -1,3 +1,4 @@
+import { logActivity } from "@/lib/activity";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { broadcasts } from "@/lib/db/schema";
@@ -6,7 +7,7 @@ import { sanitizeSegment } from "@/lib/segments";
 import { broadcastAudience } from "@/lib/store";
 
 /** POST — copy a broadcast (copy, audience, A/B, smart timing) into a new one awaiting confirmation. */
-export async function POST(_request: Request, context: RouteParams<{ id: string }>) {
+export async function POST(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
     const db = await getDb();
@@ -31,6 +32,7 @@ export async function POST(_request: Request, context: RouteParams<{ id: string 
         totalCount: audience.length,
       })
       .returning();
+    await logActivity(request, source.botId, "Duplicated broadcast", source.name);
     return json({ broadcast, audienceCount: audience.length });
   } catch (error) {
     return fail(error);

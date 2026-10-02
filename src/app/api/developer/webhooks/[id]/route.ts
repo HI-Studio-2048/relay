@@ -1,3 +1,4 @@
+import { logActivity } from "@/lib/activity";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { webhookSubscriptions } from "@/lib/db/schema";
@@ -19,11 +20,12 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
   }
 }
 
-export async function DELETE(_request: Request, context: RouteParams<{ id: string }>) {
+export async function DELETE(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
     const db = await getDb();
-    await db.delete(webhookSubscriptions).where(eq(webhookSubscriptions.id, id));
+    const [removed] = await db.delete(webhookSubscriptions).where(eq(webhookSubscriptions.id, id)).returning();
+    if (removed) await logActivity(request, removed.botId, "Removed webhook", removed.url);
     return json({ ok: true });
   } catch (error) {
     return fail(error);

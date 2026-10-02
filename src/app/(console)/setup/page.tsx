@@ -16,6 +16,7 @@ import { AlertsCard } from "@/components/alerts-card";
 import { StripeCard } from "@/components/stripe-card";
 import { FieldsCard } from "@/components/fields-card";
 import { TagsCard } from "@/components/tags-card";
+import { ActivityCard } from "@/components/activity-card";
 
 const GUIDES: Record<ChannelId, { title: string; steps: string[]; tokenLabel: string; accountLabel?: string }> = {
   zernio: {
@@ -299,6 +300,7 @@ export default function SetupPage() {
       {bot ? <StripeCard botId={bot.id} /> : null}
       {bot ? <FieldsCard botId={bot.id} /> : null}
       {bot ? <TagsCard botId={bot.id} /> : null}
+      {bot ? <ActivityCard botId={bot.id} /> : null}
 
       <TeamCard />
 
