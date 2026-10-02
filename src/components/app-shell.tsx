@@ -20,6 +20,7 @@ import {
   MessageCircleQuestion,
   Search,
   Building2,
+  RadioTower,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useBot } from "@/components/bot-provider";
@@ -48,6 +49,7 @@ const GROUPS: {
       { href: "/", label: "Overview", icon: LayoutDashboard, tone: "start" },
       { href: "/inbox", label: "Inbox", icon: Inbox, tone: "content", count: "inbox" },
       { href: "/contacts", label: "Contacts", icon: Users, tone: "input" },
+      { href: "/channels", label: "Channels", icon: RadioTower, tone: "start" },
       { href: "/accounts", label: "All accounts", icon: Building2, tone: "start" },
     ],
   },
@@ -77,6 +79,7 @@ function sectionTitle(pathname: string) {
   if (pathname.startsWith("/inbox")) return "Inbox";
   if (pathname.startsWith("/contacts")) return "Contacts";
   if (pathname.startsWith("/accounts")) return "All accounts";
+  if (pathname.startsWith("/channels")) return "Channels";
   if (pathname.startsWith("/flows")) return "Flows";
   if (pathname.startsWith("/keywords")) return "Keywords";
   if (pathname.startsWith("/sequences")) return "Sequences";
