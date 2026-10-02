@@ -14,9 +14,10 @@ import type { FlowCanvasHandle } from "@/components/flow-canvas/flow-canvas-edit
 import type { FlowMeta, InspectorField, InspectorFlowOption } from "@/components/flow-canvas/node-inspector";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client";
+import { exportFlow } from "@/lib/flow-import";
 import { CHANNELS, type ChannelId } from "@/lib/channels/types";
 import type { CanvasValidation } from "@/lib/flow-canvas";
-import type { FlowEditorRecord } from "@/lib/types";
+import type { FlowDefinition, FlowEditorRecord } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const FlowCanvasEditor = dynamic(() => import("@/components/flow-canvas/flow-canvas-editor"), {
@@ -143,6 +144,21 @@ export function FlowWorkspace({
     }
   };
 
+  /** Download the last saved version as a portable .json file. */
+  const exportJson = async () => {
+    try {
+      const data = await api<{ flow: { name: string; triggerType: string; triggerValue: string | null; definition: FlowDefinition } }>(`/api/flows/${flow.id}`);
+      const file = new Blob([JSON.stringify(exportFlow(data.flow), null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(file);
+      link.download = `${data.flow.name.replace(/[^\w-]+/g, "-").toLowerCase() || "flow"}.relay.json`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Export failed");
+    }
+  };
+
   const duplicate = async () => {
     try {
       const data = await api<{ flow: { id: string } }>(`/api/flows/${flow.id}/duplicate`, { method: "POST" });
@@ -237,6 +253,9 @@ export function FlowWorkspace({
           <FlowShareButton botId={flow.botId} flowId={flow.id} />
           <Button size="sm" variant="outline" onClick={() => void duplicate()}>
             Duplicate
+          </Button>
+          <Button size="sm" variant="outline" title="Download the last saved version as a .json file" onClick={() => void exportJson()}>
+            Export
           </Button>
           <Button size="sm" onClick={() => void save()} disabled={saving}>
             {saving ? "Saving…" : "Save"}

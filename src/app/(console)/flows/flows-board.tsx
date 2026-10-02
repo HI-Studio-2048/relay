@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { Folder, LayoutTemplate, Plus, Search, Sparkles, Workflow } from "lucide-react";
+import { Folder, LayoutTemplate, Upload, Plus, Search, Sparkles, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/chrome/page-header";
 import { PlatformDot } from "@/components/chrome/platform-badge";
@@ -162,6 +162,23 @@ export function FlowsBoard({ botId, flows }: { botId: string; flows: FlowRow[] }
     }
   };
 
+  const importFile = async (file: File) => {
+    setBusy(true);
+    try {
+      const parsed = JSON.parse(await file.text());
+      const data = await api<{ flow: { id: string }; warnings: string[] }>("/api/flows/import", {
+        method: "POST",
+        body: JSON.stringify({ botId, flow: parsed }),
+      });
+      for (const warning of data.warnings) toast.warning(warning);
+      toast.success("Flow imported — review it, then switch it on");
+      router.push(`/flows/${data.flow.id}`);
+    } catch (error) {
+      toast.error(error instanceof SyntaxError ? "That file is not valid JSON" : error instanceof Error ? error.message : "Import failed");
+      setBusy(false);
+    }
+  };
+
   const toggle = async (flow: FlowRow) => {
     setRows((current) => current.map((item) => (item.id === flow.id ? { ...item, isActive: !flow.isActive } : item)));
     try {
@@ -182,6 +199,22 @@ export function FlowsBoard({ botId, flows }: { botId: string; flows: FlowRow[] }
         description="Every automation: comment-to-DM, story replies, keywords, welcome messages and growth links. Open one to edit it on the canvas."
         actions={
           <>
+            <label className="inline-flex">
+              <input
+                type="file"
+                accept="application/json,.json"
+                className="sr-only"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (file) void importFile(file);
+                }}
+              />
+              <span className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-lg border border-[#e5e7eb] bg-white px-2.5 text-[13px] font-medium hover:bg-[#f9fafb]">
+                <Upload className="size-3.5" />
+                Import
+              </span>
+            </label>
             <Button variant="outline" size="sm" onClick={() => setShowTemplates((value) => !value)}>
               <LayoutTemplate className="size-3.5" />
               Templates
