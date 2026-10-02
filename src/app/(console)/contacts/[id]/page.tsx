@@ -18,9 +18,10 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
     db.select().from(customFields).where(eq(customFields.botId, row!.botId)),
     db.select().from(tags).where(eq(tags.botId, row!.botId)),
     db
-      .select({ at: flowEvents.createdAt, kind: flowEvents.kind, name: flowEvents.name, value: flowEvents.value, flowName: flows.name })
+      .select({ at: flowEvents.createdAt, kind: flowEvents.kind, name: flowEvents.name, value: flowEvents.value, currency: flowEvents.currency, flowName: flows.name })
       .from(flowEvents)
-      .innerJoin(flows, eq(flows.id, flowEvents.flowId))
+      // Left join: goals with no flow (e.g. a Stripe payment) still show up.
+      .leftJoin(flows, eq(flows.id, flowEvents.flowId))
       .where(eq(flowEvents.contactId, id))
       .orderBy(desc(flowEvents.createdAt))
       .limit(100),
@@ -70,7 +71,7 @@ export default async function ContactDetailPage({ params }: { params: Promise<{ 
               : event.kind === "goal"
                 ? `Reached goal “${event.name ?? "Goal"}”`
                 : `Finished “${event.flowName}”`,
-        detail: event.kind === "goal" && event.value ? String(event.value) : null,
+        detail: event.kind === "goal" && event.value ? `${event.value}${event.currency ? ` ${event.currency.toUpperCase()}` : ""}` : null,
       })),
   ].sort((a, b) => b.at.localeCompare(a.at));
 
