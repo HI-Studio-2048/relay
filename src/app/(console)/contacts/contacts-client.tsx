@@ -23,6 +23,8 @@ export type ContactRow = {
   email: string | null;
   phone: string | null;
   unsubscribed: boolean;
+  /** Lifetime value: sum of goal values reached. */
+  value: number;
   createdAt: string;
   lastInboundAt: string | null;
   subject: SegmentSubject;
@@ -74,7 +76,9 @@ export function ContactsClient({
           row.subject.tags.some((tag) => tag.toLowerCase().includes(needle))),
     );
   }, [initialRows, query, segment, now]);
-  const visible = filtered.slice(0, limit);
+  const [sortBy, setSortBy] = useState<"recent" | "value">("recent");
+  const sorted = useMemo(() => (sortBy === "value" ? [...filtered].sort((a, b) => b.value - a.value) : filtered), [filtered, sortBy]);
+  const visible = sorted.slice(0, limit);
   const allVisibleSelected = visible.length > 0 && visible.every((row) => selected.has(row.id));
 
   const toggle = (id: string) =>
@@ -268,13 +272,22 @@ export function ContactsClient({
               <th className="px-2 py-2.5">Contact</th>
               <th className="px-3 py-2.5">Email / phone</th>
               <th className="px-3 py-2.5">Tags</th>
-              <th className="px-3 py-2.5 text-right">Last message</th>
+              <th className="px-3 py-2.5 text-right">
+                <button type="button" onClick={() => setSortBy(sortBy === "value" ? "recent" : "value")} className={cn("uppercase", sortBy === "value" && "text-[#0084ff]")}>
+                  Value {sortBy === "value" ? "↓" : ""}
+                </button>
+              </th>
+              <th className="px-3 py-2.5 text-right">
+                <button type="button" onClick={() => setSortBy("recent")} className={cn("uppercase", sortBy === "recent" && "text-[#0084ff]")}>
+                  Last message {sortBy === "recent" ? "↓" : ""}
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-[#6b7280]">
+                <td colSpan={6} className="px-4 py-10 text-center text-[#6b7280]">
                   {initialRows.length === 0 ? "No contacts yet. They appear as soon as someone messages or comments." : "Nobody matches."}
                 </td>
               </tr>
@@ -310,6 +323,9 @@ export function ContactsClient({
                       ))}
                       {row.subject.tags.length > 4 ? <span className="text-[11px] text-[#8b95a1]">+{row.subject.tags.length - 4}</span> : null}
                     </span>
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums text-[#1b1f24]">
+                    {row.value ? row.value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : <span className="text-[#c5cdd6]">—</span>}
                   </td>
                   <td className="px-3 py-2 text-right text-[#6b7280] tabular-nums">{ago(row.lastInboundAt, now)}</td>
                 </tr>
