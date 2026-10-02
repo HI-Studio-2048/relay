@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlarmClock, ArrowLeft, BookmarkPlus, Languages, Sparkles, CheckCircle2, MessageCircle, PanelRight, Play, RotateCcw, Send, X } from "lucide-react";
+import { AlarmClock, ArrowLeft, BookmarkPlus, Eye, Languages, Sparkles, CheckCircle2, MessageCircle, PanelRight, Play, RotateCcw, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { useBot } from "@/components/bot-provider";
 import { ContactAvatar } from "@/components/chrome/avatar";
@@ -69,6 +69,16 @@ function Bubble({
   const outbound = message.direction === "outbound";
   const event = message.body.match(EVENT_PREFIX);
   const time = new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (message.body.endsWith(" [rating request]")) {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[#e7f1ff] px-3 py-2 text-[13px] text-[#1b1f24]">
+          <p className="break-words whitespace-pre-wrap">{message.body.slice(0, -" [rating request]".length)}</p>
+          <p className="mt-1 text-[10px] text-[#8b95a1]">Satisfaction survey · 😀 / 😐 / 🙁 · {time}</p>
+        </div>
+      </div>
+    );
+  }
   if (message.body.startsWith("[rating] ")) {
     return (
       <div className="flex justify-start">
@@ -201,7 +211,30 @@ export function ThreadView({
   const [assisting, setAssisting] = useState(false);
   const [assignedTo, setAssignedTo] = useState<string | null>(null);
   const [snoozedUntil, setSnoozedUntil] = useState<string | null>(null);
-  const { team } = useTeam();
+  const { team, byId } = useTeam();
+  const [others, setOthers] = useState<{ agentId: string; typing: boolean }[]>([]);
+  const typedAt = useRef(0);
+
+  // Collision detection: tell the server we are here (and typing), learn who else is.
+  useEffect(() => {
+    let cancelled = false;
+    const ping = () =>
+      api<{ others: { agentId: string; typing: boolean }[] }>(`/api/inbox/${contactId}/presence`, {
+        method: "POST",
+        body: JSON.stringify({ typing: Date.now() - typedAt.current < 5000 }),
+      })
+        .then((data) => {
+          if (!cancelled) setOthers(data.others);
+        })
+        .catch(() => undefined);
+    const first = setTimeout(ping, 0);
+    const timer = setInterval(ping, 4000);
+    return () => {
+      cancelled = true;
+      clearTimeout(first);
+      clearInterval(timer);
+    };
+  }, [contactId]);
   const bottom = useRef<HTMLDivElement>(null);
 
   const load = async () => {
@@ -249,7 +282,9 @@ export function ThreadView({
   }, [botId]);
 
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: "smooth" });
+    // Scroll only the message list, never the page around it.
+    const list = bottom.current?.parentElement;
+    if (list) list.scrollTo({ top: list.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
 
   const slashQuery = text.startsWith("/") ? text.slice(1).toLowerCase() : null;
@@ -402,12 +437,12 @@ export function ThreadView({
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-3 border-b border-[#e5e7eb] bg-white px-3 py-2.5 md:px-4">
+        <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[#e5e7eb] bg-white px-3 py-2.5 md:px-4">
           <Link href="/inbox" className="text-[#6b7280] md:hidden" aria-label="Back to conversations">
             <ArrowLeft className="size-4" />
           </Link>
           <ContactAvatar name={name} src={contact.avatarUrl} platform={contact.platform} />
-          <div className="min-w-0 flex-1">
+          <div className="min-w-[8rem] flex-1">
             <p className="truncate text-[14px] font-semibold text-[#1b1f24]">{name}</p>
             <p className="flex items-center gap-1.5 truncate text-[11px] text-[#6b7280]">
               <PlatformBadge platform={contact.platform} />
@@ -462,7 +497,7 @@ export function ThreadView({
                   const until = snoozeTime(event.target.value);
                   if (until) void snooze(until);
                 }}
-                className="hidden rounded-lg border border-[#e5e7eb] bg-white px-2 py-1 text-[12px] sm:block"
+                className="field-sizing-content hidden rounded-lg border border-[#e5e7eb] bg-white px-2 py-1 text-[12px] sm:block"
               >
                 <option value="">Snooze…</option>
                 <option value="1h">1 hour</option>
@@ -491,6 +526,14 @@ export function ThreadView({
           </Button>
         </header>
 
+        {others.length > 0 ? (
+          <p className="flex items-center gap-1.5 border-b border-amber-100 bg-amber-50 px-4 py-1.5 text-[12px] text-amber-900">
+            <Eye className="size-3.5" />
+            {others
+              .map((other) => `${byId(other.agentId)?.name ?? "A teammate"} ${other.typing ? "is typing a reply…" : "is viewing"}`)
+              .join(" · ")}
+          </p>
+        ) : null}
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-[#f4f6f8] px-3 py-4 md:px-6">
           {messages.length === 0 ? (
             <p className="text-center text-[13px] text-[#6b7280]">No messages yet.</p>
@@ -587,7 +630,10 @@ export function ThreadView({
           <div className="flex items-end gap-2">
             <textarea
               value={text}
-              onChange={(event) => setText(event.target.value)}
+              onChange={(event) => {
+                setText(event.target.value);
+                typedAt.current = Date.now();
+              }}
               placeholder={`Reply to ${contact.firstName ?? name}… (/ for saved replies)`}
               rows={2}
               className="max-h-40 min-h-[2.5rem] flex-1 resize-none rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2 text-[13px] outline-none focus:border-[#0084ff]"
