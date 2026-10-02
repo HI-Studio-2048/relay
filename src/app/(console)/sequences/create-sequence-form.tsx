@@ -18,7 +18,7 @@ const SECONDS: Record<Unit, number> = { minutes: 60, hours: 3600, days: 86400 };
 /** Seconds → the largest whole unit, for editing an existing step. */
 function toDraft(step: { delaySeconds: number; body: string; flowId: string | null }): StepDraft {
   const unit: Unit = step.delaySeconds % 86400 === 0 && step.delaySeconds > 0 ? "days" : step.delaySeconds % 3600 === 0 && step.delaySeconds > 0 ? "hours" : "minutes";
-  return { amount: Math.round(step.delaySeconds / SECONDS[unit]), unit, kind: step.flowId ? "flow" : "message", body: step.body, flowId: step.flowId ?? "" };
+  return { amount: Number((step.delaySeconds / SECONDS[unit]).toFixed(4)), unit, kind: step.flowId ? "flow" : "message", body: step.body, flowId: step.flowId ?? "" };
 }
 
 export function CreateSequenceForm({
@@ -57,7 +57,8 @@ export function CreateSequenceForm({
           botId,
           ...(editing ? { id: editing.id } : { name }),
           steps: steps.map((step) => ({
-            delaySeconds: Math.max(0, step.amount) * SECONDS[step.unit],
+            // Rounded to the second so a sub-minute delay (e.g. 30s from the API) survives an edit.
+            delaySeconds: Math.round(Math.max(0, step.amount) * SECONDS[step.unit]),
             body: step.kind === "message" ? step.body : "",
             flowId: step.kind === "flow" ? step.flowId || flows[0]?.id || null : null,
           })),
@@ -88,10 +89,11 @@ export function CreateSequenceForm({
             <Input
               type="number"
               min={0}
+              step="any"
               aria-label="Delay"
               className="w-20"
               value={step.amount}
-              onChange={(event) => update(index, { amount: Number.parseInt(event.target.value, 10) || 0 })}
+              onChange={(event) => update(index, { amount: Number.parseFloat(event.target.value) || 0 })}
             />
             <select
               aria-label="Delay unit"

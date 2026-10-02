@@ -52,6 +52,10 @@ export async function mergeContacts(keepId: string, dropId: string) {
     );
     await tx.execute(sql`update flow_events set contact_id = ${keepId} where contact_id = ${dropId}`);
     await tx.execute(sql`update growth_link_events set contact_id = ${keepId} where contact_id = ${dropId}`);
+    // An opted-out duplicate's queued replies are dropped, not re-routed to the kept channel.
+    if (drop.unsubscribed) {
+      await tx.execute(sql`update scheduled_messages set status = 'cancelled' where contact_id = ${dropId} and status = 'pending'`);
+    }
     await tx.execute(sql`update scheduled_messages set contact_id = ${keepId} where contact_id = ${dropId}`);
     await tx.execute(
       sql`update sequence_subscriptions set contact_id = ${keepId} where contact_id = ${dropId} and sequence_id not in (select sequence_id from sequence_subscriptions where contact_id = ${keepId})`,
@@ -64,6 +68,9 @@ export async function mergeContacts(keepId: string, dropId: string) {
         phone: keep.phone ?? drop.phone,
         notes: [keep.notes, drop.notes].filter((note) => note?.trim()).join("\n") || keep.notes,
         createdAt: keep.createdAt < drop.createdAt ? keep.createdAt : drop.createdAt,
+        // Opting out on either channel opts the person out; list subscriptions add up.
+        unsubscribed: keep.unsubscribed || drop.unsubscribed,
+        subscriptions: [...new Set([...(keep.subscriptions ?? []), ...(drop.subscriptions ?? [])])],
       })
       .where(and(eq(contacts.id, keepId), eq(contacts.botId, keep.botId)));
     // Whatever is left (open sessions, broadcast receipts, duplicates of the above) goes with it.

@@ -31,22 +31,56 @@ export async function createSequence(input: {
   return id;
 }
 
-/** Replace a sequence's messages in place. Subscribers keep their position (step index). */
-export async function replaceSequenceSteps(sequenceId: string, steps: { delaySeconds: number; body: string; flowId?: string | null }[]) {
+type StepShape = { delaySeconds: number; body: string; flowId?: string | null };
+
+/**
+ * Where a subscriber waiting on old step `index` should wait after an edit. Steps are matched by content
+ * (copy + flow), so inserting or deleting a step neither repeats nor skips a message they already got;
+ * an edited step counts as new, so they get the new copy.
+ */
+export function remapSequenceIndex(oldSteps: StepShape[], newSteps: StepShape[], index: number) {
+  const keyOf = (step: StepShape) => `${step.flowId ?? ""}\u0000${step.body.trim()}`;
+  const used = new Set<number>();
+  const map = oldSteps.map((step) => {
+    const found = newSteps.findIndex((candidate, position) => !used.has(position) && keyOf(candidate) === keyOf(step));
+    if (found >= 0) used.add(found);
+    return found;
+  });
+  if (index < oldSteps.length && map[index]! >= 0) return map[index]!;
+  // The step they were waiting on is gone or changed: continue after the last one they received.
+  let next = 0;
+  for (let past = 0; past < Math.min(index, oldSteps.length); past++) if (map[past]! >= 0) next = Math.max(next, map[past]! + 1);
+  return next;
+}
+
+/** Replace a sequence's messages. Active subscribers are moved to the matching step and re-timed. */
+export async function replaceSequenceSteps(sequenceId: string, steps: StepShape[]) {
   const db = await getDb();
+  const kept = steps
+    .filter((step) => step.body.trim() || step.flowId)
+    .map((step) => ({ delaySeconds: Math.max(0, Math.floor(step.delaySeconds || 0)), body: step.body.trim(), flowId: step.flowId || null }));
   await db.transaction(async (tx) => {
+    const oldSteps = await tx.select().from(sequenceSteps).where(eq(sequenceSteps.sequenceId, sequenceId)).orderBy(asc(sequenceSteps.position));
+    const active = await tx
+      .select()
+      .from(sequenceSubscriptions)
+      .where(and(eq(sequenceSubscriptions.sequenceId, sequenceId), eq(sequenceSubscriptions.status, "active")));
     await tx.delete(sequenceSteps).where(eq(sequenceSteps.sequenceId, sequenceId));
-    let position = 0;
-    for (const step of steps) {
-      if (!step.body.trim() && !step.flowId) continue;
-      await tx.insert(sequenceSteps).values({
-        id: crypto.randomUUID(),
-        sequenceId,
-        position: position++,
-        delaySeconds: Math.max(0, Math.floor(step.delaySeconds || 0)),
-        body: step.body.trim(),
-        flowId: step.flowId || null,
-      });
+    for (const [position, step] of kept.entries()) {
+      await tx.insert(sequenceSteps).values({ id: crypto.randomUUID(), sequenceId, position, ...step });
+    }
+    for (const sub of active) {
+      const nextIndex = remapSequenceIndex(oldSteps, kept, sub.nextIndex);
+      // nextAt was "previous send + old delay": swap in the new step's delay.
+      const oldDelay = oldSteps[sub.nextIndex]?.delaySeconds;
+      const newDelay = kept[nextIndex]?.delaySeconds;
+      const nextAt =
+        oldDelay !== undefined && newDelay !== undefined && oldDelay !== newDelay
+          ? new Date(new Date(sub.nextAt).getTime() + (newDelay - oldDelay) * 1000)
+          : sub.nextAt;
+      if (nextIndex !== sub.nextIndex || nextAt !== sub.nextAt) {
+        await tx.update(sequenceSubscriptions).set({ nextIndex, nextAt }).where(eq(sequenceSubscriptions.id, sub.id));
+      }
     }
   });
 }

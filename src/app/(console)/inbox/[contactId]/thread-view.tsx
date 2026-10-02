@@ -408,12 +408,23 @@ export function ThreadView({
 
   // "e" marks the open conversation done (outside text fields), like an email client.
   const patchRef = useRef<(patch: Record<string, unknown>) => Promise<void>>(async () => undefined);
+  const closingRef = useRef(false);
+  const statusRef = useRef(contact.inboxStatus);
+  useEffect(() => {
+    statusRef.current = contact.inboxStatus;
+  }, [contact.inboxStatus]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
-      if (event.key === "e") void patchRef.current({ inboxStatus: "closed" });
+      if (event.key !== "e" || event.repeat || closingRef.current || statusRef.current === "closed") return;
+      // Not while a dialog (e.g. the "?" shortcuts sheet) is open.
+      if (document.querySelector('[role="dialog"]')) return;
+      closingRef.current = true;
+      void patchRef.current({ inboxStatus: "closed" }).finally(() => {
+        closingRef.current = false;
+      });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

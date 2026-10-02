@@ -1,5 +1,5 @@
 import { logActivity } from "@/lib/activity";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
@@ -66,9 +66,16 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
         ? [...new Set(body.tags.map((tag) => String(tag).trim()).filter(Boolean))]
         : contact.tags,
     };
+    // Claim the close atomically: two quick "Done"s must not both send the CSAT survey.
+    const closing =
+      body.inboxStatus === "closed" &&
+      (await db
+        .update(contacts)
+        .set({ inboxStatus: "closed" })
+        .where(and(eq(contacts.id, id), ne(contacts.inboxStatus, "closed")))
+        .returning()).length > 0;
     await persistContact(row!.botId, next);
     // Closing a conversation a teammate handled can ask the person to rate it (CSAT).
-    const closing = body.inboxStatus === "closed" && contact.inboxStatus !== "closed";
     const surveyed = closing ? await sendCsatSurvey(id) : false;
     if (closing) emitWebhookSoon(row!.botId, "conversation.closed", { contact: publicContact(next), surveyed });
     return json({ contact: await loadContactRecord(id), surveyed });
