@@ -68,6 +68,7 @@ export default async function SequencesPage() {
           {rows.map((sequence) => (
             <SequenceCard
               key={sequence.id}
+              flows={flowRows}
               sequence={{
                 id: sequence.id,
                 botId: sequence.botId,
@@ -76,6 +77,9 @@ export default async function SequencesPage() {
                 stats: sequence.stats,
                 steps: sequence.steps.map((step) => ({
                   id: step.id,
+                  delaySeconds: step.delaySeconds,
+                  body: step.body,
+                  flowId: step.flowId,
                   label: `wait ${formatDelay(step.delaySeconds)} — ${
                     step.flowId ? `flow “${flowRows.find((flow) => flow.id === step.flowId)?.name ?? "deleted flow"}”` : step.body
                   }`,

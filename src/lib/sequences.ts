@@ -31,6 +31,26 @@ export async function createSequence(input: {
   return id;
 }
 
+/** Replace a sequence's messages in place. Subscribers keep their position (step index). */
+export async function replaceSequenceSteps(sequenceId: string, steps: { delaySeconds: number; body: string; flowId?: string | null }[]) {
+  const db = await getDb();
+  await db.transaction(async (tx) => {
+    await tx.delete(sequenceSteps).where(eq(sequenceSteps.sequenceId, sequenceId));
+    let position = 0;
+    for (const step of steps) {
+      if (!step.body.trim() && !step.flowId) continue;
+      await tx.insert(sequenceSteps).values({
+        id: crypto.randomUUID(),
+        sequenceId,
+        position: position++,
+        delaySeconds: Math.max(0, Math.floor(step.delaySeconds || 0)),
+        body: step.body.trim(),
+        flowId: step.flowId || null,
+      });
+    }
+  });
+}
+
 export async function listSequences(botId: string) {
   const db = await getDb();
   const rows = await db.select().from(sequences).where(eq(sequences.botId, botId)).orderBy(asc(sequences.createdAt));

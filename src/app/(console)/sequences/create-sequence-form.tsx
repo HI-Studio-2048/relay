@@ -15,13 +15,34 @@ type StepDraft = { amount: number; unit: Unit; kind: "message" | "flow"; body: s
 
 const SECONDS: Record<Unit, number> = { minutes: 60, hours: 3600, days: 86400 };
 
-export function CreateSequenceForm({ botId, flows = [] }: { botId: string; flows?: { id: string; name: string }[] }) {
+/** Seconds → the largest whole unit, for editing an existing step. */
+function toDraft(step: { delaySeconds: number; body: string; flowId: string | null }): StepDraft {
+  const unit: Unit = step.delaySeconds % 86400 === 0 && step.delaySeconds > 0 ? "days" : step.delaySeconds % 3600 === 0 && step.delaySeconds > 0 ? "hours" : "minutes";
+  return { amount: Math.round(step.delaySeconds / SECONDS[unit]), unit, kind: step.flowId ? "flow" : "message", body: step.body, flowId: step.flowId ?? "" };
+}
+
+export function CreateSequenceForm({
+  botId,
+  flows = [],
+  editing,
+  onDone,
+}: {
+  botId: string;
+  flows?: { id: string; name: string }[];
+  /** Edit an existing sequence's messages (its name is the subscribe list, so it stays). */
+  editing?: { id: string; name: string; steps: { delaySeconds: number; body: string; flowId: string | null }[] };
+  onDone?: () => void;
+}) {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [steps, setSteps] = useState<StepDraft[]>([
-    { amount: 0, unit: "minutes", kind: "message", body: "Welcome — thanks for opting in, {{first_name|there}}!", flowId: "" },
-    { amount: 1, unit: "days", kind: "message", body: "Day 2: here is the next step.", flowId: "" },
-  ]);
+  const [name, setName] = useState(editing?.name ?? "");
+  const [steps, setSteps] = useState<StepDraft[]>(
+    editing
+      ? editing.steps.map(toDraft)
+      : [
+          { amount: 0, unit: "minutes", kind: "message", body: "Welcome — thanks for opting in, {{first_name|there}}!", flowId: "" },
+          { amount: 1, unit: "days", kind: "message", body: "Day 2: here is the next step.", flowId: "" },
+        ],
+  );
   const [busy, setBusy] = useState(false);
 
   const update = (index: number, patch: Partial<StepDraft>) => setSteps(steps.map((step, i) => (i === index ? { ...step, ...patch } : step)));
@@ -31,10 +52,10 @@ export function CreateSequenceForm({ botId, flows = [] }: { botId: string; flows
     setBusy(true);
     try {
       await api("/api/sequences", {
-        method: "POST",
+        method: editing ? "PUT" : "POST",
         body: JSON.stringify({
           botId,
-          name,
+          ...(editing ? { id: editing.id } : { name }),
           steps: steps.map((step) => ({
             delaySeconds: Math.max(0, step.amount) * SECONDS[step.unit],
             body: step.kind === "message" ? step.body : "",
@@ -42,9 +63,10 @@ export function CreateSequenceForm({ botId, flows = [] }: { botId: string; flows
           })),
         }),
       });
-      toast.success("Sequence created");
-      setName("");
+      toast.success(editing ? "Sequence saved" : "Sequence created");
+      if (!editing) setName("");
       router.refresh();
+      onDone?.();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not create sequence");
     } finally {
@@ -56,7 +78,7 @@ export function CreateSequenceForm({ botId, flows = [] }: { botId: string; flows
     <div className="space-y-3">
       <div className="space-y-1">
         <Label>Name (also the subscribe list)</Label>
-        <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="welcome_drip" />
+        <Input value={name} disabled={Boolean(editing)} onChange={(event) => setName(event.target.value)} placeholder="welcome_drip" />
       </div>
       {steps.map((step, index) => (
         <div key={index} className="space-y-2 rounded-xl p-3 ring-1 ring-[#e5e7eb]">
@@ -121,8 +143,13 @@ export function CreateSequenceForm({ botId, flows = [] }: { botId: string; flows
         <Button type="button" size="sm" variant="outline" onClick={() => setSteps([...steps, { amount: 1, unit: "days", kind: "message", body: "", flowId: "" }])}>
           Add step
         </Button>
+        {editing && onDone ? (
+          <Button type="button" size="sm" variant="ghost" onClick={onDone}>
+            Cancel
+          </Button>
+        ) : null}
         <Button type="button" size="sm" onClick={() => void save()} disabled={busy || !name.trim()}>
-          {busy ? "Saving…" : "Create sequence"}
+          {busy ? "Saving…" : editing ? "Save changes" : "Create sequence"}
         </Button>
       </div>
     </div>

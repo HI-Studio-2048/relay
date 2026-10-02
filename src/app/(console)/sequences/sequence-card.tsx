@@ -7,18 +7,20 @@ import { CanvasCard } from "@/components/chrome/tone";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client";
 import { cn } from "@/lib/utils";
+import { CreateSequenceForm } from "./create-sequence-form";
 
 export type SequenceView = {
   id: string;
   botId: string;
   name: string;
   isActive: boolean;
-  steps: { id: string; label: string }[];
+  steps: { id: string; label: string; delaySeconds: number; body: string; flowId: string | null }[];
   stats: { active: number; completed: number; unsubscribed: number };
 };
 
 /** One drip: its messages, who is in it, and pause / delete. */
-export function SequenceCard({ sequence }: { sequence: SequenceView }) {
+export function SequenceCard({ sequence, flows }: { sequence: SequenceView; flows: { id: string; name: string }[] }) {
+  const [editing, setEditing] = useState(false);
   const router = useRouter();
   const [active, setActive] = useState(sequence.isActive);
   const [busy, setBusy] = useState(false);
@@ -73,6 +75,16 @@ export function SequenceCard({ sequence }: { sequence: SequenceView }) {
           </div>
         ))}
       </div>
+      {editing ? (
+        <div className="rounded-xl bg-[#f9fafb] p-3 ring-1 ring-[#eef0f3]">
+          <CreateSequenceForm
+            botId={sequence.botId}
+            flows={flows}
+            editing={{ id: sequence.id, name: sequence.name, steps: sequence.steps }}
+            onDone={() => setEditing(false)}
+          />
+        </div>
+      ) : null}
       <ol className="space-y-1 text-sm">
         {sequence.steps.map((step, index) => (
           <li key={step.id}>
@@ -83,6 +95,9 @@ export function SequenceCard({ sequence }: { sequence: SequenceView }) {
       <div className="flex gap-2">
         <Button size="sm" variant="outline" disabled={busy} onClick={() => void toggle()}>
           {active ? "Pause" : "Resume"}
+        </Button>
+        <Button size="sm" variant="outline" disabled={busy} onClick={() => setEditing((value) => !value)}>
+          Edit
         </Button>
         <Button size="sm" variant="ghost" disabled={busy} onClick={() => void remove()}>
           Delete
