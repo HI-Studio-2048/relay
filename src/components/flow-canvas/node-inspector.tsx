@@ -669,6 +669,15 @@ function ButtonListEditor({
             onChange={(event) => updateButton(index, { url: event.target.value })}
             placeholder="Go to step (connect on canvas) or https:// URL"
           />
+          {/buy\.stripe\.com/i.test(button.url ?? "") && !/client_reference_id/i.test(button.url ?? "") ? (
+            <button
+              type="button"
+              className="text-left text-[11px] text-[#635bff] hover:underline"
+              onClick={() => updateButton(index, { url: `${button.url}${button.url!.includes("?") ? "&" : "?"}client_reference_id={{contact_id}}` })}
+            >
+              💳 Stripe link: add the contact id so the purchase is credited to this flow
+            </button>
+          ) : null}
         </div>
       ))}
       <Button
