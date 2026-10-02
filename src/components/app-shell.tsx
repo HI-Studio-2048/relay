@@ -18,9 +18,11 @@ import {
   Sparkles,
   Plug,
   MessageCircleQuestion,
+  Search,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useBot } from "@/components/bot-provider";
+import { CommandPalette } from "@/components/command-palette";
 import { RelayLogo } from "@/components/chrome/relay-logo";
 import { StatusPill } from "@/components/chrome/status-pill";
 import { CanvasCard, ToneChip, type ToneName } from "@/components/chrome/tone";
@@ -260,6 +262,7 @@ export function AppShell({
 
   return (
     <div className={cn("flex bg-[#f4f6f8]", immersive ? "h-dvh overflow-hidden" : "min-h-dvh")}>
+      <CommandPalette />
       <aside className="hidden w-64 shrink-0 border-r border-[#e5e7eb] bg-white p-4 md:flex md:flex-col">
         <Sidebar inboxCount={inboxCount} confirmCount={confirmCount} />
       </aside>
@@ -293,6 +296,15 @@ export function AppShell({
               </p>
               <p className="font-heading text-[15px] tracking-tight text-[#1b1f24]">{title}</p>
             </div>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new Event("relay:search"))}
+              className="ml-auto mr-3 flex w-64 items-center gap-2 rounded-lg bg-[#f4f6f8] px-3 py-1.5 text-[13px] text-[#8b95a1] ring-1 ring-[#e5e7eb] hover:text-[#1b1f24]"
+            >
+              <Search className="size-3.5" />
+              Search
+              <kbd className="ml-auto rounded border border-[#e5e7eb] bg-white px-1.5 text-[10px]">⌘K</kbd>
+            </button>
             {bot ? (
               <div className="flex items-center gap-2 rounded-full bg-[#f4f6f8] px-2.5 py-1 ring-1 ring-[#e5e7eb]">
                 <span className="max-w-40 truncate text-[12px] text-[#1b1f24]">
