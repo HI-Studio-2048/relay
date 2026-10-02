@@ -29,6 +29,7 @@ export const NODE_TONE: Record<CanvasNodeKind, NodeTone> = {
   ai: { hex: RELAY.ai, family: "input" },
   goal: { hex: RELAY.goal, family: "action" },
   end: { hex: RELAY.stop, family: "stop" },
+  note: { hex: "#E5A500", family: "stop" },
 };
 
 export function nodeHex(kind: string | undefined): string {

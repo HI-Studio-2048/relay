@@ -96,3 +96,15 @@ describe("gallery step", () => {
     expect(parts.every((part) => !part.cards)).toBe(true);
   });
 });
+
+describe("canvas notes", () => {
+  it("keep sticky notes in the layout, never as steps", () => {
+    const withNote: FlowDefinition = { ...definition, canvas: { nodes: {}, notes: [{ id: "n1", x: 10, y: 20, text: "Prices change in March" }] } };
+    const graph = definitionToCanvas(withNote);
+    expect(graph.nodes.find((node) => node.id === "n1")?.data).toEqual({ kind: "note", text: "Prices change in March" });
+    const back = canvasToDefinition(graph);
+    expect(back.canvas?.notes).toEqual([{ id: "n1", x: 10, y: 20, text: "Prices change in March" }]);
+    expect(back.steps.some((step) => step.id === "n1")).toBe(false);
+    expect(engineDefinition(back).steps.map((step) => step.id).sort()).toEqual(["g", "pro", "starter"]);
+  });
+});

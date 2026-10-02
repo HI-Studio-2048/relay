@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, GalleryHorizontal, Sparkles, Trophy, CornerUpRight, Dices, Filter, Globe, Hash, MessageSquare, PenLine, Square, Timer, UserRound, ClipboardList } from "lucide-react";
+import { Bell, GalleryHorizontal, StickyNote, Sparkles, Trophy, CornerUpRight, Dices, Filter, Globe, Hash, MessageSquare, PenLine, Square, Timer, UserRound, ClipboardList } from "lucide-react";
 import { NODE_TONE } from "@/components/flow-canvas/node-colors";
 import type { CanvasNodeKind } from "@/lib/flow-canvas";
 
@@ -42,6 +42,7 @@ const GROUPS: {
       { kind: "notify", label: "Notify admin", hint: "Alert on a new lead", icon: Bell },
       { kind: "goal", label: "Goal", hint: "Count a conversion (+ value)", icon: Trophy },
       { kind: "end", label: "Stop", hint: "Stop the flow", icon: Square },
+      { kind: "note", label: "Note", hint: "Sticky note for your team", icon: StickyNote },
     ],
   },
 ];

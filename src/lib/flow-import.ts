@@ -39,10 +39,17 @@ function cleanDefinition(definition: FlowDefinition, steps: FlowDefinition["step
         ...(trigger.aiPublicReply ? { aiPublicReply: true } : {}),
       }
     : undefined;
+  const rawNotes = (definition.canvas as { notes?: unknown } | undefined)?.notes;
+  const notes = (Array.isArray(rawNotes) ? rawNotes : [])
+    .filter((note): note is { id: string; x: number; y: number; text: string } =>
+      Boolean(note) && typeof note.id === "string" && Number.isFinite(note.x) && Number.isFinite(note.y) && typeof note.text === "string",
+    )
+    .slice(0, 50)
+    .map((note) => ({ id: note.id.slice(0, 64), x: note.x, y: note.y, text: note.text.slice(0, 2000) }));
   return {
     startStepId: definition.startStepId,
     steps,
-    ...(Object.keys(nodes).length ? { canvas: { nodes } } : {}),
+    ...(Object.keys(nodes).length || notes.length ? { canvas: { nodes, ...(notes.length ? { notes } : {}) } } : {}),
     ...(safeTrigger ? { trigger: safeTrigger } : {}),
   };
 }

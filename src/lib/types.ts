@@ -112,8 +112,12 @@ export type FlowCanvasPosition = {
 };
 
 /** Optional editor layout. The Telegram engine ignores this field. */
+export type FlowCanvasNote = { id: string; x: number; y: number; text: string };
+
 export type FlowCanvasLayout = {
   nodes: Record<string, FlowCanvasPosition>;
+  /** Sticky notes on the canvas. Documentation only; never run. */
+  notes?: FlowCanvasNote[];
 };
 
 export type FlowStep =

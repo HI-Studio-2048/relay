@@ -22,6 +22,7 @@ export type CanvasNodeKind =
   | "trigger"
   | "send_message"
   | "gallery"
+  | "note"
   | "message"
   | "media"
   | "buttons"
@@ -97,6 +98,7 @@ export type CanvasNodeData =
   | { kind: "trigger" }
   | SendMessageData
   | { kind: "gallery"; text: string; cards: CanvasCard[] }
+  | { kind: "note"; text: string }
   | { kind: "message"; text: string; media?: FlowMedia }
   | { kind: "media"; text: string; media?: FlowMedia }
   | { kind: "buttons"; text: string; buttons: CanvasButton[]; media?: FlowMedia }
@@ -656,6 +658,12 @@ export function definitionToCanvas(definition: FlowDefinition): CanvasGraph {
       const chain = chains.get(step.id);
       return chain ? messageNodeFromChain(chain, position) : nodeFromStep(step, position);
     }),
+    ...(definition.canvas?.notes ?? []).map((note) => ({
+      id: note.id,
+      type: "note" as const,
+      position: { x: note.x, y: note.y },
+      data: { kind: "note" as const, text: note.text },
+    })),
   ];
 
   const edges: CanvasEdge[] = [];
@@ -776,6 +784,10 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
   const canvas: FlowCanvasLayout = { nodes: {} };
 
   for (const node of graph.nodes) {
+    if (node.data.kind === "note") {
+      canvas.notes = [...(canvas.notes ?? []), { id: node.id, x: node.position.x, y: node.position.y, text: node.data.text }];
+      continue;
+    }
     canvas.nodes[node.id] = { x: node.position.x, y: node.position.y };
     if (node.id === TRIGGER_NODE_ID) continue;
 
@@ -1210,6 +1222,8 @@ export function createCanvasNode(
           quickReplies: [],
         },
       };
+    case "note":
+      return { id, type: "note", position, data: { kind: "note", text: "Note for your team: why this flow exists, what to change…" } };
     case "gallery":
       return {
         id,
@@ -1377,7 +1391,7 @@ export type ChannelLimits = {
 export function validateCanvas(graph: CanvasGraph, channel?: ChannelLimits): CanvasValidation {
   const errors: string[] = [];
   const warnings: string[] = [];
-  const stepIds = new Set(graph.nodes.filter((node) => node.id !== TRIGGER_NODE_ID).map((node) => node.id));
+  const stepIds = new Set(graph.nodes.filter((node) => node.id !== TRIGGER_NODE_ID && node.data.kind !== "note").map((node) => node.id));
 
   const triggerOut = graph.edges.filter((edge) => edge.source === TRIGGER_NODE_ID);
   if (triggerOut.length === 0) errors.push("Connect the trigger to the first step.");

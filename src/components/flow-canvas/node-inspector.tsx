@@ -324,6 +324,14 @@ export function NodeInspector({
         </div>
       ) : null}
 
+      {data.kind === "note" ? (
+        <div className="space-y-1">
+          <Label>Note</Label>
+          <Textarea rows={8} value={data.text} onChange={(event) => onDataChange(selectedId, { ...data, text: event.target.value })} />
+          <p className="text-[11px] text-muted-foreground">Only your team sees notes. They never run or send anything.</p>
+        </div>
+      ) : null}
+
       {data.kind === "gallery" ? (
         <GalleryEditor data={data} onChange={(next) => onDataChange(selectedId, next)} />
       ) : null}

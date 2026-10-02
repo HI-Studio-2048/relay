@@ -17,6 +17,7 @@ import {
   PenLine,
   Sparkles,
   Square,
+  StickyNote,
   Timer,
   Trophy,
   UserRound,
@@ -589,6 +590,21 @@ export function GoalNode({ id, selected, data }: NodeProps<FlowNode<"goal">>) {
   );
 }
 
+/** Sticky note: documentation on the canvas, no handles, never runs. */
+export function NoteNode({ selected, data }: NodeProps<FlowNode<"note">>) {
+  return (
+    <div
+      className={cn("w-56 rounded-md p-3 text-[12px] leading-snug whitespace-pre-wrap shadow-sm", selected ? "ring-2 ring-[#E5A500]" : "ring-1 ring-[#f3d36b]")}
+      style={{ background: "#FFF6C7", color: "#5c4a00" }}
+    >
+      <p className="mb-1 flex items-center gap-1 text-[10px] font-semibold tracking-wide uppercase opacity-70">
+        <StickyNote className="size-3" /> Note
+      </p>
+      {data.text || "Empty note"}
+    </div>
+  );
+}
+
 export function EndNode({ id, selected, data }: NodeProps<FlowNode<"end">>) {
   return (
     <NodeFrame id={id} selected={selected} kind="end" icon={Square} title="Stop">
@@ -605,6 +621,7 @@ export const flowNodeTypes = {
   media: MediaNode,
   buttons: ButtonsNode,
   gallery: GalleryNode,
+  note: NoteNode,
   capture: CaptureNode,
   form: FormNode,
   tag: TagNode,
