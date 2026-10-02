@@ -127,3 +127,14 @@ export function describeCondition(condition: SegmentCondition): string {
       return `${condition.op === "within" ? "joined in" : "joined before"} the last ${condition.days} days`;
   }
 }
+
+export type SavedSegment = { id: string; name: string; segment: Segment };
+
+/** Named audiences stored on bots.settings.segments, reusable in Contacts and Broadcasts. */
+export function readSavedSegments(settings: Record<string, unknown> | null | undefined): SavedSegment[] {
+  const raw = Array.isArray(settings?.segments) ? (settings!.segments as Record<string, unknown>[]) : [];
+  return raw
+    .filter((item) => typeof item?.id === "string" && typeof item?.name === "string")
+    .map((item) => ({ id: item.id as string, name: (item.name as string).slice(0, 60), segment: sanitizeSegment(item.segment) }))
+    .filter((item) => item.segment.conditions.length > 0);
+}

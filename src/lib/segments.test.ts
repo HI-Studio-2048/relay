@@ -79,3 +79,19 @@ describe("segments", () => {
     expect(describeCondition({ kind: "field", key: "company", op: "contains", value: "acme" })).toBe('company contains "acme"');
   });
 });
+
+describe("saved segments", () => {
+  it("reads only valid saved segments", async () => {
+    const { readSavedSegments } = await import("@/lib/segments");
+    const saved = readSavedSegments({
+      segments: [
+        { id: "1", name: "VIPs", segment: { match: "all", conditions: [{ kind: "tag", op: "has", value: "vip" }] } },
+        { id: "2", name: "Empty", segment: { match: "all", conditions: [] } },
+        { name: "No id" },
+        "junk",
+      ],
+    });
+    expect(saved.map((item) => item.name)).toEqual(["VIPs"]);
+    expect(readSavedSegments(null)).toEqual([]);
+  });
+});

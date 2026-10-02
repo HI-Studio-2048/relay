@@ -1,8 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
+import { toast } from "sonner";
+import { useBot } from "@/components/bot-provider";
 import { zernioPlatformLabel } from "@/components/chrome/platform-badge";
-import type { Segment, SegmentCondition } from "@/lib/segments";
+import { api } from "@/lib/client";
+import { cn } from "@/lib/utils";
+import type { SavedSegment, Segment, SegmentCondition } from "@/lib/segments";
 
 export type SegmentOptions = {
   tags: string[];
@@ -174,18 +179,92 @@ function ConditionRow({
   );
 }
 
+/** Saved audiences: one tap applies one, "Save" names the current conditions. */
+export function SavedSegments({ value, onChange }: { value: Segment; onChange: (next: Segment) => void }) {
+  const { botId } = useBot();
+  const [saved, setSaved] = useState<SavedSegment[]>([]);
+
+  useEffect(() => {
+    if (!botId) return;
+    let cancelled = false;
+    api<{ segments: SavedSegment[] }>(`/api/bots/${botId}/segments`)
+      .then((data) => {
+        if (!cancelled) setSaved(data.segments);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [botId]);
+
+  const current = JSON.stringify(value);
+  const save = async () => {
+    const name = window.prompt("Name this segment", "")?.trim();
+    if (!name || !botId) return;
+    try {
+      const data = await api<{ segments: SavedSegment[] }>(`/api/bots/${botId}/segments`, {
+        method: "POST",
+        body: JSON.stringify({ name, segment: value }),
+      });
+      setSaved(data.segments);
+      toast.success(`Saved “${name}”`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save");
+    }
+  };
+  const remove = async (item: SavedSegment) => {
+    if (!botId || !window.confirm(`Delete the saved segment “${item.name}”?`)) return;
+    const data = await api<{ segments: SavedSegment[] }>(`/api/bots/${botId}/segments?segmentId=${item.id}`, { method: "DELETE" }).catch(() => null);
+    if (data) setSaved(data.segments);
+  };
+
+  if (saved.length === 0 && value.conditions.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {saved.map((item) => {
+        const active = JSON.stringify(item.segment) === current;
+        return (
+          <span
+            key={item.id}
+            className={cn(
+              "flex items-center gap-1 rounded-full py-0.5 pr-1 pl-2.5 text-[12px] ring-1",
+              active ? "bg-[#eef6ff] text-[#0b63c5] ring-[#0084ff]/40" : "bg-white text-[#374151] ring-[#e5e7eb]",
+            )}
+          >
+            <button type="button" title={active ? "Clear this filter" : "Apply this segment"} onClick={() => onChange(active ? { match: "all", conditions: [] } : item.segment)}>
+              {item.name}
+            </button>
+            <button type="button" aria-label={`Delete ${item.name}`} title="Delete saved segment" className="rounded-full p-0.5 text-[#8b95a1] hover:text-[#1b1f24]" onClick={() => void remove(item)}>
+              <X className="size-3" />
+            </button>
+          </span>
+        );
+      })}
+      {value.conditions.length > 0 && !saved.some((item) => JSON.stringify(item.segment) === current) ? (
+        <button type="button" onClick={() => void save()} className="rounded-full px-2.5 py-0.5 text-[12px] font-medium text-[#0084ff] ring-1 ring-dashed ring-[#0084ff]/40 hover:bg-[#eef6ff]">
+          Save as segment
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 /** ManyChat-style condition builder: match all / any of tag, field, platform, list, activity, join date. */
 export function SegmentBuilder({
   value,
   options,
   onChange,
+  showSaved = true,
 }: {
   value: Segment;
   options: SegmentOptions;
   onChange: (next: Segment) => void;
+  /** Show saved-segment chips above the conditions (off where the page shows them elsewhere). */
+  showSaved?: boolean;
 }) {
   return (
     <div className="space-y-2">
+      {showSaved ? <SavedSegments value={value} onChange={onChange} /> : null}
       <datalist id="segment-tags">
         {options.tags.map((tag) => (
           <option key={tag} value={tag} />

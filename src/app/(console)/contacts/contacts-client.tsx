@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { ContactAvatar } from "@/components/chrome/avatar";
 import { PageHeader } from "@/components/chrome/page-header";
 import { PlatformBadge } from "@/components/chrome/platform-badge";
-import { SegmentBuilder, type SegmentOptions } from "@/components/segment-builder";
+import { SavedSegments, SegmentBuilder, type SegmentOptions } from "@/components/segment-builder";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client";
 import { EMPTY_SEGMENT, matchesSegment, type Segment, type SegmentSubject } from "@/lib/segments";
@@ -173,9 +173,11 @@ export function ContactsClient({
 
       {showFilter ? (
         <div className="rounded-2xl bg-white p-4 shadow-[0_1px_3px_rgba(16,24,40,0.10)] ring-1 ring-[#e5e7eb]">
-          <SegmentBuilder value={segment} options={options} onChange={setSegment} />
+          <SegmentBuilder value={segment} options={options} onChange={setSegment} showSaved={false} />
         </div>
       ) : null}
+
+      <SavedSegments value={segment} onChange={(next) => setSegment(next)} />
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-[13px]">
         <p className="text-[#6b7280]">
