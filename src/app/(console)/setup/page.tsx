@@ -14,6 +14,7 @@ import { BotFieldsCard } from "@/components/bot-fields-card";
 import { TeamCard } from "@/components/team-card";
 import { AlertsCard } from "@/components/alerts-card";
 import { FieldsCard } from "@/components/fields-card";
+import { TagsCard } from "@/components/tags-card";
 
 const GUIDES: Record<ChannelId, { title: string; steps: string[]; tokenLabel: string; accountLabel?: string }> = {
   zernio: {
@@ -295,6 +296,7 @@ export default function SetupPage() {
       {bot ? <BotFieldsCard botId={bot.id} /> : null}
       {bot ? <AlertsCard botId={bot.id} /> : null}
       {bot ? <FieldsCard botId={bot.id} /> : null}
+      {bot ? <TagsCard botId={bot.id} /> : null}
 
       <TeamCard />
 

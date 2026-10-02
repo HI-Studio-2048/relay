@@ -10,7 +10,12 @@ export async function DELETE(request: Request, context: RouteParams<{ id: string
     const body = await readJson<{ confirm?: unknown }>(request);
     assertConfirm(body.confirm, "Delete tag");
     const db = await getDb();
-    await db.delete(tags).where(eq(tags.id, id));
+    try {
+      await db.delete(tags).where(eq(tags.id, id));
+    } catch {
+      // Broadcasts keep a hard reference to the tag they were sent to.
+      return json({ error: "A broadcast was sent to this tag, so it is kept for its history" }, 409);
+    }
     return json({ ok: true });
   } catch (error) {
     return fail(error);

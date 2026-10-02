@@ -1,14 +1,34 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { tags } from "@/lib/db/schema";
+import { contactTags, flows, tags } from "@/lib/db/schema";
 import { json, fail, readJson } from "@/lib/http";
 
 export async function GET(request: Request) {
   try {
-    const botId = new URL(request.url).searchParams.get("botId");
+    const url = new URL(request.url);
+    const botId = url.searchParams.get("botId");
     if (!botId) return json({ error: "botId is required" }, 400);
     const db = await getDb();
-    return json({ tags: await db.select().from(tags).where(eq(tags.botId, botId)) });
+    const rows = await db.select().from(tags).where(eq(tags.botId, botId));
+    if (!url.searchParams.get("usage")) return json({ tags: rows });
+    // Usage for Settings → Tags: contacts carrying it and flows that read or set it (by name).
+    const [counts, flowRows] = await Promise.all([
+      db
+        .select({ tagId: contactTags.tagId, count: sql<number>`count(*)::int` })
+        .from(contactTags)
+        .innerJoin(tags, eq(tags.id, contactTags.tagId))
+        .where(eq(tags.botId, botId))
+        .groupBy(contactTags.tagId),
+      db.select({ definition: flows.definition }).from(flows).where(eq(flows.botId, botId)),
+    ]);
+    const flowTexts = flowRows.map((flow) => JSON.stringify(flow.definition).toLowerCase());
+    return json({
+      tags: rows.map((tag) => ({
+        ...tag,
+        contacts: counts.find((row) => row.tagId === tag.id)?.count ?? 0,
+        flows: flowTexts.filter((text) => text.includes(`"tagname":${JSON.stringify(tag.name.toLowerCase())}`)).length,
+      })),
+    });
   } catch (error) {
     return fail(error);
   }
