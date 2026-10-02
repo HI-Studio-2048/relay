@@ -34,6 +34,8 @@ export async function POST(request: Request) {
       segment?: unknown;
       /** Send this flow instead of the text. */
       flowId?: string | null;
+      /** A/B test: a second version for half the audience. */
+      textB?: string | null;
     }>(request);
     const everyone = body.audience === "all";
     const flowId = body.flowId?.trim() || null;
@@ -70,6 +72,7 @@ export async function POST(request: Request) {
         botId: body.botId,
         name: body.name?.trim() || fallbackName.slice(0, 120),
         body: body.text?.trim() || (flowName ? `[flow] ${flowName}` : ""),
+        bodyB: !flowId && body.textB?.trim() ? body.textB.trim() : null,
         tagId,
         segment: segment.conditions.length ? segment : null,
         flowId,

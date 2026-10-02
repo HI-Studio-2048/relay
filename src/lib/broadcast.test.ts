@@ -42,3 +42,13 @@ describe("confirm-before-broadcast", () => {
     expect(() => assertConfirm(true, "Delete bot")).not.toThrow();
   });
 });
+
+describe("broadcast A/B split", () => {
+  it("splits evenly and shuffles", async () => {
+    const { splitArms } = await import("@/lib/broadcast-dispatch");
+    const arms = splitArms(11, () => 0.3);
+    expect(arms.filter((arm) => arm === "a")).toHaveLength(6);
+    expect(arms.filter((arm) => arm === "b")).toHaveLength(5);
+    expect(splitArms(0)).toEqual([]);
+  });
+});

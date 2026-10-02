@@ -35,13 +35,15 @@ export async function materializeBroadcast(broadcastId: string, from: string[] =
 
   const sendAt = claimed.smartTiming ? await smartSendTimes(audience.map((contact) => contact.id)) : new Map<string, Date>();
   await db.delete(broadcastRecipients).where(eq(broadcastRecipients.broadcastId, broadcastId));
+  const arms = claimed.bodyB?.trim() && !claimed.flowId ? splitArms(audience.length) : null;
   await db.insert(broadcastRecipients).values(
-    audience.map((contact) => ({
+    audience.map((contact, index) => ({
       id: crypto.randomUUID(),
       broadcastId,
       contactId: contact.id,
       status: "pending",
       sendAt: sendAt.get(contact.id) ?? null,
+      variant: arms ? arms[index]! : null,
     })),
   );
   const [updated] = await db
@@ -86,6 +88,16 @@ async function smartSendTimes(contactIds: string[]) {
     }
   }
   return result;
+}
+
+/** A/B test: an even, shuffled split of n recipients into "a" and "b". */
+export function splitArms(n: number, random = Math.random): ("a" | "b")[] {
+  const arms = Array.from({ length: n }, (_, index) => (index % 2 === 0 ? "a" : "b") as "a" | "b");
+  for (let i = arms.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [arms[i], arms[j]] = [arms[j]!, arms[i]!];
+  }
+  return arms;
 }
 
 /** Worker tick: release scheduled broadcasts whose time has come. */

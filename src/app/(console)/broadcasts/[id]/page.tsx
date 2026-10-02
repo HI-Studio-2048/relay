@@ -1,4 +1,4 @@
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, isNotNull, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { broadcastRecipients, broadcasts } from "@/lib/db/schema";
@@ -30,6 +30,21 @@ export default async function BroadcastDetailPage({
         .from(broadcastRecipients)
         .where(and(eq(broadcastRecipients.broadcastId, id), eq(broadcastRecipients.status, "pending"), gt(broadcastRecipients.sendAt, new Date())))
     : [];
+  // A/B results: who replied within 48 hours of their copy.
+  const variantRows = broadcast.bodyB
+    ? await db
+        .select({
+          variant: broadcastRecipients.variant,
+          sent: sql<number>`count(*) filter (where ${broadcastRecipients.status} = 'sent')::int`,
+          // Fully qualified: an unqualified contact_id inside the subquery would bind to messages.contact_id.
+          replied: sql<number>`count(*) filter (where broadcast_recipients.status = 'sent' and exists (
+            select 1 from messages m where m.contact_id = broadcast_recipients.contact_id and m.direction = 'inbound'
+            and m.created_at > broadcast_recipients.sent_at and m.created_at < broadcast_recipients.sent_at + interval '48 hours'))::int`,
+        })
+        .from(broadcastRecipients)
+        .where(and(eq(broadcastRecipients.broadcastId, id), isNotNull(broadcastRecipients.variant)))
+        .groupBy(broadcastRecipients.variant)
+    : [];
   const nextAt = waiting.reduce<Date | null>((min, row) => (row.sendAt && (!min || row.sendAt < min) ? row.sendAt : min), null);
   return (
     <BroadcastDetail
@@ -47,6 +62,8 @@ export default async function BroadcastDetailPage({
         segment: describeSegment(sanitizeSegment(broadcast.segment)),
         isFlow: Boolean(broadcast.flowId),
         smartTiming: broadcast.smartTiming,
+        bodyB: broadcast.bodyB,
+        variants: variantRows.map((row) => ({ variant: row.variant ?? "a", sent: Number(row.sent), replied: Number(row.replied) })),
         waitingCount: waiting.length,
         nextAt: nextAt ? nextAt.toISOString() : null,
       }}

@@ -269,6 +269,8 @@ ALTER TABLE flow_events ADD COLUMN IF NOT EXISTS value double precision;
 ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS flow_id text REFERENCES flows(id) ON DELETE SET NULL;
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS snoozed_until timestamptz;
 ALTER TABLE flows ADD COLUMN IF NOT EXISTS folder text;
+ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS body_b text;
+ALTER TABLE broadcast_recipients ADD COLUMN IF NOT EXISTS variant text;
 ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS smart_timing boolean NOT NULL DEFAULT false;
 ALTER TABLE broadcast_recipients ADD COLUMN IF NOT EXISTS send_at timestamptz;
 

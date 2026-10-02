@@ -199,6 +199,8 @@ export const broadcasts = pgTable("broadcasts", {
     .references(() => bots.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   body: text("body").notNull(),
+  /** A/B test: half the audience gets this text instead. */
+  bodyB: text("body_b"),
   /** Null means "everyone" (all subscribed contacts of the bot). */
   tagId: text("tag_id").references(() => tags.id, { onDelete: "restrict" }),
   /** Extra audience conditions (segments.ts). Applied on top of tagId. */
@@ -234,6 +236,8 @@ export const broadcastRecipients = pgTable(
     error: text("error"),
     /** Smart timing: not before this moment. */
     sendAt: timestamp("send_at", { withTimezone: true }),
+    /** A/B test arm: "a" or "b". */
+    variant: text("variant"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
   },
   (table) => [uniqueIndex("broadcast_recipients_unique").on(table.broadcastId, table.contactId)],

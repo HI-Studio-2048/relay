@@ -42,6 +42,8 @@ export function ComposeBroadcast({
   const [flowId, setFlowId] = useState(flows[0]?.id ?? "");
   const [name, setName] = useState("");
   const [text, setText] = useState("");
+  const [abTest, setAbTest] = useState(false);
+  const [textB, setTextB] = useState("");
   const [preview, setPreview] = useState<{ count: number; sample: string[] }>({ count: initialEveryone, sample: [] });
   const [saving, setSaving] = useState(false);
   const router = useRouter();
@@ -72,6 +74,7 @@ export function ComposeBroadcast({
           segment,
           name,
           text: content === "text" ? text : "",
+          textB: content === "text" && abTest ? textB : null,
           flowId: content === "flow" ? flowId : null,
         }),
       });
@@ -168,6 +171,13 @@ export function ComposeBroadcast({
             <p className="text-[11px] text-muted-foreground">
               Variables: {"{{first_name}}"}, {"{{email}}"}, any custom field like {"{{company}}"}, with fallbacks {"{{first_name|there}}"}.
             </p>
+            <label className="flex items-center gap-2 pt-1 text-[13px]">
+              <input type="checkbox" checked={abTest} onChange={(event) => setAbTest(event.target.checked)} />
+              A/B test a second version (half the audience each; compare reply rates)
+            </label>
+            {abTest ? (
+              <Textarea rows={4} value={textB} onChange={(event) => setTextB(event.target.value)} placeholder="Version B — try a different hook or offer" />
+            ) : null}
           </div>
         ) : (
           <div className="space-y-1">
@@ -199,7 +209,7 @@ export function ComposeBroadcast({
 
       <Button
         onClick={() => void create()}
-        disabled={saving || (mode === "tag" && !tagId) || (content === "text" ? !text.trim() : !flowId) || preview.count === 0}
+        disabled={saving || (mode === "tag" && !tagId) || (content === "text" ? !text.trim() || (abTest && !textB.trim()) : !flowId) || preview.count === 0}
       >
         {saving ? "Saving…" : `Review and confirm (${preview.count})`}
       </Button>

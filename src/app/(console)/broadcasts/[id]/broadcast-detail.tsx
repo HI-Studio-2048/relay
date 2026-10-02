@@ -27,6 +27,8 @@ export type BroadcastView = {
   segment?: string | null;
   isFlow?: boolean;
   smartTiming?: boolean;
+  bodyB?: string | null;
+  variants?: { variant: string; sent: number; replied: number }[];
   /** Smart timing: recipients still waiting for their usual hour. */
   waitingCount?: number;
   nextAt?: string | null;
@@ -83,7 +85,14 @@ export function BroadcastDetail({
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {broadcast.bodyB ? <p className="mb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Version A</p> : null}
           <p className="whitespace-pre-wrap text-sm">{broadcast.body}</p>
+          {broadcast.bodyB ? (
+            <>
+              <p className="mt-3 mb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Version B</p>
+              <p className="whitespace-pre-wrap text-sm">{broadcast.bodyB}</p>
+            </>
+          ) : null}
         </CardContent>
         <CardFooter>
           <p className="text-sm text-muted-foreground">
@@ -91,6 +100,35 @@ export function BroadcastDetail({
           </p>
         </CardFooter>
       </Card>
+      {broadcast.bodyB && (broadcast.variants ?? []).some((row) => row.sent > 0) ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>A/B test</CardTitle>
+            <CardDescription>Half the audience got each version. Reply rate counts replies within 48 hours.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {(() => {
+              const rows = ["a", "b"].map((variant) => {
+                const row = broadcast.variants?.find((item) => item.variant === variant) ?? { variant, sent: 0, replied: 0 };
+                return { ...row, rate: row.sent ? row.replied / row.sent : 0 };
+              });
+              const leader = rows[0]!.rate === rows[1]!.rate ? null : rows[0]!.rate > rows[1]!.rate ? "a" : "b";
+              return rows.map((row) => (
+                <div key={row.variant} className="flex items-center gap-3 text-sm">
+                  <span className="w-20 font-medium">Version {row.variant.toUpperCase()}</span>
+                  <div className="h-2 flex-1 rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-[#00c853]" style={{ width: `${Math.round(row.rate * 100)}%` }} />
+                  </div>
+                  <span className="w-40 text-right tabular-nums text-muted-foreground">
+                    {Math.round(row.rate * 100)}% · {row.replied}/{row.sent} replied
+                  </span>
+                  {leader === row.variant ? <span className="rounded-full bg-[#ecfdf3] px-2 py-0.5 text-[11px] font-medium text-[#05603a]">Leading</span> : <span className="w-[58px]" />}
+                </div>
+              ));
+            })()}
+          </CardContent>
+        </Card>
+      ) : null}
       {broadcast.lastError ? (
         <p className="text-sm text-destructive">{broadcast.lastError}</p>
       ) : null}

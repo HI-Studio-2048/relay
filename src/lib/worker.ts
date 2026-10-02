@@ -91,7 +91,8 @@ async function sendBroadcast(broadcastId: string) {
       }
       await acquireSendSlot(broadcast.botId, contact.telegramUserId);
       const record = await loadContactRecord(contact.id);
-      const personalized = record ? interpolateTemplate(broadcast.body, record, botFieldValues(bot.settings)) : broadcast.body;
+      const body = recipient.variant === "b" && broadcast.bodyB?.trim() ? broadcast.bodyB : broadcast.body;
+      const personalized = record ? interpolateTemplate(body, record, botFieldValues(bot.settings)) : body;
       const sent = await sendChannelReply(account, channelTarget(contact), { text: personalized, source: "broadcast" });
       await db
         .update(broadcastRecipients)
