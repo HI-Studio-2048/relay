@@ -45,11 +45,18 @@ export default async function BroadcastsPage() {
                 <p className="font-medium">{row.name}</p>
                 <p className="text-xs text-muted-foreground">
                   {row.sentCount}/{row.totalCount} sent · {row.failedCount} failed
+                  {row.scheduledAt && row.status === "scheduled"
+                    ? ` · scheduled ${row.scheduledAt.toISOString().slice(0, 16).replace("T", " ")} UTC`
+                    : ""}
                 </p>
               </div>
-              <Badge variant={row.status === "awaiting_confirm" ? "destructive" : "secondary"}>
-                {row.status}
-              </Badge>
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
+                {row.bodyB ? <Badge variant="outline">A/B</Badge> : null}
+                {row.smartTiming ? <Badge variant="outline">Smart time</Badge> : null}
+                <Badge variant={row.status === "awaiting_confirm" ? "destructive" : "secondary"}>
+                  {row.status.replace(/_/g, " ")}
+                </Badge>
+              </div>
             </Link>
           ))}
         </div>
