@@ -3,6 +3,7 @@ import { ConnectPrompt } from "@/components/chrome/connect-prompt";
 import { EmptyState } from "@/components/chrome/empty-state";
 import { PageHeader } from "@/components/chrome/page-header";
 import { CanvasCard, MANYCHAT } from "@/components/chrome/tone";
+import { SequenceCard } from "./sequence-card";
 import { currentBot } from "@/lib/current-bot";
 import { listSequences } from "@/lib/sequences";
 import { getDb } from "@/lib/db";
@@ -65,21 +66,22 @@ export default async function SequencesPage() {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {rows.map((sequence) => (
-            <CanvasCard key={sequence.id} className="p-4">
-              <p className="font-medium">{sequence.name}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {sequence.steps.length} message{sequence.steps.length === 1 ? "" : "s"} · subscribe list “
-                {sequence.name}”
-              </p>
-              <ol className="mt-3 space-y-1 text-sm">
-                {sequence.steps.map((step, index) => (
-                  <li key={step.id}>
-                    {index + 1}. wait {formatDelay(step.delaySeconds)} —{" "}
-                    {step.flowId ? `flow “${flowRows.find((flow) => flow.id === step.flowId)?.name ?? "deleted flow"}”` : step.body}
-                  </li>
-                ))}
-              </ol>
-            </CanvasCard>
+            <SequenceCard
+              key={sequence.id}
+              sequence={{
+                id: sequence.id,
+                botId: sequence.botId,
+                name: sequence.name,
+                isActive: sequence.isActive,
+                stats: sequence.stats,
+                steps: sequence.steps.map((step) => ({
+                  id: step.id,
+                  label: `wait ${formatDelay(step.delaySeconds)} — ${
+                    step.flowId ? `flow “${flowRows.find((flow) => flow.id === step.flowId)?.name ?? "deleted flow"}”` : step.body
+                  }`,
+                })),
+              }}
+            />
           ))}
         </div>
       )}

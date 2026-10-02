@@ -39,6 +39,19 @@ export async function POST(request: Request) {
   }
 }
 
+/** PATCH { id, botId, isActive } pauses or resumes a sequence. */
+export async function PATCH(request: Request) {
+  try {
+    const body = await readJson<{ id?: string; botId?: string; isActive?: boolean }>(request);
+    if (!body.id || !body.botId || typeof body.isActive !== "boolean") return json({ error: "id, botId and isActive are required" }, 400);
+    const db = await getDb();
+    await db.update(sequences).set({ isActive: body.isActive }).where(and(eq(sequences.id, body.id), eq(sequences.botId, body.botId)));
+    return json({ ok: true });
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 export async function DELETE(request: Request) {
   try {
     const body = await readJson<{ id?: string; botId?: string; confirm?: boolean }>(request);

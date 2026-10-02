@@ -1,4 +1,4 @@
-import { and, asc, eq, lte } from "drizzle-orm";
+import { and, asc, eq, lte, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { sequenceSteps, sequenceSubscriptions, sequences } from "@/lib/db/schema";
 import { interpolateTemplate } from "@/lib/flow-effects";
@@ -41,7 +41,17 @@ export async function listSequences(botId: string) {
       .from(sequenceSteps)
       .where(eq(sequenceSteps.sequenceId, row.id))
       .orderBy(asc(sequenceSteps.position));
-    result.push({ ...row, steps });
+    const counts = await db
+      .select({ status: sequenceSubscriptions.status, count: sql<number>`count(*)::int` })
+      .from(sequenceSubscriptions)
+      .where(eq(sequenceSubscriptions.sequenceId, row.id))
+      .groupBy(sequenceSubscriptions.status);
+    const stats = {
+      active: counts.find((item) => item.status === "active")?.count ?? 0,
+      completed: counts.find((item) => item.status === "completed")?.count ?? 0,
+      unsubscribed: counts.find((item) => item.status === "unsubscribed")?.count ?? 0,
+    };
+    result.push({ ...row, steps, stats });
   }
   return result;
 }
@@ -123,10 +133,13 @@ export async function syncContactSequences(
 
 export async function listDueSequenceSends() {
   const db = await getDb();
-  return db
-    .select()
+  // A paused sequence holds its subscribers where they are until it is switched back on.
+  const rows = await db
+    .select({ sub: sequenceSubscriptions })
     .from(sequenceSubscriptions)
-    .where(and(eq(sequenceSubscriptions.status, "active"), lte(sequenceSubscriptions.nextAt, new Date())));
+    .innerJoin(sequences, eq(sequences.id, sequenceSubscriptions.sequenceId))
+    .where(and(eq(sequenceSubscriptions.status, "active"), eq(sequences.isActive, true), lte(sequenceSubscriptions.nextAt, new Date())));
+  return rows.map((row) => row.sub);
 }
 
 export async function loadSequenceStep(sequenceId: string, index: number) {
