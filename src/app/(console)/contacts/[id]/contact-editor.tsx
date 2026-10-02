@@ -102,6 +102,18 @@ export function ContactEditor({
     }
   };
 
+  const erase = async () => {
+    const name = [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.username || "this contact";
+    if (window.prompt(`Type ERASE to permanently delete ${name} and their conversation.`) !== "ERASE") return;
+    try {
+      await api(`/api/contacts/${contact.id}`, { method: "DELETE", body: JSON.stringify({ confirm: true }) });
+      toast.success("Contact erased");
+      window.location.assign("/contacts");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not erase");
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -193,6 +205,23 @@ export function ContactEditor({
           <Button variant="secondary" onClick={() => void addField()}>
             Add field
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Privacy</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Button variant="outline" nativeButton={false} render={<a href={`/api/contacts/${contact.id}/export`} download />}>
+            Download their data
+          </Button>
+          <Button variant="destructive" onClick={() => void erase()}>
+            Erase contact
+          </Button>
+          <p className="w-full text-[12px] text-muted-foreground">
+            For access and deletion requests. Erasing removes their profile, messages, tags and fields; analytics keep an anonymous count.
+          </p>
         </CardContent>
       </Card>
     </div>

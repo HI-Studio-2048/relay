@@ -17,6 +17,21 @@ export async function GET(_request: Request, context: RouteParams<{ id: string }
   }
 }
 
+/** Erase a person (right to be forgotten). Messages, tags, fields and sessions cascade; analytics keep an anonymous row. */
+export async function DELETE(request: Request, context: RouteParams<{ id: string }>) {
+  try {
+    const { id } = await context.params;
+    const body = await readJson<{ confirm?: unknown }>(request).catch(() => ({ confirm: undefined }));
+    if (body.confirm !== true) return json({ error: "Erasing a contact requires confirm: true", code: "CONFIRM_REQUIRED" }, 409);
+    const db = await getDb();
+    const [removed] = await db.delete(contacts).where(eq(contacts.id, id)).returning();
+    if (!removed) return json({ error: "Contact not found" }, 404);
+    return json({ ok: true });
+  } catch (error) {
+    return fail(error);
+  }
+}
+
 export async function PATCH(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
