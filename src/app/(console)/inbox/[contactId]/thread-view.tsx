@@ -349,6 +349,9 @@ export function ThreadView({
       toast.error(error instanceof Error ? error.message : "Update failed");
     }
   };
+  useEffect(() => {
+    patchRef.current = patchContact;
+  });
 
   const send = async () => {
     if (!text.trim()) return;
@@ -402,6 +405,19 @@ export function ThreadView({
   };
 
   const [summarizing, setSummarizing] = useState(false);
+
+  // "e" marks the open conversation done (outside text fields), like an email client.
+  const patchRef = useRef<(patch: Record<string, unknown>) => Promise<void>>(async () => undefined);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      if (event.key === "e") void patchRef.current({ inboxStatus: "closed" });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const notesRef = useRef(notes);
   useEffect(() => {
     notesRef.current = notes;

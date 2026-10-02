@@ -23,6 +23,7 @@ import {
 import { useEffect, useState } from "react";
 import { useBot } from "@/components/bot-provider";
 import { CommandPalette } from "@/components/command-palette";
+import { ShortcutsHelp } from "@/components/shortcuts-help";
 import { RelayLogo } from "@/components/chrome/relay-logo";
 import { StatusPill } from "@/components/chrome/status-pill";
 import { CanvasCard, ToneChip, type ToneName } from "@/components/chrome/tone";
@@ -263,6 +264,7 @@ export function AppShell({
   return (
     <div className={cn("flex bg-[#f4f6f8]", immersive ? "h-dvh overflow-hidden" : "min-h-dvh")}>
       <CommandPalette />
+      <ShortcutsHelp />
       <aside className="hidden w-64 shrink-0 border-r border-[#e5e7eb] bg-white p-4 md:flex md:flex-col">
         <Sidebar inboxCount={inboxCount} confirmCount={confirmCount} />
       </aside>
