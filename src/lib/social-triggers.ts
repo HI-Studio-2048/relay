@@ -24,6 +24,8 @@ export type SocialTriggerConfig = {
   oncePerContact?: boolean;
   /** Hide the comment after replying (keep price questions or emails out of public view). */
   hideAfterReply?: boolean;
+  /** Claude writes each public reply (in the brand voice, about that comment); presets are the fallback. */
+  aiPublicReply?: boolean;
 };
 
 /** Account-wide comment moderation, stored on bots.settings.moderation. */

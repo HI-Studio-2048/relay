@@ -11,7 +11,7 @@ import {
 } from "@/lib/channels";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
-import { aiConfigured, classifyIntent, readAiSettings } from "@/lib/ai";
+import { aiConfigured, classifyIntent, readAiSettings, writeCommentReply } from "@/lib/ai";
 import { intentFlows, routeToIntent, shouldCheckIntents } from "@/lib/intents";
 import { isWithinHours, readHours } from "@/lib/starters";
 import { emitWebhookSoon, publicContact } from "@/lib/developer";
@@ -311,7 +311,23 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
 
   let replies = result.replies;
   if (kind === "comment" && inbound.comment && account.channel === "zernio" && inbound.channelAccountId) {
-    const answered = await answerComment(botId, account, contact, inbound, result.publicReply ?? null, replies);
+    let publicReply = result.publicReply ?? null;
+    const commentFlow = result.matchedFlowId ? flows.find((flow) => flow.id === result.matchedFlowId) : null;
+    const commentConfig = commentFlow?.definition.trigger;
+    if (commentConfig?.aiPublicReply && aiConfigured()) {
+      try {
+        publicReply = await writeCommentReply({
+          comment: text ?? "",
+          postCaption: inbound.comment.postCaption ?? null,
+          examples: commentConfig.publicReplies ?? [],
+          settings: readAiSettings(bot.settings),
+          brandName: bot.name,
+        });
+      } catch (error) {
+        log.warn("AI comment reply failed; using a preset", error instanceof Error ? error.message : error);
+      }
+    }
+    const answered = await answerComment(botId, account, contact, inbound, publicReply, replies);
     replies = [];
     if (answered.session !== undefined) await persistSession(contact.id, answered.session);
     const matched = result.matchedFlowId ? flows.find((flow) => flow.id === result.matchedFlowId) : null;

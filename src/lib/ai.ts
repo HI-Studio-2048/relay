@@ -284,6 +284,37 @@ export async function extractKnowledge(input: { pageText: string; url: string; b
   return result.knowledge.trim();
 }
 
+const CommentReplySchema = z.object({ reply: z.string().describe("The public reply, under 120 characters.") });
+
+/** A short public reply under someone's comment, pointing them to their DMs. */
+export async function writeCommentReply(input: {
+  comment: string;
+  postCaption?: string | null;
+  examples: string[];
+  settings: BotAiSettings;
+  brandName: string;
+}) {
+  const result = await parse(CommentReplySchema, {
+    system: [
+      `You reply publicly to comments on ${input.brandName}'s social posts. A DM with details was just sent to the commenter.`,
+      input.settings.persona?.trim() ? `Brand voice:\n${input.settings.persona.trim()}` : "",
+      "Write one short, warm, specific reply (under 120 characters, at most one emoji) that acknowledges what they said and tells them to check their DMs. No hashtags, no links, no prices, never promise anything not in the comment.",
+      input.examples.length ? `Replies the brand likes:\n${input.examples.slice(0, 5).map((line) => `- ${line}`).join("\n")}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+    effort: "low",
+    maxTokens: 1000,
+    user: [
+      input.postCaption ? `<post>\n${input.postCaption.slice(0, 500)}\n</post>` : "",
+      `<comment>\n${input.comment.slice(0, 500)}\n</comment>`,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
+  });
+  return result.reply.trim().slice(0, 200);
+}
+
 export const REWRITE_STYLES = {
   shorter: "Make it shorter and punchier. DM-sized.",
   friendlier: "Make it warmer and friendlier, still professional.",

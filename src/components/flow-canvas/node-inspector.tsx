@@ -129,6 +129,20 @@ export function SocialTriggerEditor({
         <p className="text-[11px] leading-snug text-muted-foreground">
           One per line. Relay picks one at random so replies do not look automated.
         </p>
+        <label className="flex items-center gap-2 pt-1 text-sm">
+          <input
+            type="checkbox"
+            checked={Boolean(value.aiPublicReply)}
+            onChange={(event) => onChange({ ...value, aiPublicReply: event.target.checked || undefined })}
+          />
+          ✨ Let AI write each reply
+        </label>
+        {value.aiPublicReply ? (
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Claude replies to what each person actually said, in your brand voice, styled after the lines above (which are
+            also the fallback).
+          </p>
+        ) : null}
       </div>
       <label className="flex items-center gap-2 text-sm">
         <input
