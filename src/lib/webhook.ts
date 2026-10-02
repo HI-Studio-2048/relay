@@ -102,6 +102,11 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
     if (!(await hasOpenCsatRequest(existing.id))) return;
     await saveMessage({ botId, contactId: existing.id, direction: "inbound", source: "user", body: ratingBody(rating) });
     emitWebhookSoon(botId, "conversation.rated", { contact: publicContact(existing), score: rating, outOf: 3 });
+    // Rules can react, e.g. "when someone rates 1, notify the manager and assign them".
+    const { runRules } = await import("@/lib/rules");
+    await runRules(botId, existing, [{ type: "csat_rated", value: String(rating) }]).catch((error) =>
+      log.warn("Rating rules failed", error instanceof Error ? error.message : error),
+    );
     try {
       const thanks = readCsat(bot.settings).thanks;
       await sendChannelReply(account, channelTarget(existing), { text: thanks, source: "flow" });

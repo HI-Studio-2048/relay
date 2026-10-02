@@ -13,6 +13,7 @@ export const RULE_TRIGGERS = [
   { value: "field_set", label: "Custom field set", valueLabel: "Field key" },
   { value: "contact_created", label: "New contact", valueLabel: "—" },
   { value: "goal_reached", label: "Goal reached", valueLabel: "Goal name (empty = any)" },
+  { value: "csat_rated", label: "Customer rated the chat", valueLabel: "Score 1 (🙁), 2 (😐) or 3 (😀); empty = any" },
 ] as const;
 
 export const RULE_ACTIONS = [
