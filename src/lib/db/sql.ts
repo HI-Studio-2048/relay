@@ -317,4 +317,14 @@ CREATE TABLE IF NOT EXISTS processed_events (
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (bot_id, source, event_id)
 );
+CREATE TABLE IF NOT EXISTS contact_aliases (
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  external_user_id text NOT NULL,
+  contact_id text NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  platform text,
+  channel_account_id text,
+  thread_id text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (bot_id, external_user_id)
+);
 `;

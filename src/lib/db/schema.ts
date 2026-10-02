@@ -459,3 +459,26 @@ export const processedEvents = pgTable(
   },
   (table) => [primaryKey({ columns: [table.botId, table.source, table.eventId] })],
 );
+
+/**
+ * A merged contact's other network identities: a message from `externalUserId` belongs to `contactId`
+ * (and moves the reply route there), instead of creating a new contact and re-running the welcome.
+ */
+export const contactAliases = pgTable(
+  "contact_aliases",
+  {
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    externalUserId: text("external_user_id").notNull(),
+    contactId: text("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    platform: text("platform"),
+    channelAccountId: text("channel_account_id"),
+    threadId: text("thread_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.botId, table.externalUserId] })],
+);
+

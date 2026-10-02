@@ -1,6 +1,7 @@
 import { and, desc, eq, ilike, isNotNull, like, lte, notInArray, notLike, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import {
+  contactAliases,
   contactFieldValues,
   contactTags,
   contacts,
@@ -67,8 +68,37 @@ export async function findContactByTelegram(botId: string, telegramUserId: strin
     .from(contacts)
     .where(and(eq(contacts.botId, botId), eq(contacts.telegramUserId, telegramUserId)))
     .limit(1);
-  if (!row) return null;
-  return loadContactRecord(row.id);
+  if (row) return loadContactRecord(row.id);
+  // A merged duplicate writing again: route to the kept contact and make this network the reply route
+  // (they just wrote here, so it's the one that can reach them); the previous route becomes the alias.
+  const [alias] = await db
+    .select()
+    .from(contactAliases)
+    .where(and(eq(contactAliases.botId, botId), eq(contactAliases.externalUserId, telegramUserId)))
+    .limit(1);
+  if (!alias) return null;
+  const swapped = await db.transaction(async (tx) => {
+    const [owner] = await tx.select().from(contacts).where(eq(contacts.id, alias.contactId)).limit(1);
+    if (!owner) return false;
+    await tx.delete(contactAliases).where(and(eq(contactAliases.botId, botId), eq(contactAliases.externalUserId, telegramUserId)));
+    await tx
+      .insert(contactAliases)
+      .values({
+        botId,
+        externalUserId: owner.telegramUserId,
+        contactId: owner.id,
+        platform: owner.platform,
+        channelAccountId: owner.channelAccountId,
+        threadId: owner.threadId,
+      })
+      .onConflictDoUpdate({ target: [contactAliases.botId, contactAliases.externalUserId], set: { contactId: owner.id } });
+    await tx
+      .update(contacts)
+      .set({ telegramUserId, platform: alias.platform, channelAccountId: alias.channelAccountId, threadId: alias.threadId })
+      .where(eq(contacts.id, owner.id));
+    return true;
+  });
+  return swapped ? loadContactRecord(alias.contactId) : null;
 }
 
 export async function persistContact(

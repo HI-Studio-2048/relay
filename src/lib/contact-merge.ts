@@ -34,8 +34,8 @@ export class MergeError extends Error {}
 
 /**
  * Fold `dropId` into `keepId` (same account): history, tags, field values, automation and growth
- * attribution move over; missing profile details are filled in; then the duplicate is removed. The
- * kept contact's channel stays the reply route.
+ * attribution move over; missing profile details are filled in; then the duplicate is removed. Its
+ * network id becomes an alias, so the person stays one contact and replies follow the network they last wrote from.
  */
 export async function mergeContacts(keepId: string, dropId: string) {
   if (keepId === dropId) throw new MergeError("Pick two different contacts");
@@ -77,6 +77,12 @@ export async function mergeContacts(keepId: string, dropId: string) {
         ) merged)`,
       })
       .where(and(eq(contacts.id, keepId), eq(contacts.botId, keep.botId)));
+    // The duplicate's network identity (and any it had absorbed) now points at the kept contact, so their
+    // next message there lands in this profile instead of creating a new contact.
+    await tx.execute(sql`update contact_aliases set contact_id = ${keepId} where contact_id = ${dropId}`);
+    await tx.execute(sql`insert into contact_aliases (bot_id, external_user_id, contact_id, platform, channel_account_id, thread_id)
+      values (${drop.botId}, ${drop.telegramUserId}, ${keepId}, ${drop.platform}, ${drop.channelAccountId}, ${drop.threadId})
+      on conflict (bot_id, external_user_id) do update set contact_id = excluded.contact_id`);
     // Whatever is left (open sessions, broadcast receipts, duplicates of the above) goes with it.
     await tx.delete(contacts).where(eq(contacts.id, dropId));
   });
