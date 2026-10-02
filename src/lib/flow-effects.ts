@@ -41,8 +41,17 @@ export async function applyFlowEffects(input: {
           log.warn("HTTP step skipped: URL must be https");
           continue;
         }
+        if (process.env.NODE_ENV === "production") {
+          // Never let a flow call into the server's own network (SSRF).
+          const { resolvesPublic } = await import("@/lib/web-import");
+          if (!(await resolvesPublic(new URL(url).hostname))) {
+            log.warn("HTTP step skipped: host is not a public address", url);
+            continue;
+          }
+        }
         const body = effect.body ? interpolateTemplate(effect.body, input.contact) : undefined;
         const response = await fetch(url, {
+          redirect: "error",
           method: effect.method,
           headers: effect.method === "POST" ? { "content-type": "application/json" } : undefined,
           body: effect.method === "POST" ? (body ?? "{}") : undefined,

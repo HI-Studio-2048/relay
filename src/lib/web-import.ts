@@ -106,6 +106,19 @@ function guardedLookup(allowPrivate: boolean): LookupFunction {
   };
 }
 
+/** True when every address the host resolves to is public (production guard for outbound webhooks). */
+export async function resolvesPublic(hostname: string): Promise<boolean> {
+  const host = hostname.replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  if (isIP(host)) return isPublicAddress(host);
+  const { lookup: lookupAll } = await import("node:dns/promises");
+  try {
+    const addresses = await lookupAll(host, { all: true });
+    return addresses.length > 0 && addresses.every((entry) => isPublicAddress(entry.address));
+  } catch {
+    return false;
+  }
+}
+
 /** HTML → readable text: drops scripts, styles and tags, keeps line breaks between blocks. */
 export function htmlToText(html: string): string {
   const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim();
