@@ -327,6 +327,24 @@ export const growthLinkEvents = pgTable("growth_link_events", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Live Chat "send later": a teammate's reply queued for a time. */
+export const scheduledMessages = pgTable("scheduled_messages", {
+  id: text("id").primaryKey(),
+  botId: text("bot_id")
+    .notNull()
+    .references(() => bots.id, { onDelete: "cascade" }),
+  contactId: text("contact_id")
+    .notNull()
+    .references(() => contacts.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  sendAt: timestamp("send_at", { withTimezone: true }).notNull(),
+  /** pending | sending | sent | failed | cancelled */
+  status: text("status").notNull().default("pending"),
+  author: text("author"),
+  error: text("error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** Live Chat canned responses. ManyChat calls them Saved Replies; "/" in the composer searches them. */
 export const savedReplies = pgTable("saved_replies", {
   id: text("id").primaryKey(),

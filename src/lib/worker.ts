@@ -9,6 +9,7 @@ import { log } from "@/lib/logger";
 import { resumeDueDelays } from "@/lib/flow-resume";
 import { resumeDueSequences } from "@/lib/sequence-resume";
 import { releaseDueBroadcasts } from "@/lib/broadcast-dispatch";
+import { sendDueScheduled } from "@/lib/agent-reply";
 import { startFlowForContact } from "@/lib/flow-dispatch";
 import { dequeueJob, shouldRunWorker, type Job } from "@/lib/queue";
 import { acquireSendSlot } from "@/lib/rate-limit";
@@ -191,6 +192,7 @@ export function startWorker() {
       await releaseDueBroadcasts();
       await drainJobs();
       await releaseSmartRecipients();
+      await sendDueScheduled();
       await resumeDueDelays();
       await resumeDueSequences();
     } catch (error) {

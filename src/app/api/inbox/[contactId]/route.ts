@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { contacts, flows } from "@/lib/db/schema";
 import { json, fail, type RouteParams } from "@/lib/http";
 import { isBotPaused, listMessages, loadActiveSession, loadContactRecord } from "@/lib/store";
+import { listScheduled } from "@/lib/agent-reply";
 
 export async function GET(_request: Request, context: RouteParams<{ contactId: string }>) {
   try {
@@ -18,6 +19,7 @@ export async function GET(_request: Request, context: RouteParams<{ contactId: s
     ]);
     return json({
       assignedTo: row?.assignedTo ?? null,
+      scheduled: (await listScheduled(contactId)).map((item) => ({ id: item.id, body: item.body, sendAt: new Date(item.sendAt).toISOString(), author: item.author })),
       snoozedUntil: row?.snoozedUntil && new Date(row.snoozedUntil).getTime() > Date.now() ? new Date(row.snoozedUntil).toISOString() : null,
       contact,
       messages,

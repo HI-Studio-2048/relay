@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlarmClock, ArrowLeft, BookmarkPlus, Eye, Languages, Sparkles, CheckCircle2, MessageCircle, PanelRight, Play, RotateCcw, Send, X } from "lucide-react";
+import { AlarmClock, ArrowLeft, BookmarkPlus, Clock, Eye, Languages, Sparkles, CheckCircle2, MessageCircle, PanelRight, Play, RotateCcw, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { useBot } from "@/components/bot-provider";
 import { ContactAvatar } from "@/components/chrome/avatar";
@@ -211,6 +211,7 @@ export function ThreadView({
   const [assisting, setAssisting] = useState(false);
   const [assignedTo, setAssignedTo] = useState<string | null>(null);
   const [snoozedUntil, setSnoozedUntil] = useState<string | null>(null);
+  const [scheduled, setScheduled] = useState<{ id: string; body: string; sendAt: string; author: string | null }[]>([]);
   const { team, byId } = useTeam();
   const [others, setOthers] = useState<{ agentId: string; typing: boolean }[]>([]);
   const typedAt = useRef(0);
@@ -245,7 +246,9 @@ export function ThreadView({
       flows?: FlowOption[];
       assignedTo?: string | null;
       snoozedUntil?: string | null;
+      scheduled?: { id: string; body: string; sendAt: string; author: string | null }[];
     }>(`/api/inbox/${contactId}`);
+    setScheduled(data.scheduled ?? []);
     setSnoozedUntil(data.snoozedUntil ?? null);
     setContact(data.contact);
     setAssignedTo(data.assignedTo ?? null);
@@ -297,6 +300,25 @@ export function ThreadView({
           ),
     [saved, slashQuery],
   );
+
+  const scheduleReply = async (choice: string) => {
+    const when = snoozeTime(choice);
+    if (!when || !text.trim()) return;
+    try {
+      await api(`/api/inbox/${contactId}/scheduled`, { method: "POST", body: JSON.stringify({ text, sendAt: when.toISOString() }) });
+      setText("");
+      setUntranslated(null);
+      toast.success(`Scheduled for ${when.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}`);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not schedule");
+    }
+  };
+
+  const cancelScheduled = async (id: string) => {
+    await api(`/api/inbox/${contactId}/scheduled?id=${id}`, { method: "DELETE" }).catch(() => undefined);
+    setScheduled((current) => current.filter((item) => item.id !== id));
+  };
 
   const snooze = async (until: Date | null) => {
     try {
@@ -635,6 +657,22 @@ export function ThreadView({
               </div>
             </div>
           ) : null}
+          {scheduled.length > 0 ? (
+            <div className="mb-2 space-y-1">
+              {scheduled.map((item) => (
+                <p key={item.id} className="flex items-center gap-2 rounded-lg bg-[#f5f3ff] px-2.5 py-1.5 text-[12px] text-[#4c1d95]">
+                  <Clock className="size-3.5 shrink-0" />
+                  <span className="shrink-0 font-medium">
+                    {new Date(item.sendAt).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{item.body}</span>
+                  <button type="button" className="shrink-0 text-[#6b7280] hover:text-[#1b1f24]" onClick={() => void cancelScheduled(item.id)}>
+                    Cancel
+                  </button>
+                </p>
+              ))}
+            </div>
+          ) : null}
           {untranslated !== null ? (
             <p className="mb-1.5 flex items-center gap-2 text-[11px] text-[#6b7280]">
               <Languages className="size-3 text-[#7b61ff]" /> Translated into their language.
@@ -692,6 +730,20 @@ export function ThreadView({
             <Button variant="ghost" size="icon" aria-label="Save as reply" disabled={!text.trim()} onClick={() => void saveAsReply()}>
               <BookmarkPlus className="size-4" />
             </Button>
+            <select
+              aria-label="Send later"
+              title="Send later"
+              value=""
+              disabled={!text.trim()}
+              onChange={(event) => void scheduleReply(event.target.value)}
+              className="field-sizing-content h-9 rounded-lg border border-[#e5e7eb] bg-white px-1.5 text-[12px] text-[#6b7280] disabled:opacity-50"
+            >
+              <option value="">Later…</option>
+              <option value="1h">In 1 hour</option>
+              <option value="3h">In 3 hours</option>
+              <option value="tomorrow">Tomorrow 9:00</option>
+              <option value="week">Monday 9:00</option>
+            </select>
             <Button size="icon" aria-label="Send" onClick={() => void send()} disabled={sending || !text.trim()}>
               <Send className="size-4" />
             </Button>

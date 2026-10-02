@@ -270,6 +270,18 @@ ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS flow_id text REFERENCES flow
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS snoozed_until timestamptz;
 ALTER TABLE flows ADD COLUMN IF NOT EXISTS folder text;
 ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS body_b text;
+CREATE TABLE IF NOT EXISTS scheduled_messages (
+  id text PRIMARY KEY,
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  contact_id text NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+  body text NOT NULL,
+  send_at timestamptz NOT NULL,
+  status text NOT NULL DEFAULT 'pending',
+  author text,
+  error text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS scheduled_messages_due_idx ON scheduled_messages(status, send_at);
 ALTER TABLE broadcast_recipients ADD COLUMN IF NOT EXISTS variant text;
 ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS smart_timing boolean NOT NULL DEFAULT false;
 ALTER TABLE broadcast_recipients ADD COLUMN IF NOT EXISTS send_at timestamptz;
