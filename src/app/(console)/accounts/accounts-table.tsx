@@ -17,7 +17,8 @@ export type AccountRow = {
   activeFlows: number;
   totalFlows: number;
   conversions: number;
-  revenue: number;
+  /** Formatted per currency, e.g. "¥5,000 · $19.99"; empty when none. */
+  revenue: string;
 };
 
 export function AccountsTable({ rows }: { rows: AccountRow[] }) {
@@ -61,7 +62,7 @@ export function AccountsTable({ rows }: { rows: AccountRow[] }) {
               </td>
               <td className="px-3 py-2.5 text-right tabular-nums">
                 {row.conversions}
-                {row.revenue ? <span className="block text-[11px] text-[#6b7280]">{row.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span> : null}
+                {row.revenue ? <span className="block text-[11px] text-[#6b7280]">{row.revenue}</span> : null}
               </td>
               <td className="px-4 py-2.5 text-right">
                 <div className="flex justify-end gap-1.5">

@@ -6,6 +6,7 @@ import { readAiSettings } from "@/lib/ai";
 import { buildTeamReport } from "@/lib/team-report";
 import { listInboxThreads } from "@/lib/store";
 import { readHours } from "@/lib/starters";
+import { formatRevenue } from "@/lib/format";
 
 const DAY = 86_400_000;
 
@@ -45,9 +46,10 @@ export async function loadDashboard(botId: string, days = 30) {
     statsByFlow(botId, days),
     db.select({ id: flows.id, name: flows.name, isActive: flows.isActive }).from(flows).where(eq(flows.botId, botId)),
     db
-      .select({ count: sql<number>`count(*)::int`, value: sql<number>`coalesce(sum(${flowEvents.value}), 0)::float8` })
+      .select({ currency: flowEvents.currency, count: sql<number>`count(*)::int`, value: sql<number>`coalesce(sum(${flowEvents.value}), 0)::float8` })
       .from(flowEvents)
-      .where(and(eq(flowEvents.botId, botId), eq(flowEvents.kind, "goal"), gte(flowEvents.createdAt, new Date(Date.now() - days * DAY)))),
+      .where(and(eq(flowEvents.botId, botId), eq(flowEvents.kind, "goal"), gte(flowEvents.createdAt, new Date(Date.now() - days * DAY))))
+      .groupBy(flowEvents.currency),
   ]);
 
   const counts = new Map(daily.map((row) => [row.day, Number(row.count)]));
@@ -86,8 +88,9 @@ export async function loadDashboard(botId: string, days = 30) {
     recentThreads: threads.slice(0, 6),
     topFlows,
     // All goals in the period, including payments no flow sent (per-flow stats leave those out).
-    conversions: Number(goalTotals[0]?.count ?? 0),
-    revenue: Number(goalTotals[0]?.value ?? 0),
+    conversions: goalTotals.reduce((sum, row) => sum + Number(row.count), 0),
+    /** Per currency, e.g. "¥5,000 · $19.99" (never added across currencies); empty when none. */
+    revenue: formatRevenue(goalTotals.map((row) => ({ currency: row.currency, value: Number(row.value) })), "en-US"),
   };
 }
 

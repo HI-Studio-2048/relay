@@ -181,7 +181,7 @@ export default async function OverviewPage() {
         <StatTile
           label="Conversions · 30 days"
           value={data.conversions.toLocaleString()}
-          detail={data.revenue ? `${data.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })} attributed to flows` : "Add a Goal step to a flow"}
+          detail={data.revenue ? `${data.revenue} in revenue` : "Add a Goal step to a flow"}
           icon={Trophy}
           tone="start"
           href="/flows"

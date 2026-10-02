@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db";
 import { contacts, flowEvents, flows } from "@/lib/db/schema";
 import { listInboxThreads } from "@/lib/store";
 import { AccountsTable, type AccountRow } from "./accounts-table";
+import { formatRevenue } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export default async function AccountsPage() {
   const monthAgo = new Date(Date.now() - 30 * 86_400_000);
   const rows: AccountRow[] = await Promise.all(
     bots.map(async (bot) => {
-      const [[totals], [flowTotals], [goals], threads] = await Promise.all([
+      const [[totals], [flowTotals], goals, threads] = await Promise.all([
         db
           .select({
             total: sql<number>`count(*)::int`,
@@ -30,9 +31,10 @@ export default async function AccountsPage() {
           .from(flows)
           .where(eq(flows.botId, bot.id)),
         db
-          .select({ count: sql<number>`count(*)::int`, value: sql<number>`coalesce(sum(${flowEvents.value}), 0)::float` })
+          .select({ currency: flowEvents.currency, count: sql<number>`count(*)::int`, value: sql<number>`coalesce(sum(${flowEvents.value}), 0)::float` })
           .from(flowEvents)
-          .where(and(eq(flowEvents.botId, bot.id), eq(flowEvents.kind, "goal"), gte(flowEvents.createdAt, monthAgo))),
+          .where(and(eq(flowEvents.botId, bot.id), eq(flowEvents.kind, "goal"), gte(flowEvents.createdAt, monthAgo)))
+          .groupBy(flowEvents.currency),
         listInboxThreads(bot.id),
       ]);
       return {
@@ -45,8 +47,9 @@ export default async function AccountsPage() {
         needsReply: threads.filter((thread) => thread.needsReply).length,
         activeFlows: Number(flowTotals?.active ?? 0),
         totalFlows: Number(flowTotals?.total ?? 0),
-        conversions: Number(goals?.count ?? 0),
-        revenue: Number(goals?.value ?? 0),
+        conversions: goals.reduce((sum, row) => sum + Number(row.count), 0),
+        // Per currency, formatted here (one locale) so the table never adds yen to dollars.
+        revenue: formatRevenue(goals.map((row) => ({ currency: row.currency, value: Number(row.value) })), "en-US"),
       };
     }),
   );

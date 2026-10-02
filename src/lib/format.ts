@@ -27,3 +27,30 @@ export function triggerLabel(type: string, value: string | null): string {
   if (type === "keyword") return value ? `“${value}”` : "Keyword";
   return value ? `${type} · ${value}` : type;
 }
+
+/**
+ * Revenue across currencies, never added together: "¥5,000 · $19.99". Amounts with no known currency
+ * (goal steps, the API) show as plain numbers.
+ */
+export function formatRevenue(parts: { currency: string | null; value: number }[], locale?: string) {
+  const totals = new Map<string, number>();
+  for (const part of parts) {
+    if (!part.value) continue;
+    const key = part.currency?.trim().toUpperCase() ?? "";
+    totals.set(key, (totals.get(key) ?? 0) + part.value);
+  }
+  return [...totals]
+    .sort((a, b) => b[1] - a[1])
+    .map(([currency, value]) => {
+      if (currency) {
+        try {
+          return new Intl.NumberFormat(locale, { style: "currency", currency }).format(value);
+        } catch {
+          // Unknown code: fall through to a plain number with the code.
+          return `${value.toLocaleString(locale, { maximumFractionDigits: 2 })} ${currency}`;
+        }
+      }
+      return value.toLocaleString(locale, { maximumFractionDigits: 2 });
+    })
+    .join(" · ");
+}
