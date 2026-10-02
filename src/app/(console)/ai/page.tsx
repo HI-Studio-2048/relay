@@ -6,6 +6,7 @@ import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { AiSettingsForm } from "./ai-settings-form";
+import { AutoTagsCard } from "@/components/auto-tags-card";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export default async function AiPage() {
         description="Teach Claude your business once. It powers AI Steps in flows, answers messages nothing else catches, drafts replies in Live Chat, and builds flows from a sentence."
       />
       <AiSettingsForm botId={bot.id} configured={aiConfigured()} initial={readAiSettings(row?.settings)} />
+      <AutoTagsCard botId={bot.id} configured={aiConfigured()} />
     </div>
   );
 }

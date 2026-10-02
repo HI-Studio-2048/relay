@@ -17,6 +17,7 @@ import { isWithinHours, readHours } from "@/lib/starters";
 import { emitWebhookSoon, publicContact } from "@/lib/developer";
 import { buttonSourceStep, recordFlowEvents } from "@/lib/analytics";
 import { runAiAutoReply } from "@/lib/ai-runtime";
+import { applyAutoTags } from "@/lib/auto-tags";
 import { hideZernioComment, replyToZernioComment, sendZernioPrivateReply } from "@/lib/channels/zernio";
 import { moderationReason, readModeration } from "@/lib/social-triggers";
 import { deliverReplies, loadBotFieldValues } from "@/lib/flow-dispatch";
@@ -382,6 +383,12 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
         log.warn("Away message failed", error instanceof Error ? error.message : error);
       }
     }
+  }
+
+  // AI auto-tags last, in the background: never delays the reply, and nothing above re-saves the
+  // contact from an older snapshot afterwards (which would drop the new tag).
+  if (kind === "message" || kind === "story_reply") {
+    void applyAutoTags({ botId, brandName: bot.name, settings: bot.settings, contactId: contact.id, contactTags: contact.tags, text: inbound.text });
   }
 }
 

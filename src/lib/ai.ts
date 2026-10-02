@@ -485,3 +485,24 @@ export async function analyzeConversations(input: { settings: BotAiSettings; bra
     ].join("\n\n"),
   });
 }
+
+const AutoTagSchema = z.object({
+  tags: z.array(z.string()).describe("Names of the tags whose description the message clearly fits. Empty if none."),
+});
+
+/** Ask Claude which described tags fit this message; returns the matching tag names. */
+export async function classifyAutoTags(text: string, rules: { tag: string; description: string }[], brandName: string): Promise<string[]> {
+  if (rules.length === 0) return [];
+  const list = rules.map((rule) => `- ${rule.tag}: ${rule.description}`).join("\n");
+  const result = await parse(AutoTagSchema, {
+    system: [
+      `You label incoming DMs for ${brandName}'s CRM.`,
+      "Return the tags whose description the message clearly fits. Be conservative: no tag for greetings, small talk or vague messages.",
+    ].join("\n"),
+    effort: "low",
+    maxTokens: 1000,
+    user: `<tags>\n${list}\n</tags>\n\n<message>\n${text.slice(0, 1000)}\n</message>`,
+  });
+  const allowed = new Map(rules.map((rule) => [rule.tag.toLowerCase(), rule.tag]));
+  return [...new Set(result.tags.map((tag) => allowed.get(tag.trim().toLowerCase())).filter((tag): tag is string => Boolean(tag)))];
+}
