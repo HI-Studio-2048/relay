@@ -34,23 +34,33 @@ export async function createSequence(input: {
 type StepShape = { delaySeconds: number; body: string; flowId?: string | null };
 
 /**
- * Where a subscriber waiting on old step `index` should wait after an edit. Steps are matched by content
- * (copy + flow), so inserting or deleting a step neither repeats nor skips a message they already got;
- * an edited step counts as new, so they get the new copy.
+ * Where a subscriber waiting on old step `index` should wait after an edit. Old and new lists are aligned
+ * (longest common subsequence of copy + flow): an unchanged step keeps its subscribers, and within a run
+ * of changed steps people keep their relative place, so editing copy neither repeats nor skips messages.
  */
 export function remapSequenceIndex(oldSteps: StepShape[], newSteps: StepShape[], index: number) {
   const keyOf = (step: StepShape) => `${step.flowId ?? ""}\u0000${step.body.trim()}`;
-  const used = new Set<number>();
-  const map = oldSteps.map((step) => {
-    const found = newSteps.findIndex((candidate, position) => !used.has(position) && keyOf(candidate) === keyOf(step));
-    if (found >= 0) used.add(found);
-    return found;
-  });
-  if (index < oldSteps.length && map[index]! >= 0) return map[index]!;
-  // The step they were waiting on is gone or changed: continue after the last one they received.
-  let next = 0;
-  for (let past = 0; past < Math.min(index, oldSteps.length); past++) if (map[past]! >= 0) next = Math.max(next, map[past]! + 1);
-  return next;
+  const a = oldSteps.map(keyOf);
+  const b = newSteps.map(keyOf);
+  // lcs[i][j] = LCS length of a[i:] and b[j:].
+  const lcs = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) lcs[i]![j] = a[i] === b[j] ? lcs[i + 1]![j + 1]! + 1 : Math.max(lcs[i + 1]![j]!, lcs[i]![j + 1]!);
+  }
+  const pairs: [number, number][] = [];
+  for (let i = 0, j = 0; i < a.length && j < b.length; ) {
+    if (a[i] === b[j]) pairs.push([i++, j++]);
+    else if (lcs[i + 1]![j]! >= lcs[i]![j + 1]!) i++;
+    else j++;
+  }
+  const exact = pairs.find(([from]) => from === index);
+  if (exact) return exact[1];
+  // Between the matched steps around `index`, keep the same offset into the changed run.
+  const before = [...pairs].reverse().find(([from]) => from < index) ?? [-1, -1];
+  const after = pairs.find(([from]) => from > index) ?? [a.length, b.length];
+  const offset = index - (before[0] + 1);
+  const room = after[1] - (before[1] + 1);
+  return before[1] + 1 + Math.min(offset, room);
 }
 
 /** Replace a sequence's messages. Active subscribers are moved to the matching step and re-timed. */

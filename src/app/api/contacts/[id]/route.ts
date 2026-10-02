@@ -27,8 +27,8 @@ export async function DELETE(request: Request, context: RouteParams<{ id: string
     const db = await getDb();
     const [removed] = await db.delete(contacts).where(eq(contacts.id, id)).returning();
     if (!removed) return json({ error: "Contact not found" }, 404);
-    const who = [removed.firstName, removed.lastName].filter(Boolean).join(" ") || (removed.username ? `@${removed.username}` : "a contact");
-    await logActivity(request, removed.botId, "Erased contact", who);
+    // No name or handle: the log must not keep personal data the erasure removed.
+    await logActivity(request, removed.botId, "Erased a contact", `ref ${removed.id.slice(0, 8)}`);
     return json({ ok: true });
   } catch (error) {
     return fail(error);

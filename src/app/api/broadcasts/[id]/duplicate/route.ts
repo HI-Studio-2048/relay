@@ -1,7 +1,7 @@
 import { logActivity } from "@/lib/activity";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { broadcasts } from "@/lib/db/schema";
+import { broadcasts, flows } from "@/lib/db/schema";
 import { json, fail, type RouteParams } from "@/lib/http";
 import { sanitizeSegment } from "@/lib/segments";
 import { broadcastAudience } from "@/lib/store";
@@ -13,6 +13,13 @@ export async function POST(request: Request, context: RouteParams<{ id: string }
     const db = await getDb();
     const [source] = await db.select().from(broadcasts).where(eq(broadcasts.id, id)).limit(1);
     if (!source) return json({ error: "Broadcast not found" }, 404);
+    // A flow broadcast whose flow was deleted only has placeholder text: never resend that.
+    if (source.flowId) {
+      const [flow] = await db.select({ botId: flows.botId }).from(flows).where(eq(flows.id, source.flowId)).limit(1);
+      if (!flow || flow.botId !== source.botId) return json({ error: "The flow this broadcast sent no longer exists" }, 409);
+    } else if (source.body.startsWith("[flow] ")) {
+      return json({ error: "The flow this broadcast sent was deleted. Compose a new broadcast instead." }, 409);
+    }
     const segment = sanitizeSegment(source.segment);
     // The audience is recounted now: contacts may have joined, left or unsubscribed since.
     const audience = await broadcastAudience(source.botId, source.tagId, segment);

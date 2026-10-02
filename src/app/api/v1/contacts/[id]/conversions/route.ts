@@ -14,7 +14,7 @@ export async function POST(request: Request, context: RouteParams<{ id: string }
     const name = body.name?.trim().slice(0, 80) || "Conversion";
     const value = body.value === undefined || body.value === null ? null : Number(body.value);
     if (value !== null && !Number.isFinite(value)) return json({ error: "value must be a number" }, 400);
-    const flowId = await recordConversion({ botId, contactId: id, name, value, flowId: body.flow_id ?? null });
+    const { flowId } = await recordConversion({ botId, contactId: id, name, value, flowId: body.flow_id ?? null });
     return json({ ok: true, attributed_flow_id: flowId });
   });
 }

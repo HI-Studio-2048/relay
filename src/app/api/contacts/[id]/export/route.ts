@@ -19,9 +19,10 @@ export async function GET(_request: Request, context: RouteParams<{ id: string }
         .where(eq(messages.contactId, id))
         .orderBy(asc(messages.createdAt)),
       db
-        .select({ at: flowEvents.createdAt, kind: flowEvents.kind, flow: flows.name, goal: flowEvents.name, value: flowEvents.value })
+        .select({ at: flowEvents.createdAt, kind: flowEvents.kind, flow: flows.name, goal: flowEvents.name, value: flowEvents.value, currency: flowEvents.currency })
         .from(flowEvents)
-        .innerJoin(flows, eq(flows.id, flowEvents.flowId))
+        // Left join: payments with no flow are part of the person's data too.
+        .leftJoin(flows, eq(flows.id, flowEvents.flowId))
         .where(eq(flowEvents.contactId, id))
         .orderBy(asc(flowEvents.createdAt)),
     ]);

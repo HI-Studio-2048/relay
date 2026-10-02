@@ -69,8 +69,12 @@ export async function mergeContacts(keepId: string, dropId: string) {
         notes: [keep.notes, drop.notes].filter((note) => note?.trim()).join("\n") || keep.notes,
         createdAt: keep.createdAt < drop.createdAt ? keep.createdAt : drop.createdAt,
         // Opting out on either channel opts the person out; list subscriptions add up.
-        unsubscribed: keep.unsubscribed || drop.unsubscribed,
-        subscriptions: [...new Set([...(keep.subscriptions ?? []), ...(drop.subscriptions ?? [])])],
+        // In SQL, from the current rows: an opt-out that lands mid-merge is never undone.
+        unsubscribed: sql`${contacts.unsubscribed} or coalesce((select c.unsubscribed from contacts c where c.id = ${dropId}), false)`,
+        subscriptions: sql`(select coalesce(jsonb_agg(distinct s), '[]'::jsonb) from (
+          select jsonb_array_elements_text(${contacts.subscriptions}) as s
+          union select jsonb_array_elements_text(coalesce((select c.subscriptions from contacts c where c.id = ${dropId}), '[]'::jsonb))
+        ) merged)`,
       })
       .where(and(eq(contacts.id, keepId), eq(contacts.botId, keep.botId)));
     // Whatever is left (open sessions, broadcast receipts, duplicates of the above) goes with it.

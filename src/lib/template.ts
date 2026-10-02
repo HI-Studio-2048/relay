@@ -32,8 +32,6 @@ export function interpolateTemplate(
     const key = rawKey.toLowerCase();
     let value: string | undefined;
     if (key.startsWith("field:")) value = contact.customFields[rawKey.slice("field:".length)] ?? "";
-    // A custom field named contact_id (common in ManyChat imports) keeps winning over the built-in.
-    else if (key === "contact_id" && rawKey in contact.customFields) value = contact.customFields[rawKey];
     else if (key in builtins) value = builtins[key];
     else if (rawKey in contact.customFields) value = contact.customFields[rawKey];
     else if (fallback === undefined) return match;

@@ -36,4 +36,12 @@ describe("remapSequenceIndex", () => {
     expect(remapSequenceIndex([a, b, c], [a, { ...b, body: "B2" }, c], 1)).toBe(1);
     expect(remapSequenceIndex([a, b], [a, b, c], 2)).toBe(2);
   });
+  it("keeps people's place when several messages are reworded", () => {
+    const edit = (step: typeof a) => ({ ...step, body: `${step.body}2` });
+    expect(remapSequenceIndex([a, b, c], [edit(a), edit(b), edit(c)], 2)).toBe(2);
+    expect(remapSequenceIndex([a, b, c], [a, edit(b), edit(c)], 2)).toBe(2);
+    // A reorder is ambiguous; ties keep the later step, so nobody skips a message they never got.
+    expect(remapSequenceIndex([a, b, c], [a, c, b], 1)).toBe(1);
+    expect(remapSequenceIndex([a, b, c], [a, c, b], 2)).toBe(1);
+  });
 });
