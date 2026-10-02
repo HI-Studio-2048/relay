@@ -1,6 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useBot } from "@/components/bot-provider";
+import { api } from "@/lib/client";
 import { Bot, FastForward, MessageCircle, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { executeFrom, processInboundEvent, type FlowRecord } from "@/lib/flow-engine";
@@ -69,6 +71,21 @@ export function FlowSimulator({
   const [text, setText] = useState("");
   const [clock, setClock] = useState(wallClock);
   const bottom = useRef<HTMLDivElement>(null);
+  // Bot fields ({{bot.promo_code}}) render like they will in real DMs.
+  const { botId } = useBot();
+  const [botValues, setBotValues] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!botId) return;
+    let cancelled = false;
+    api<{ botFields: { key: string; value: string }[] }>(`/api/bots/${botId}/bot-fields`)
+      .then((data) => {
+        if (!cancelled) setBotValues(Object.fromEntries(data.botFields.map((field) => [`bot.${field.key}`, field.value])));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [botId]);
   // The definition of the run in progress, so render never has to read the canvas.
   const [runDefinition, setRunDefinition] = useState<FlowDefinition | null>(null);
 
@@ -82,8 +99,14 @@ export function FlowSimulator({
     definition: FlowDefinition,
   ) => {
     const next: Line[] = [];
-    if (result.publicReply) next.push({ id: newId(), kind: "note", text: `Public reply under the comment: “${interpolateTemplate(result.publicReply, result.contact)}”`, tone: "info" });
-    for (const reply of result.replies) next.push({ id: newId(), kind: "out", reply: { ...reply, text: interpolateTemplate(reply.text, result.contact) }, live: true });
+    if (result.publicReply) next.push({ id: newId(), kind: "note", text: `Public reply under the comment: “${interpolateTemplate(result.publicReply, result.contact, botValues)}”`, tone: "info" });
+    for (const reply of result.replies) next.push({ id: newId(), kind: "out", reply: {
+          ...reply,
+          text: interpolateTemplate(reply.text, result.contact, botValues),
+          ...(reply.cards
+            ? { cards: reply.cards.map((card) => ({ ...card, title: interpolateTemplate(card.title, result.contact, botValues), ...(card.subtitle ? { subtitle: interpolateTemplate(card.subtitle, result.contact, botValues) } : {}) })) }
+            : {}),
+        }, live: true });
     for (const effect of result.effects) {
       const line = describeEffect(effect, definition);
       if (line) next.push(line);
