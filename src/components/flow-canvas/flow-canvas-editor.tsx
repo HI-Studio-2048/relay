@@ -23,6 +23,7 @@ import {
   useEffect,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
   type DragEvent,
 } from "react";
@@ -48,9 +49,11 @@ import {
   mediaBlockTypeFor,
   messageNodeButtons,
   newBlockId,
+  newStepId,
   replaceHandleEdge,
   validateCanvas,
   type CanvasEdge,
+  type CanvasGraph,
   type CanvasNode,
   type CanvasNodeData,
   type CanvasNodeKind,
@@ -146,6 +149,91 @@ function CanvasStage({
   const { screenToFlowPosition } = useReactFlow();
 
   const graph = useCallback(() => fromRf(nodes, edges), [nodes, edges]);
+
+  // Undo / redo: snapshots of the graph (positions, data, edges), taken once edits settle.
+  const history = useRef<{ past: string[]; future: string[]; current: string; restoring: boolean }>({
+    past: [],
+    future: [],
+    current: "",
+    restoring: false,
+  });
+  useEffect(() => {
+    const snapshot = JSON.stringify(fromRf(nodes, edges));
+    const state = history.current;
+    if (!state.current) {
+      state.current = snapshot;
+      return;
+    }
+    // An undo/redo just applied this graph: take it as the current state, not as a new edit.
+    if (state.restoring) {
+      state.restoring = false;
+      state.current = snapshot;
+      return;
+    }
+    if (snapshot === state.current) return;
+    const timer = setTimeout(() => {
+      if (snapshot === state.current) return;
+      state.past = [...state.past, state.current].slice(-50);
+      state.future = [];
+      state.current = snapshot;
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [nodes, edges]);
+
+  const restore = useCallback(
+    (direction: "undo" | "redo") => {
+      const state = history.current;
+      const from = direction === "undo" ? state.past : state.future;
+      const target = from[from.length - 1];
+      if (!target) return;
+      if (direction === "undo") {
+        state.past = state.past.slice(0, -1);
+        state.future = [...state.future, state.current];
+      } else {
+        state.future = state.future.slice(0, -1);
+        state.past = [...state.past, state.current];
+      }
+      state.current = target;
+      state.restoring = true;
+      const rf = toRf(JSON.parse(target) as CanvasGraph);
+      setNodes(rf.nodes);
+      setEdges(rf.edges);
+    },
+    [setNodes, setEdges],
+  );
+
+  // Copy / paste a step (not the trigger): pasted with a new id, slightly offset, unconnected.
+  const clipboard = useRef<RfNode | null>(null);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      if (!(event.metaKey || event.ctrlKey)) return;
+      const key = event.key.toLowerCase();
+      if (key === "z") {
+        event.preventDefault();
+        restore(event.shiftKey ? "redo" : "undo");
+      } else if (key === "y") {
+        event.preventDefault();
+        restore("redo");
+      } else if (key === "c") {
+        const node = nodes.find((item) => item.id === selectedId);
+        if (node && node.id !== TRIGGER_NODE_ID) clipboard.current = node;
+      } else if (key === "v" && clipboard.current) {
+        event.preventDefault();
+        const source = clipboard.current;
+        const id = newStepId();
+        setNodes((current) => [
+          ...current.map((node) => ({ ...node, selected: false })),
+          { ...source, id, selected: true, position: { x: source.position.x + 40, y: source.position.y + 40 }, data: structuredClone(source.data) },
+        ]);
+        setSelectedId(id);
+        clipboard.current = { ...source, position: { x: source.position.x + 40, y: source.position.y + 40 } };
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [nodes, selectedId, restore, setNodes]);
 
   useImperativeHandle(
     canvasRef,
