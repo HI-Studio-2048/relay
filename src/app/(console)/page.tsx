@@ -12,6 +12,7 @@ import { CHANNELS } from "@/lib/channels/types";
 import { currentBot } from "@/lib/current-bot";
 import { loadChecklist, loadDashboard, loadTeamReport } from "@/lib/dashboard";
 import { formatDuration } from "@/lib/team-report";
+import { WeeklyDigest } from "@/components/weekly-digest";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -142,6 +143,8 @@ export default async function OverviewPage() {
           </ul>
         </CanvasCard>
       ) : null}
+
+      <WeeklyDigest botId={bot.id} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatTile

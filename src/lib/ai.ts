@@ -315,6 +315,27 @@ export async function writeCommentReply(input: {
   return result.reply.trim().slice(0, 200);
 }
 
+const DigestSchema = z.object({
+  headline: z.string().describe("One sentence: the most important thing about this week."),
+  highlights: z.array(z.string()).describe("2-4 short observations grounded in the numbers."),
+  next_steps: z.array(z.string()).describe("2-3 concrete actions to take in Relay this week."),
+});
+
+export type WeeklyDigest = z.infer<typeof DigestSchema>;
+
+/** Overview "Weekly digest": Claude reads the account's numbers and says what happened and what to do. */
+export async function writeWeeklyDigest(input: { brandName: string; facts: Record<string, unknown> }): Promise<WeeklyDigest> {
+  return parse(DigestSchema, {
+    system: [
+      `You are the growth analyst for ${input.brandName}'s social DM automation (comment-to-DM, flows, broadcasts, live chat).`,
+      "Use only the numbers given. Be specific and brief; no fluff, no invented metrics. Next steps must be things the user can do in the app (a flow, a broadcast, a keyword, replying to waiting chats, AI knowledge).",
+    ].join("\n"),
+    effort: "low",
+    maxTokens: 3000,
+    user: `<numbers>\n${JSON.stringify(input.facts, null, 2)}\n</numbers>`,
+  });
+}
+
 export const REWRITE_STYLES = {
   shorter: "Make it shorter and punchier. DM-sized.",
   friendlier: "Make it warmer and friendlier, still professional.",
