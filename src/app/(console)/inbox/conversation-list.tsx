@@ -24,6 +24,7 @@ type Thread = {
   lastDirection: "inbound" | "outbound";
   needsReply: boolean;
   assignedTo: string | null;
+  tags: string[];
 };
 
 type Filter = "open" | "unanswered" | "mine" | "unassigned" | "snoozed" | "closed" | "all";
@@ -78,6 +79,8 @@ export function ConversationList() {
   const [threads, setThreads] = useState<Thread[] | null>(null);
   const [filter, setFilter] = useState<Filter>("open");
   const [query, setQuery] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
+  const allTags = useMemo(() => [...new Set((threads ?? []).flatMap((thread) => thread.tags ?? []))].sort((a, b) => a.localeCompare(b)), [threads]);
   const { team, me, setMe, byId } = useTeam();
   const router = useRouter();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -158,6 +161,7 @@ export function ConversationList() {
       if (filter === "open" && thread.status !== "open") return false;
       if (filter === "closed" && thread.status !== "closed") return false;
       if (filter === "snoozed" && thread.status !== "snoozed") return false;
+      if (tagFilter && !(thread.tags ?? []).includes(tagFilter)) return false;
       if (filter === "unanswered" && !thread.needsReply) return false;
       if (filter === "mine" && !(thread.status === "open" && me && thread.assignedTo === me)) return false;
       if (filter === "unassigned" && !(thread.status === "open" && !thread.assignedTo)) return false;
@@ -168,7 +172,7 @@ export function ConversationList() {
         thread.lastBody.toLowerCase().includes(needle)
       );
     });
-  }, [threads, filter, query, me]);
+  }, [threads, filter, query, me, tagFilter]);
 
   useEffect(() => {
     const waiting = counts.unanswered;
@@ -247,6 +251,21 @@ export function ConversationList() {
             {notify ? <Bell className="size-3.5" /> : <BellOff className="size-3.5" />}
           </button>
         </div>
+        {allTags.length > 0 ? (
+          <select
+            aria-label="Filter by tag"
+            value={tagFilter}
+            onChange={(event) => setTagFilter(event.target.value)}
+            className="w-full rounded-lg border border-[#e5e7eb] bg-white px-2 py-1 text-[12px] text-[#1b1f24]"
+          >
+            <option value="">Any tag</option>
+            {allTags.map((tag) => (
+              <option key={tag} value={tag}>
+                #{tag}
+              </option>
+            ))}
+          </select>
+        ) : null}
         <div className="flex gap-1 overflow-x-auto">
           {FILTERS.filter((item) => !item.team || team.length > 0).map((item) => (
             <button
@@ -298,6 +317,11 @@ export function ConversationList() {
                 </div>
                 <div className="mt-1 flex items-center gap-1.5">
                   {thread.platform ? <PlatformBadge platform={thread.platform} /> : null}
+                  {(thread.tags ?? []).slice(0, 2).map((tag) => (
+                    <span key={tag} className="max-w-20 truncate rounded-full bg-[#f5f3ff] px-1.5 py-0.5 text-[10px] text-[#6d28d9]">
+                      #{tag}
+                    </span>
+                  ))}
                   {thread.snoozedUntil ? (
                     <span className="flex items-center gap-0.5 rounded-full bg-[#f5f3ff] px-1.5 py-0.5 text-[10px] font-medium text-[#6d28d9]">
                       <AlarmClock className="size-2.5" />

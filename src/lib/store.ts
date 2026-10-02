@@ -349,6 +349,7 @@ export type InboxThread = {
   /** The contact spoke last: someone should answer. */
   needsReply: boolean;
   assignedTo: string | null;
+  tags: string[];
 };
 
 /** Live Chat list: one row per conversation with its latest message, newest first. */
@@ -390,7 +391,16 @@ export async function listInboxThreads(botId: string): Promise<InboxThread[]> {
   const byContact = new Map<string, (typeof latest)[number]>();
   for (const message of latest) if (!byContact.has(message.contactId)) byContact.set(message.contactId, message);
   if (byContact.size === 0) return [];
-  const rows = await db.select().from(contacts).where(eq(contacts.botId, botId));
+  const [rows, tagRows] = await Promise.all([
+    db.select().from(contacts).where(eq(contacts.botId, botId)),
+    db
+      .select({ contactId: contactTags.contactId, name: tags.name })
+      .from(contactTags)
+      .innerJoin(tags, eq(tags.id, contactTags.tagId))
+      .where(eq(tags.botId, botId)),
+  ]);
+  const tagsByContact = new Map<string, string[]>();
+  for (const row of tagRows) tagsByContact.set(row.contactId, [...(tagsByContact.get(row.contactId) ?? []), row.name]);
   return rows
     .filter((row) => byContact.has(row.id))
     .map((row) => {
@@ -415,6 +425,7 @@ export async function listInboxThreads(botId: string): Promise<InboxThread[]> {
         needsReply:
           last.direction === "inbound" && row.inboxStatus !== "closed" && !(row.snoozedUntil && new Date(row.snoozedUntil).getTime() > Date.now()),
         assignedTo: row.assignedTo ?? null,
+        tags: (tagsByContact.get(row.id) ?? []).sort((a, b) => a.localeCompare(b)),
       };
     })
     .sort((a, b) => (b.lastAt ?? "").localeCompare(a.lastAt ?? ""));
