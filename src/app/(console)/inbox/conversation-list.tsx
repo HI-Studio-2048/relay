@@ -91,6 +91,13 @@ export function ConversationList() {
       return next;
     });
 
+  // A new filter, tag or search starts a fresh selection, so bulk actions never touch hidden chats.
+  const [selectionKey, setSelectionKey] = useState(`${filter}|${tagFilter}|${query}`);
+  if (selectionKey !== `${filter}|${tagFilter}|${query}`) {
+    setSelectionKey(`${filter}|${tagFilter}|${query}`);
+    setSelected(new Set());
+  }
+
   const bulk = async (action: "done" | "assign", memberId?: string | null) => {
     setBulkBusy(true);
     const ids = [...selected];
@@ -102,13 +109,14 @@ export function ConversationList() {
       ),
     );
     const failed = results.filter((result) => result.status === "rejected").length;
+    const done = new Set(ids.filter((_, index) => results[index]!.status === "fulfilled"));
     if (failed) toast.error(`${failed} of ${ids.length} could not be updated`);
     else toast.success(action === "done" ? `Marked ${ids.length} done` : `Assigned ${ids.length}`);
     setSelected(new Set());
     setBulkBusy(false);
     setThreads((current) =>
       (current ?? []).map((thread) =>
-        !ids.includes(thread.contactId)
+        !done.has(thread.contactId)
           ? thread
           : action === "done"
             ? { ...thread, status: "closed", needsReply: false }

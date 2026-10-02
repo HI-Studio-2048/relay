@@ -658,7 +658,9 @@ export function definitionToCanvas(definition: FlowDefinition): CanvasGraph {
       const chain = chains.get(step.id);
       return chain ? messageNodeFromChain(chain, position) : nodeFromStep(step, position);
     }),
-    ...(definition.canvas?.notes ?? []).map((note) => ({
+    ...(definition.canvas?.notes ?? [])
+      .filter((note) => note.id !== TRIGGER_NODE_ID && !definition.steps.some((step) => step.id === note.id))
+      .map((note) => ({
       id: note.id,
       type: "note" as const,
       position: { x: note.x, y: note.y },

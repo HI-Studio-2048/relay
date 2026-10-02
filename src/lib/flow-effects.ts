@@ -34,19 +34,16 @@ async function postAlert(botId: string, text: string, link?: string | null) {
   const [bot] = await db.select({ settings: bots.settings }).from(bots).where(eq(bots.id, botId)).limit(1);
   const { webhookUrl } = readAlerts(bot?.settings);
   if (!webhookUrl) return false;
-  if (process.env.NODE_ENV === "production") {
-    const { resolvesPublic } = await import("@/lib/web-import");
-    if (!(await resolvesPublic(new URL(webhookUrl).hostname))) return false;
-  }
-  const response = await fetch(webhookUrl, {
+  const { safeRequest } = await import("@/lib/web-import");
+  const response = await safeRequest({
+    url: webhookUrl,
     method: "POST",
-    redirect: "error",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(alertPayload(webhookUrl, text, link)),
-    signal: AbortSignal.timeout(8000),
   });
-  if (!response.ok) log.warn("Team alert webhook failed", response.status);
-  return response.ok;
+  const ok = response.status >= 200 && response.status < 300;
+  if (!ok) log.warn("Team alert webhook failed", response.status);
+  return ok;
 }
 
 /**
@@ -90,22 +87,16 @@ export async function applyFlowEffects(input: {
           log.warn("HTTP step skipped: URL must be https");
           continue;
         }
-        if (process.env.NODE_ENV === "production") {
-          // Never let a flow call into the server's own network (SSRF).
-          const { resolvesPublic } = await import("@/lib/web-import");
-          if (!(await resolvesPublic(new URL(url).hostname))) {
-            log.warn("HTTP step skipped: host is not a public address", url);
-            continue;
-          }
-        }
         const body = effect.body ? interpolateTemplate(effect.body, input.contact) : undefined;
-        const response = await fetch(url, {
-          redirect: "error",
-          method: effect.method,
-          headers: effect.method === "POST" ? { "content-type": "application/json" } : undefined,
-          body: effect.method === "POST" ? (body ?? "{}") : undefined,
+        // Never let a flow call into the server's own network (SSRF): the dialled address is checked.
+        const { safeRequest } = await import("@/lib/web-import");
+        const response = await safeRequest({
+          url,
+          method: effect.method === "GET" ? "GET" : "POST",
+          headers: effect.method === "GET" ? {} : { "content-type": "application/json" },
+          body: effect.method === "GET" ? undefined : (body ?? "{}"),
         });
-        if (!response.ok) {
+        if (response.status < 200 || response.status >= 300) {
           log.warn("HTTP step failed", response.status, url);
         }
         continue;

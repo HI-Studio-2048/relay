@@ -44,3 +44,13 @@ describe("AI intents", () => {
     expect(matchFlowTrigger(routeToIntent(flows, "ship"), "price please")?.id).toBe("price");
   });
 });
+
+describe("AI public comment replies", () => {
+  it("rejects links, mentions and hashtags", async () => {
+    const { safePublicReply } = await import("@/lib/ai");
+    expect(safePublicReply("  Thanks Rae!  Check your DMs 💌 ")).toBe("Thanks Rae! Check your DMs 💌");
+    for (const bad of ["Visit evil.com now", "go to https://x.y", "ping @someone", "#ad free stuff", "www.spam.io"]) {
+      expect(() => safePublicReply(bad), bad).toThrow();
+    }
+  });
+});

@@ -312,7 +312,20 @@ export async function writeCommentReply(input: {
       .filter(Boolean)
       .join("\n\n"),
   });
-  return result.reply.trim().slice(0, 200);
+  return safePublicReply(result.reply);
+}
+
+/**
+ * A public reply is posted under the brand's name, and the comment it answers is attacker-controlled
+ * text. Refuse anything with links, domains, @mentions or hashtags (the caller falls back to a preset).
+ */
+export function safePublicReply(reply: string): string {
+  const text = reply.replace(/\s+/g, " ").trim().slice(0, 200);
+  if (!text) throw new AiUnavailableError("Empty reply");
+  if (/(https?:\/\/|www\.|\b[a-z0-9-]+\.(com|net|org|io|ly|co|xyz|link|shop|me|app|gg|info|biz|ru|tk)\b|@\w|#\w)/i.test(text)) {
+    throw new AiUnavailableError("Reply contained a link, mention or hashtag");
+  }
+  return text;
 }
 
 const DigestSchema = z.object({

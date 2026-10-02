@@ -183,6 +183,14 @@ function CanvasStage({
   const restore = useCallback(
     (direction: "undo" | "redo") => {
       const state = history.current;
+      // An edit still inside the snapshot debounce counts as the current state, so undo reverts it
+      // (and redo can bring it back) instead of dropping it.
+      const live = JSON.stringify(fromRf(nodes, edges));
+      if (live !== state.current) {
+        state.past = [...state.past, state.current].slice(-50);
+        state.future = [];
+        state.current = live;
+      }
       const from = direction === "undo" ? state.past : state.future;
       const target = from[from.length - 1];
       if (!target) return;
@@ -199,7 +207,7 @@ function CanvasStage({
       setNodes(rf.nodes);
       setEdges(rf.edges);
     },
-    [setNodes, setEdges],
+    [nodes, edges, setNodes, setEdges],
   );
 
   // Copy / paste a step (not the trigger): pasted with a new id, slightly offset, unconnected.

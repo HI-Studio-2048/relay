@@ -45,7 +45,9 @@ function cleanDefinition(definition: FlowDefinition, steps: FlowDefinition["step
       Boolean(note) && typeof note.id === "string" && Number.isFinite(note.x) && Number.isFinite(note.y) && typeof note.text === "string",
     )
     .slice(0, 50)
-    .map((note) => ({ id: note.id.slice(0, 64), x: note.x, y: note.y, text: note.text.slice(0, 2000) }));
+    .map((note) => ({ id: note.id.slice(0, 64), x: note.x, y: note.y, text: note.text.slice(0, 2000) }))
+    // A note must never share an id with a step or the trigger node.
+    .filter((note) => note.id !== "__trigger" && !steps.some((step) => step.id === note.id));
   return {
     startStepId: definition.startStepId,
     steps,

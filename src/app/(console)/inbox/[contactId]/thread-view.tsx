@@ -211,7 +211,7 @@ export function ThreadView({
   const [assisting, setAssisting] = useState(false);
   const [assignedTo, setAssignedTo] = useState<string | null>(null);
   const [snoozedUntil, setSnoozedUntil] = useState<string | null>(null);
-  const [scheduled, setScheduled] = useState<{ id: string; body: string; sendAt: string; author: string | null }[]>([]);
+  const [scheduled, setScheduled] = useState<{ id: string; body: string; sendAt: string; author: string | null; failed?: string | null }[]>([]);
   const { team, byId } = useTeam();
   const [others, setOthers] = useState<{ agentId: string; typing: boolean }[]>([]);
   const typedAt = useRef(0);
@@ -246,7 +246,7 @@ export function ThreadView({
       flows?: FlowOption[];
       assignedTo?: string | null;
       snoozedUntil?: string | null;
-      scheduled?: { id: string; body: string; sendAt: string; author: string | null }[];
+      scheduled?: { id: string; body: string; sendAt: string; author: string | null; failed?: string | null }[];
     }>(`/api/inbox/${contactId}`);
     setScheduled(data.scheduled ?? []);
     setSnoozedUntil(data.snoozedUntil ?? null);
@@ -316,8 +316,12 @@ export function ThreadView({
   };
 
   const cancelScheduled = async (id: string) => {
-    await api(`/api/inbox/${contactId}/scheduled?id=${id}`, { method: "DELETE" }).catch(() => undefined);
-    setScheduled((current) => current.filter((item) => item.id !== id));
+    try {
+      await api(`/api/inbox/${contactId}/scheduled?id=${id}`, { method: "DELETE" });
+      setScheduled((current) => current.filter((item) => item.id !== id));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not cancel");
+    }
   };
 
   const snooze = async (until: Date | null) => {
@@ -660,14 +664,22 @@ export function ThreadView({
           {scheduled.length > 0 ? (
             <div className="mb-2 space-y-1">
               {scheduled.map((item) => (
-                <p key={item.id} className="flex items-center gap-2 rounded-lg bg-[#f5f3ff] px-2.5 py-1.5 text-[12px] text-[#4c1d95]">
+                <p
+                  key={item.id}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12px]",
+                    item.failed ? "bg-red-50 text-red-800" : "bg-[#f5f3ff] text-[#4c1d95]",
+                  )}
+                >
                   <Clock className="size-3.5 shrink-0" />
                   <span className="shrink-0 font-medium">
-                    {new Date(item.sendAt).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}
+                    {item.failed ? "Not sent" : new Date(item.sendAt).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}
                   </span>
-                  <span className="min-w-0 flex-1 truncate">{item.body}</span>
+                  <span className="min-w-0 flex-1 truncate" title={item.failed ?? undefined}>
+                    {item.failed ? `${item.failed} · ${item.body}` : item.body}
+                  </span>
                   <button type="button" className="shrink-0 text-[#6b7280] hover:text-[#1b1f24]" onClick={() => void cancelScheduled(item.id)}>
-                    Cancel
+                    {item.failed ? "Dismiss" : "Cancel"}
                   </button>
                 </p>
               ))}

@@ -119,6 +119,42 @@ export async function resolvesPublic(hostname: string): Promise<boolean> {
   }
 }
 
+/**
+ * Outbound request for flow HTTP steps and team alerts. In production the socket dials only an address
+ * that passed the public-address check (no DNS rebinding window); no redirects; 8s timeout.
+ */
+export function safeRequest(input: {
+  url: string;
+  method: "GET" | "POST";
+  body?: string;
+  headers?: Record<string, string>;
+  allowPrivate?: boolean;
+}): Promise<{ status: number }> {
+  const url = new URL(input.url);
+  const allowPrivate = input.allowPrivate ?? process.env.NODE_ENV !== "production";
+  const client = url.protocol === "https:" ? https : http;
+  return new Promise((resolve, reject) => {
+    const request = client.request(
+      url,
+      {
+        method: input.method,
+        lookup: guardedLookup(allowPrivate),
+        timeout: 8_000,
+        headers: { ...(input.headers ?? {}), ...(input.body ? { "content-length": Buffer.byteLength(input.body) } : {}) },
+      },
+      (response) => {
+        response.resume();
+        response.on("end", () => resolve({ status: response.statusCode ?? 0 }));
+        response.on("error", reject);
+      },
+    );
+    request.on("timeout", () => request.destroy(new WebImportError("Request timed out")));
+    request.on("error", reject);
+    if (input.body) request.write(input.body);
+    request.end();
+  });
+}
+
 /** HTML → readable text: drops scripts, styles and tags, keeps line breaks between blocks. */
 export function htmlToText(html: string): string {
   const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim();

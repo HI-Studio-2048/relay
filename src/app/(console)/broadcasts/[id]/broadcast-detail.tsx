@@ -145,7 +145,7 @@ export function BroadcastDetail({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <SendTest broadcastId={broadcast.id} />
+            {broadcast.isFlow ? null : <SendTest broadcastId={broadcast.id} />}
             <form
               method="POST"
               action={`/api/broadcasts/${broadcast.id}/confirm`}

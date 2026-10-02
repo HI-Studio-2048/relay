@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { listScheduled } from "@/lib/agent-reply";
 import { getDb } from "@/lib/db";
 import { contacts, scheduledMessages } from "@/lib/db/schema";
@@ -32,7 +32,7 @@ export async function POST(request: Request, context: RouteParams<{ contactId: s
     const agent = await findMember(agentIdFromCookieHeader(request.headers.get("cookie")));
     const [row] = await db
       .insert(scheduledMessages)
-      .values({ id: crypto.randomUUID(), botId: contact.botId, contactId, body: text, sendAt, author: agent?.name ?? null })
+      .values({ id: crypto.randomUUID(), botId: contact.botId, contactId, body: text, sendAt, author: agent?.name ?? null, authorId: agent?.id ?? null })
       .returning();
     return json({ scheduled: row });
   } catch (error) {
@@ -46,10 +46,12 @@ export async function DELETE(request: Request, context: RouteParams<{ contactId:
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return json({ error: "id is required" }, 400);
     const db = await getDb();
-    await db
+    const [cancelled] = await db
       .update(scheduledMessages)
       .set({ status: "cancelled" })
-      .where(and(eq(scheduledMessages.id, id), eq(scheduledMessages.contactId, contactId), eq(scheduledMessages.status, "pending")));
+      .where(and(eq(scheduledMessages.id, id), eq(scheduledMessages.contactId, contactId), inArray(scheduledMessages.status, ["pending", "failed"])))
+      .returning();
+    if (!cancelled) return json({ error: "Already sent, sending or cancelled" }, 409);
     return json({ ok: true });
   } catch (error) {
     return fail(error);

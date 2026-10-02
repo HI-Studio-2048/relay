@@ -282,6 +282,7 @@ CREATE TABLE IF NOT EXISTS scheduled_messages (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS scheduled_messages_due_idx ON scheduled_messages(status, send_at);
+ALTER TABLE scheduled_messages ADD COLUMN IF NOT EXISTS author_id text;
 ALTER TABLE broadcast_recipients ADD COLUMN IF NOT EXISTS variant text;
 ALTER TABLE broadcasts ADD COLUMN IF NOT EXISTS smart_timing boolean NOT NULL DEFAULT false;
 ALTER TABLE broadcast_recipients ADD COLUMN IF NOT EXISTS send_at timestamptz;

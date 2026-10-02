@@ -19,7 +19,13 @@ export async function GET(_request: Request, context: RouteParams<{ contactId: s
     ]);
     return json({
       assignedTo: row?.assignedTo ?? null,
-      scheduled: (await listScheduled(contactId)).map((item) => ({ id: item.id, body: item.body, sendAt: new Date(item.sendAt).toISOString(), author: item.author })),
+      scheduled: (await listScheduled(contactId)).map((item) => ({
+        id: item.id,
+        body: item.body,
+        sendAt: new Date(item.sendAt).toISOString(),
+        author: item.author,
+        failed: item.status === "failed" ? item.error ?? "Send failed" : null,
+      })),
       snoozedUntil: row?.snoozedUntil && new Date(row.snoozedUntil).getTime() > Date.now() ? new Date(row.snoozedUntil).toISOString() : null,
       contact,
       messages,

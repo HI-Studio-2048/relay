@@ -341,6 +341,8 @@ export const scheduledMessages = pgTable("scheduled_messages", {
   /** pending | sending | sent | failed | cancelled */
   status: text("status").notNull().default("pending"),
   author: text("author"),
+  /** Team member id of the author, so the send can assign an unassigned chat to them. */
+  authorId: text("author_id"),
   error: text("error"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
