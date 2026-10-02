@@ -20,7 +20,7 @@ export async function loadDashboard(botId: string, days = 30) {
   const weekAgo = new Date(Date.now() - 7 * DAY);
   const day = sql<string>`to_char(${contacts.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`;
 
-  const [daily, totals, byPlatform, weekMessages, threads, flowStats, flowRows] = await Promise.all([
+  const [daily, totals, byPlatform, weekMessages, threads, flowStats, flowRows, goalTotals] = await Promise.all([
     db
       .select({ day, count: sql<number>`count(*)::int` })
       .from(contacts)
@@ -43,6 +43,10 @@ export async function loadDashboard(botId: string, days = 30) {
     listInboxThreads(botId),
     statsByFlow(botId, days),
     db.select({ id: flows.id, name: flows.name, isActive: flows.isActive }).from(flows).where(eq(flows.botId, botId)),
+    db
+      .select({ count: sql<number>`count(*)::int`, value: sql<number>`coalesce(sum(${flowEvents.value}), 0)::float8` })
+      .from(flowEvents)
+      .where(and(eq(flowEvents.botId, botId), eq(flowEvents.kind, "goal"), gte(flowEvents.createdAt, new Date(Date.now() - days * DAY)))),
   ]);
 
   const counts = new Map(daily.map((row) => [row.day, Number(row.count)]));
@@ -80,8 +84,9 @@ export async function loadDashboard(botId: string, days = 30) {
     openThreads: threads.filter((thread) => thread.status === "open").length,
     recentThreads: threads.slice(0, 6),
     topFlows,
-    conversions: Object.values(flowStats).reduce((sum, stats) => sum + (stats?.conversions ?? 0), 0),
-    revenue: Object.values(flowStats).reduce((sum, stats) => sum + (stats?.revenue ?? 0), 0),
+    // All goals in the period, including payments no flow sent (per-flow stats leave those out).
+    conversions: Number(goalTotals[0]?.count ?? 0),
+    revenue: Number(goalTotals[0]?.value ?? 0),
   };
 }
 
