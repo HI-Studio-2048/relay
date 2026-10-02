@@ -84,6 +84,8 @@ export function readHours(settings: Record<string, unknown> | null | undefined):
     if (value && TIME.test(value.open) && TIME.test(value.close)) days[day] = { open: value.open, close: value.close };
   }
   let timezone = typeof raw.timezone === "string" && raw.timezone ? raw.timezone : DEFAULT_HOURS.timezone;
+  // Named zones only: Postgres reads offsets like "+05:30" the POSIX way (reversed), which would skew reports.
+  if (!timezone.includes("/") && timezone !== "UTC") timezone = "UTC";
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: timezone });
   } catch {

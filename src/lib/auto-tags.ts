@@ -25,12 +25,31 @@ export function autoTagCandidates(rules: AutoTag[], contactTags: string[], text:
   return rules.filter((rule) => !have.has(rule.tag.toLowerCase()));
 }
 
+/** Spend guard (per server process): one check per contact per 10 minutes, at most 2,000 per account a day. */
+const CONTACT_COOLDOWN_MS = 10 * 60_000;
+const DAILY_CAP = 2000;
+const lastChecked = new Map<string, number>();
+const daily = new Map<string, { day: string; count: number }>();
+
+export function allowAutoTagCheck(botId: string, contactId: string, now = Date.now()) {
+  const last = lastChecked.get(contactId);
+  if (last !== undefined && now - last < CONTACT_COOLDOWN_MS) return false;
+  const day = new Date(now).toISOString().slice(0, 10);
+  const used = daily.get(botId);
+  const count = used?.day === day ? used.count : 0;
+  if (count >= DAILY_CAP) return false;
+  daily.set(botId, { day, count: count + 1 });
+  lastChecked.set(contactId, now);
+  if (lastChecked.size > 50_000) lastChecked.clear();
+  return true;
+}
+
 /** Background: tag the contact from their message. Never throws; tags fire rules, sequences and webhooks. */
 export async function applyAutoTags(input: { botId: string; brandName: string; settings: Record<string, unknown> | null; contactId: string; contactTags: string[]; text: string | null | undefined }) {
   try {
     if (!aiConfigured()) return;
     const candidates = autoTagCandidates(readAutoTags(input.settings), input.contactTags, input.text);
-    if (candidates.length === 0) return;
+    if (candidates.length === 0 || !allowAutoTagCheck(input.botId, input.contactId)) return;
     const matched = await classifyAutoTags(input.text!.trim(), candidates, input.brandName);
     for (const tag of matched) await addContactTag(input.botId, input.contactId, tag);
   } catch (error) {

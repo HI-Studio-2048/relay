@@ -327,4 +327,5 @@ CREATE TABLE IF NOT EXISTS contact_aliases (
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (bot_id, external_user_id)
 );
+ALTER TABLE contact_tags ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 `;

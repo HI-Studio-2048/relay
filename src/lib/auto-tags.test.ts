@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { autoTagCandidates, readAutoTags } from "@/lib/auto-tags";
+import { allowAutoTagCheck, autoTagCandidates, readAutoTags } from "@/lib/auto-tags";
 
 describe("auto-tags", () => {
   it("keeps only complete rules, trimmed and capped", () => {
@@ -17,5 +17,12 @@ describe("auto-tags", () => {
     expect(autoTagCandidates(rules, ["wholesale"], "do you do bulk orders?").map((rule) => rule.tag)).toEqual(["refund"]);
     expect(autoTagCandidates(rules, [], "/start")).toEqual([]);
     expect(autoTagCandidates(rules, [], "hi")).toEqual([]);
+  });
+
+  it("checks each contact at most once per 10 minutes", () => {
+    const t = 1_800_000_000_000;
+    expect(allowAutoTagCheck("bot-cd", "c-cd", t)).toBe(true);
+    expect(allowAutoTagCheck("bot-cd", "c-cd", t + 60_000)).toBe(false);
+    expect(allowAutoTagCheck("bot-cd", "c-cd", t + 11 * 60_000)).toBe(true);
   });
 });

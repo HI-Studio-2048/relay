@@ -97,6 +97,8 @@ export const contactTags = pgTable(
     tagId: text("tag_id")
       .notNull()
       .references(() => tags.id, { onDelete: "cascade" }),
+    /** Lets a save from an older snapshot keep tags added after it was loaded (see persistContact). */
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.contactId, table.tagId] })],
 );

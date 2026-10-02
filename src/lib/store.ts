@@ -28,6 +28,7 @@ export async function loadContactRecord(contactId: string): Promise<ContactRecor
   const db = await getDb();
   const [row] = await db.select().from(contacts).where(eq(contacts.id, contactId)).limit(1);
   if (!row) return null;
+  const [clock] = await db.select({ now: sql<string>`now()::text` }).from(contacts).where(eq(contacts.id, contactId)).limit(1);
   const fieldRows = await db
     .select({ key: customFields.key, value: contactFieldValues.value })
     .from(contactFieldValues)
@@ -48,6 +49,7 @@ export async function loadContactRecord(contactId: string): Promise<ContactRecor
     phone: row.phone,
     customFields: Object.fromEntries(fieldRows.map((field) => [field.key, field.value])),
     tags: tagRows.map((tag) => tag.name),
+    loadedAt: clock?.now,
     subscriptions: row.subscriptions ?? [],
     unsubscribed: row.unsubscribed ?? false,
     welcomed: row.welcomed ?? false,
@@ -76,7 +78,11 @@ export async function findContactByTelegram(botId: string, telegramUserId: strin
     .from(contactAliases)
     .where(and(eq(contactAliases.botId, botId), eq(contactAliases.externalUserId, telegramUserId)))
     .limit(1);
-  if (!alias) return null;
+  if (!alias) {
+    // A concurrent swap may have just moved this id onto the contact: look once more before calling it new.
+    const [moved] = await db.select().from(contacts).where(and(eq(contacts.botId, botId), eq(contacts.telegramUserId, telegramUserId))).limit(1);
+    return moved ? loadContactRecord(moved.id) : null;
+  }
   const swapped = await db.transaction(async (tx) => {
     const [owner] = await tx.select().from(contacts).where(eq(contacts.id, alias.contactId)).limit(1);
     if (!owner) return false;
@@ -173,11 +179,17 @@ export async function persistContact(
     );
 
   const wanted = new Set(record.tags);
+  // Only links that existed when this record was read count as removed: a tag added meanwhile (AI
+  // auto-tag, Stripe, a teammate) is kept rather than wiped by this older snapshot.
   const existingLinks = await db
     .select({ tagId: contactTags.tagId, name: tags.name })
     .from(contactTags)
     .innerJoin(tags, eq(tags.id, contactTags.tagId))
-    .where(eq(contactTags.contactId, record.id));
+    .where(
+      record.loadedAt
+        ? and(eq(contactTags.contactId, record.id), lte(contactTags.createdAt, sql`${record.loadedAt}::timestamptz`))
+        : eq(contactTags.contactId, record.id),
+    );
   for (const link of existingLinks) {
     if (!wanted.has(link.name)) {
       await db
@@ -204,6 +216,12 @@ export async function persistContact(
       .onConflictDoNothing();
   }
 
+  // The caller's record now matches the database: move its snapshot time forward (on the object itself,
+  // so rules and later steps holding it can remove tags this save just added).
+  if (record.loadedAt) {
+    const [clock] = await db.select({ now: sql<string>`now()::text` }).from(contacts).where(eq(contacts.id, record.id)).limit(1);
+    if (clock) record.loadedAt = clock.now;
+  }
   await syncContactSequences(botId, record, existing[0]?.subscriptions ?? []);
   if (!options.skipRules) await fireContactRules(botId, previous, record, { created: !existing[0] });
 }

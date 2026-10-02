@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { contactsFromCsv } from "@/lib/csv";
 import { getDb } from "@/lib/db";
-import { contacts } from "@/lib/db/schema";
+import { contactAliases, contacts } from "@/lib/db/schema";
 import { json, fail, readJson } from "@/lib/http";
 import { loadContactRecord, persistContact } from "@/lib/store";
 import type { ContactRecord } from "@/lib/types";
@@ -77,7 +77,15 @@ export async function POST(request: Request) {
           .from(contacts)
           .where(and(eq(contacts.botId, body.botId), eq(contacts.telegramUserId, record.telegramUserId)))
           .limit(1);
-        if (clash) {
+        // An id that belongs to a merged contact (alias) is that person too: don't split them again.
+        const [aliased] = clash
+          ? []
+          : await db
+              .select({ id: contactAliases.contactId })
+              .from(contactAliases)
+              .where(and(eq(contactAliases.botId, body.botId), eq(contactAliases.externalUserId, record.telegramUserId)))
+              .limit(1);
+        if (clash || aliased) {
           skipped += 1;
           continue;
         }

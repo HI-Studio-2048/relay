@@ -286,6 +286,8 @@ export type ContactRecord = {
   phone: string | null;
   customFields: Record<string, string>;
   tags: string[];
+  /** Database time this record was read; a later save only removes tags that existed by then. */
+  loadedAt?: string;
   subscriptions?: string[];
   unsubscribed?: boolean;
   welcomed?: boolean;
