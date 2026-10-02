@@ -9,6 +9,7 @@ import { getDb } from "@/lib/db";
 import { flows, tags } from "@/lib/db/schema";
 import { RULE_ACTIONS, RULE_TRIGGERS, listRules } from "@/lib/rules";
 import { listSequences } from "@/lib/sequences";
+import { RuleActions } from "./rule-actions";
 import { CreateRuleForm } from "./create-rule-form";
 
 export const dynamic = "force-dynamic";
@@ -48,7 +49,7 @@ export default async function RulesPage() {
           icon={ListFilter}
           tone="action"
           title="Rules"
-        description="ManyChat-style rules: when a tag, list, or field changes on a contact, run an action — subscribe to a sequence, add or remove a tag, start a flow, or notify the admin."
+        description="When something happens to a contact — a tag, list or field changes, they are new, reach a goal, or rate a chat — run an action: sequence, tag, field, flow, assignment, or a team alert."
       />
       <CanvasCard className="p-4">
         <CreateRuleForm
@@ -68,13 +69,17 @@ export default async function RulesPage() {
       ) : (
         <div className="space-y-2">
           {rules.map((rule) => (
-            <CanvasCard key={rule.id} className="p-4">
-              <p className="font-medium">{rule.name}</p>
-              <p className="text-sm text-muted-foreground">
-                When {label(RULE_TRIGGERS, rule.triggerType).toLowerCase()} “{rule.triggerValue}” →{" "}
-                {label(RULE_ACTIONS, rule.actionType).toLowerCase()} “
-                {rule.actionType === "start_flow" ? flowName(rule.actionValue ?? "") : rule.actionValue}”
-              </p>
+            <CanvasCard key={rule.id} className="flex items-start gap-3 p-4">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">{rule.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  When {label(RULE_TRIGGERS, rule.triggerType).toLowerCase()}
+                  {rule.triggerValue?.trim() ? ` “${rule.triggerValue}”` : ""} →{" "}
+                  {label(RULE_ACTIONS, rule.actionType).toLowerCase()} “
+                  {rule.actionType === "start_flow" ? flowName(rule.actionValue ?? "") : rule.actionValue}”
+                </p>
+              </div>
+              <RuleActions id={rule.id} botId={bot.id} isActive={rule.isActive} />
             </CanvasCard>
           ))}
         </div>
