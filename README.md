@@ -65,10 +65,19 @@ Local-only `POST /api/dev/seed` (disabled in production) creates a demo bot, a l
 | `MEDIA_DIR` | no | Flow image/GIF uploads. Default `.data/media` |
 | `ANTHROPIC_API_KEY` | for AI | Enables AI Steps, auto-reply, Live Chat suggestions and the flow builder (Claude) |
 | `ZERNIO_API_BASE` | no | Override the Zernio API origin (default `https://zernio.com/api`) |
+| `ADMIN_TELEGRAM_CHAT_ID` | no | Also send team alerts to a Telegram chat (Slack / Discord / Teams alerts are set per account in Settings) |
 
 Never commit tokens or `.env*`. Tokens are never logged (outbound logs are redacted).
 
-## Connect a bot
+## Connect every social account (Zernio)
+
+1. Connect Instagram, Facebook, WhatsApp, TikTok, X, LinkedIn and the rest in [Zernio](https://zernio.com).
+2. In Zernio → Settings → API keys, create a key.
+3. In Relay → **Settings**, choose **All socials (Zernio)**, paste the key and connect. Relay lists the linked accounts and registers its own signed webhook (DMs, comments, referrals) — set `PUBLIC_URL` first so Zernio can reach it.
+4. Optional, also in Settings: **Payments** (Stripe webhook for revenue attribution), **Team alerts** (Slack / Discord / Teams), **Fields**, **Tags** and **Team**.
+5. Start from a template under **Flows**, test it with **Test**, then switch it on.
+
+## Connect a Telegram bot
 
 1. Open Telegram and talk to [@BotFather](https://t.me/BotFather).
 2. `/newbot`, copy the token. Do not paste it into chat logs or commit it.
@@ -104,7 +113,7 @@ Keyword / command / growth-link flows work the same way: set the trigger, then a
 **Admin → Growth → Links** creates trackable Telegram start links. Each link has a slug (Telegram start param), optional tag, optional linked flow, and optional UTM source/medium/campaign.
 
 - Short URL `/go/<slug>` increments the click count, then 302s to `https://t.me/<bot>?start=<slug>`.
-- QR is a `api.qrserver.com` image of the short URL (no extra dependency).
+- QR codes are rendered by Relay itself (`/api/qr`, SVG), so links are not shared with a third-party QR service.
 - Telegram `/start <slug>` attributes the contact (tag + UTM fields), increments starts, and kicks the linked flow. Attribution is applied before the flow runs so conditions can see the tag.
 - Linked flows are matched through the engine’s existing `start_param` trigger — the flow canvas is unchanged.
 
