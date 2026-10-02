@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { ContactAvatar } from "@/components/chrome/avatar";
 import { PageHeader } from "@/components/chrome/page-header";
 import { PlatformBadge } from "@/components/chrome/platform-badge";
+import { DuplicatesBanner } from "./duplicates-banner";
 import { SavedSegments, SegmentBuilder, type SegmentOptions } from "@/components/segment-builder";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client";
@@ -180,6 +181,8 @@ export function ContactsClient({
           <SegmentBuilder value={segment} options={options} onChange={setSegment} showSaved={false} />
         </div>
       ) : null}
+
+      <DuplicatesBanner botId={botId} />
 
       <SavedSegments value={segment} onChange={(next) => setSegment(next)} />
 

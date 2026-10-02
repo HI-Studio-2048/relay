@@ -95,3 +95,19 @@ describe("saved segments", () => {
     expect(readSavedSegments(null)).toEqual([]);
   });
 });
+
+describe("duplicate contacts", () => {
+  it("pairs people who share an email or phone, keeping the most recent", async () => {
+    const { findDuplicatePairs } = await import("@/lib/contact-merge");
+    const pairs = findDuplicatePairs([
+      { id: "ig", email: "Ana@x.co", phone: null, lastAt: 200 },
+      { id: "wa", email: "ana@x.co", phone: "+1 (555) 000-1111", lastAt: 100 },
+      { id: "fb", email: null, phone: "5550001111", lastAt: 50 },
+      { id: "other", email: "bo@x.co", phone: "123", lastAt: 10 },
+    ]);
+    expect(pairs).toEqual([
+      { keepId: "ig", dropId: "wa", reason: "same email" },
+      { keepId: "wa", dropId: "fb", reason: "same phone" },
+    ]);
+  });
+});
