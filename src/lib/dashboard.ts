@@ -5,6 +5,7 @@ import { bots, contacts, flowEvents, flows, growthLinks, messages, teamMembers }
 import { readAiSettings } from "@/lib/ai";
 import { buildTeamReport } from "@/lib/team-report";
 import { listInboxThreads } from "@/lib/store";
+import { readHours } from "@/lib/starters";
 
 const DAY = 86_400_000;
 
@@ -140,3 +141,31 @@ export async function loadChecklist(botId: string): Promise<ChecklistItem[]> {
     { id: "team", label: "Add your team", done: team.length > 0, href: "/setup", hint: "Assign conversations in Live Chat." },
   ];
 }
+
+/**
+ * When people write in: inbound messages over the last `days`, by weekday (0 = Monday) and hour, in the
+ * account's business-hours time zone. Returns a 7×24 grid of counts.
+ */
+export async function loadActivityHeatmap(botId: string, days = 28) {
+  const db = await getDb();
+  const [bot] = await db.select({ settings: bots.settings }).from(bots).where(eq(bots.id, botId)).limit(1);
+  const timezone = readHours(bot?.settings).timezone;
+  const local = sql`(${messages.createdAt} at time zone ${timezone})`;
+  const rows = await db
+    .select({
+      dow: sql<number>`(extract(isodow from ${local})::int - 1)`,
+      hour: sql<number>`extract(hour from ${local})::int`,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(messages)
+    .where(and(eq(messages.botId, botId), eq(messages.direction, "inbound"), gte(messages.createdAt, new Date(Date.now() - days * DAY))))
+    .groupBy(sql`1`, sql`2`);
+  const grid = Array.from({ length: 7 }, () => new Array<number>(24).fill(0));
+  for (const row of rows) {
+    const dow = Number(row.dow);
+    const hour = Number(row.hour);
+    if (grid[dow] && hour >= 0 && hour < 24) grid[dow]![hour] = Number(row.count);
+  }
+  return { grid, timezone };
+}
+

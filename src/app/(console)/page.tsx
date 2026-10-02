@@ -10,7 +10,8 @@ import { CanvasCard, ToneChip, type ToneName } from "@/components/chrome/tone";
 import { Button } from "@/components/ui/button";
 import { CHANNELS } from "@/lib/channels/types";
 import { currentBot } from "@/lib/current-bot";
-import { loadChecklist, loadDashboard, loadTeamReport } from "@/lib/dashboard";
+import { loadActivityHeatmap, loadChecklist, loadDashboard, loadTeamReport } from "@/lib/dashboard";
+import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { formatDuration } from "@/lib/team-report";
 import { WeeklyDigest } from "@/components/weekly-digest";
 import type { LucideIcon } from "lucide-react";
@@ -83,7 +84,12 @@ export default async function OverviewPage() {
     );
   }
 
-  const [data, checklist, team] = await Promise.all([loadDashboard(bot.id), loadChecklist(bot.id), loadTeamReport(bot.id)]);
+  const [data, checklist, team, heatmap] = await Promise.all([
+    loadDashboard(bot.id),
+    loadChecklist(bot.id),
+    loadTeamReport(bot.id),
+    loadActivityHeatmap(bot.id),
+  ]);
   const remaining = checklist.filter((item) => !item.done);
   const weekDelta = data.newPreviousWeek > 0 ? Math.round(((data.newThisWeek - data.newPreviousWeek) / data.newPreviousWeek) * 100) : null;
   const automatedShare = data.week.outbound ? Math.round((data.week.automated / data.week.outbound) * 100) : 0;
@@ -290,6 +296,16 @@ export default async function OverviewPage() {
           )}
         </CanvasCard>
       </div>
+
+      <CanvasCard className="min-w-0 space-y-3 p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <p className="font-heading text-[15px] text-[#1b1f24]">When people message you · 4 weeks</p>
+          <Link href="/starters" className="text-[12px] text-[#0084ff] hover:underline">
+            Business hours
+          </Link>
+        </div>
+        <ActivityHeatmap grid={heatmap.grid} timezone={heatmap.timezone} />
+      </CanvasCard>
 
       {team.humanReplies > 0 ? (
         <CanvasCard className="min-w-0 space-y-3 p-4">
