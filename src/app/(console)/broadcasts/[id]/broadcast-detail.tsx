@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { SendTest } from "./send-test";
 import { cn } from "@/lib/utils";
 
 export type BroadcastView = {
@@ -144,10 +145,11 @@ export function BroadcastDetail({
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <SendTest broadcastId={broadcast.id} />
             <form
               method="POST"
               action={`/api/broadcasts/${broadcast.id}/confirm`}
-              className="space-y-3"
+              className="mt-3 space-y-3"
             >
               <div className="space-y-1">
                 <Label htmlFor="confirm-phrase">Type CONFIRM</Label>
