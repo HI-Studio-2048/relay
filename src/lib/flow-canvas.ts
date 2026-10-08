@@ -1,5 +1,6 @@
 import type {
   CaptureField,
+  CaptureValidation,
   ConditionCheck,
   ConditionOp,
   FlowCanvasLayout,
@@ -80,7 +81,14 @@ export type CanvasNodeData =
   | { kind: "message"; text: string; media?: FlowMedia }
   | { kind: "media"; text: string; media?: FlowMedia }
   | { kind: "buttons"; text: string; buttons: CanvasButton[]; media?: FlowMedia }
-  | { kind: "capture"; field: CaptureField; prompt: string; skippable?: boolean }
+  | {
+      kind: "capture";
+      field: CaptureField;
+      prompt: string;
+      skippable?: boolean;
+      validation?: CaptureValidation;
+      retryText?: string;
+    }
   | { kind: "form"; intro: string; fields: FormField[] }
   | { kind: "tag"; tagName: string; action: TagAction }
   | { kind: "set_field"; field: CaptureField; value: string }
@@ -323,6 +331,19 @@ function messageNodeFromChain(chain: ChainStep[], position: { x: number; y: numb
   };
 }
 
+/** Optional User Input settings, copied only when set so saved definitions stay minimal. */
+function captureOptions(source: {
+  skippable?: boolean;
+  validation?: CaptureValidation;
+  retryText?: string;
+}): { skippable?: true; validation?: CaptureValidation; retryText?: string } {
+  return {
+    ...(source.skippable ? { skippable: true as const } : {}),
+    ...(source.validation && source.validation !== "text" ? { validation: source.validation } : {}),
+    ...(source.retryText?.trim() ? { retryText: source.retryText } : {}),
+  };
+}
+
 function nodeFromStep(step: FlowStep, position: { x: number; y: number }): CanvasNode {
   if (step.type === "text") {
     return messageNodeFromChain([step], position);
@@ -332,7 +353,7 @@ function nodeFromStep(step: FlowStep, position: { x: number; y: number }): Canva
       id: step.id,
       type: "capture",
       position,
-      data: { kind: "capture", field: step.field, prompt: step.prompt, ...(step.skippable ? { skippable: true } : {}) },
+      data: { kind: "capture", field: step.field, prompt: step.prompt, ...captureOptions(step) },
     };
   }
   if (step.type === "tag") {
@@ -693,7 +714,7 @@ export function canvasToDefinition(graph: CanvasGraph): FlowDefinition {
         type: "capture",
         field: node.data.field,
         prompt: node.data.prompt,
-        ...(node.data.skippable ? { skippable: true } : {}),
+        ...captureOptions(node.data),
         next: nextFromHandle(graph.edges, node.id, "next") ?? "",
       });
       continue;
@@ -875,7 +896,7 @@ export function engineDefinition(definition: FlowDefinition): FlowDefinition {
           type: "capture",
           field: step.field,
           prompt: step.prompt,
-          ...(step.skippable ? { skippable: true as const } : {}),
+          ...captureOptions(step),
           next: step.next,
         };
       }

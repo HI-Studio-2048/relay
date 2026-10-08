@@ -1,3 +1,4 @@
+import { requireRowAccess } from "@/lib/auth/resources";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
@@ -7,6 +8,7 @@ import { loadContactRecord, persistContact } from "@/lib/store";
 export async function GET(_request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("contact", id);
     const contact = await loadContactRecord(id);
     if (!contact) return json({ error: "Contact not found" }, 404);
     return json({ contact });
@@ -18,6 +20,7 @@ export async function GET(_request: Request, context: RouteParams<{ id: string }
 export async function PATCH(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("contact", id);
     const contact = await loadContactRecord(id);
     if (!contact) return json({ error: "Contact not found" }, 404);
     const db = await getDb();

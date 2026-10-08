@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import { ownsBot } from "@/lib/auth/resources";
 import { getDb } from "@/lib/db";
 import { contacts, customFields, tags } from "@/lib/db/schema";
 import { loadContactRecord } from "@/lib/store";
@@ -9,17 +10,18 @@ export const dynamic = "force-dynamic";
 
 export default async function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const contact = await loadContactRecord(id);
-  if (!contact) notFound();
   const db = await getDb();
   const [row] = await db.select().from(contacts).where(eq(contacts.id, id)).limit(1);
+  if (!row || !(await ownsBot(row.botId))) notFound();
+  const contact = await loadContactRecord(id);
+  if (!contact) notFound();
   const [fieldRows, tagRows] = await Promise.all([
-    db.select().from(customFields).where(eq(customFields.botId, row!.botId)),
-    db.select().from(tags).where(eq(tags.botId, row!.botId)),
+    db.select().from(customFields).where(eq(customFields.botId, row.botId)),
+    db.select().from(tags).where(eq(tags.botId, row.botId)),
   ]);
   return (
     <ContactEditor
-      botId={row!.botId}
+      botId={row.botId}
       initialContact={contact}
       initialFields={fieldRows}
       initialTags={tagRows}

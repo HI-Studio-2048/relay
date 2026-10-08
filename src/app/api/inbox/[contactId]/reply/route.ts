@@ -1,3 +1,4 @@
+import { requireRowAccess } from "@/lib/auth/resources";
 import { eq } from "drizzle-orm";
 import { accountFromRow, sendChannelReply } from "@/lib/channels";
 import { getDb } from "@/lib/db";
@@ -9,6 +10,7 @@ import { pauseContactAutomation, saveMessage } from "@/lib/store";
 export async function POST(request: Request, context: RouteParams<{ contactId: string }>) {
   try {
     const { contactId } = await context.params;
+    await requireRowAccess("contact", contactId);
     const body = await readJson<{ text?: string }>(request);
     if (!body.text?.trim()) return json({ error: "Message text is required" }, 400);
     const db = await getDb();

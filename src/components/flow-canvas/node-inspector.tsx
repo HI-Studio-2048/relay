@@ -23,8 +23,10 @@ import {
   type MessageBlock,
   type SendMessageData,
 } from "@/lib/flow-canvas";
+import { CAPTURE_VALIDATIONS, defaultRetryText, effectiveValidation } from "@/lib/lead-capture";
 import type {
   CaptureField,
+  CaptureValidation,
   ConditionOp,
   FormField,
   HttpMethod,
@@ -828,6 +830,9 @@ function CaptureEditor({
   customFields: InspectorField[];
   onChange: (data: Extract<CanvasNodeData, { kind: "capture" }>) => void;
 }) {
+  // Email and phone fields always check their format, so the select shows that instead of "Any text".
+  const validation = effectiveValidation(data.field, data.validation);
+  const validationLabel = CAPTURE_VALIDATIONS.find((item) => item.value === validation)!.label;
   return (
     <div className="space-y-3">
       <FieldSelect
@@ -843,6 +848,46 @@ function CaptureEditor({
           onChange={(event) => onChange({ ...data, prompt: event.target.value })}
         />
       </div>
+      <div className="space-y-1">
+        <Label>Reply type</Label>
+        <select
+          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          value={validation}
+          onChange={(event) => {
+            const next = { ...data };
+            const value = event.target.value as CaptureValidation;
+            if (value === "text") delete next.validation;
+            else next.validation = value;
+            onChange(next);
+          }}
+        >
+          {CAPTURE_VALIDATIONS.map((item) => (
+            <option key={item.value} value={item.value}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      {validation !== "text" ? (
+        <div className="space-y-1">
+          <Label>Retry message</Label>
+          <Textarea
+            rows={2}
+            value={data.retryText ?? ""}
+            placeholder={defaultRetryText(validation)}
+            onChange={(event) => {
+              const next = { ...data };
+              if (event.target.value) next.retryText = event.target.value;
+              else delete next.retryText;
+              onChange(next);
+            }}
+          />
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Sent when the answer is not a valid {validationLabel === "URL" ? "URL" : validationLabel.toLowerCase()}. The
+            question stays open until they answer{data.skippable ? " or tap Skip" : ""}.
+          </p>
+        </div>
+      ) : null}
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"

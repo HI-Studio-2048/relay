@@ -1,3 +1,4 @@
+import { requireUserId } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import { encryptSecret, randomSecret } from "@/lib/crypto";
 import { getDb } from "@/lib/db";
@@ -12,13 +13,15 @@ export async function POST() {
   }
 
   try {
+    const userId = await requireUserId();
     const db = await getDb();
-    const existing = await db.select().from(bots);
+    const existing = await db.select().from(bots).where(eq(bots.ownerId, userId));
     let bot = existing[0];
     if (!bot) {
       const id = crypto.randomUUID();
       await db.insert(bots).values({
         id,
+        ownerId: userId,
         name: "@relay_demo_bot",
         telegramUsername: "relay_demo_bot",
         telegramBotId: "0",
@@ -35,7 +38,7 @@ export async function POST() {
       await seedBotDefaults(bot.id);
     }
 
-    const contactId = "demo-contact-daniel";
+    const contactId = `demo-contact-${bot.id}`;
     await persistContact(bot.id, {
       id: contactId,
       telegramUserId: "1001",

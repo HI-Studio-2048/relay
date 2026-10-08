@@ -1,10 +1,11 @@
+import { requireUserId } from "@/lib/auth";
 import { connectChannelAccount, listBots } from "@/lib/bots";
 import { CHANNEL_IDS, type ChannelId } from "@/lib/channels/types";
 import { json, fail, readJson } from "@/lib/http";
 
 export async function GET() {
   try {
-    return json({ bots: await listBots() });
+    return json({ bots: await listBots(await requireUserId()) });
   } catch (error) {
     return fail(error);
   }
@@ -12,6 +13,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const ownerId = await requireUserId();
     const body = await readJson<{
       channel?: string;
       token?: string;
@@ -29,6 +31,7 @@ export async function POST(request: Request) {
     }
     const bot = await connectChannelAccount({
       channel,
+      ownerId,
       token: body.token,
       externalAccountId: body.externalAccountId ?? null,
       appSecret: body.appSecret ?? null,

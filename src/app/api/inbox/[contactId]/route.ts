@@ -1,12 +1,14 @@
+import { requireRowAccess } from "@/lib/auth/resources";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { contacts, flows } from "@/lib/db/schema";
 import { json, fail, type RouteParams } from "@/lib/http";
-import { listMessages, loadActiveSession, loadContactRecord } from "@/lib/store";
+import { listMessages, loadActiveSession, loadContactRecord, markInboxRead } from "@/lib/store";
 
 export async function GET(_request: Request, context: RouteParams<{ contactId: string }>) {
   try {
     const { contactId } = await context.params;
+    await requireRowAccess("contact", contactId);
     const contact = await loadContactRecord(contactId);
     if (!contact) return json({ error: "Contact not found" }, 404);
     const db = await getDb();
@@ -15,6 +17,7 @@ export async function GET(_request: Request, context: RouteParams<{ contactId: s
       listMessages(contactId),
       loadActiveSession(contactId),
       row ? db.select().from(flows).where(eq(flows.botId, row.botId)) : Promise.resolve([]),
+      markInboxRead(contactId),
     ]);
     return json({
       contact,

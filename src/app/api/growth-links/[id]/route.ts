@@ -1,3 +1,4 @@
+import { requireRowAccess } from "@/lib/auth/resources";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { growthLinks } from "@/lib/db/schema";
@@ -6,6 +7,7 @@ import { fail, json, readJson, type RouteParams } from "@/lib/http";
 export async function DELETE(request: Request, { params }: RouteParams<{ id: string }>) {
   try {
     const { id } = await params;
+    await requireRowAccess("growthLink", id);
     const body = await readJson<{ confirm?: boolean }>(request);
     if (body.confirm !== true) return json({ error: "confirm: true is required" }, 400);
     const db = await getDb();

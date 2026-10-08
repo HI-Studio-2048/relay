@@ -1,3 +1,4 @@
+import { AccessError } from "@/lib/auth";
 import { BroadcastConfirmError } from "@/lib/broadcast";
 import { MediaError } from "@/lib/media";
 import { ChannelApiError } from "@/lib/channels/meta";
@@ -9,6 +10,9 @@ export function json(data: unknown, status = 200) {
 }
 
 export function fail(error: unknown, fallback = "Request failed") {
+  if (error instanceof AccessError) {
+    return json({ error: error.message }, error.status);
+  }
   if (error instanceof BroadcastConfirmError) {
     return json({ error: error.message, code: error.code }, 409);
   }

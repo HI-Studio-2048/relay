@@ -31,6 +31,9 @@ export type FlowEffect =
 
 export type CaptureField = "name" | "email" | "phone" | `custom:${string}`;
 
+/** ManyChat User Input "reply type": what counts as a valid answer. */
+export type CaptureValidation = "text" | "number" | "email" | "phone" | "url" | "date";
+
 export type FlowButton = {
   text: string;
   next?: string;
@@ -96,6 +99,10 @@ export type FlowStep =
       prompt: string;
       /** ManyChat "Skip" button: the contact can move on without answering. */
       skippable?: boolean;
+      /** Reply type the answer must match; omitted means any text. */
+      validation?: CaptureValidation;
+      /** Sent when the answer does not match `validation`; a default per type is used when empty. */
+      retryText?: string;
       next: string;
     }
   | {

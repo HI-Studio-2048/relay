@@ -1,3 +1,4 @@
+import { requireRowAccess } from "@/lib/auth/resources";
 import { FlowDispatchError, startFlowForContact } from "@/lib/flow-dispatch";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
 
@@ -5,6 +6,7 @@ import { json, fail, readJson, type RouteParams } from "@/lib/http";
 export async function POST(request: Request, context: RouteParams<{ contactId: string }>) {
   try {
     const { contactId } = await context.params;
+    await requireRowAccess("contact", contactId);
     const body = await readJson<{ flowId?: string }>(request);
     if (!body.flowId) return json({ error: "flowId is required" }, 400);
     const result = await startFlowForContact({ contactId, flowId: body.flowId });

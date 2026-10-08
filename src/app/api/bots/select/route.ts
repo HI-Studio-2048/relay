@@ -1,3 +1,4 @@
+import { requireUserId } from "@/lib/auth";
 import { getBot } from "@/lib/bots";
 import { BOT_COOKIE } from "@/lib/current-bot";
 import { json, fail, readJson } from "@/lib/http";
@@ -7,7 +8,7 @@ export async function POST(request: Request) {
   try {
     const body = await readJson<{ botId?: string }>(request);
     if (!body.botId) return json({ error: "botId is required" }, 400);
-    const bot = await getBot(body.botId);
+    const bot = await getBot(body.botId, await requireUserId());
     if (!bot) return json({ error: "Account not found" }, 404);
     const response = json({ ok: true });
     response.headers.append(

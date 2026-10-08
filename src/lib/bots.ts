@@ -1,7 +1,7 @@
 import { syncBotCommands } from "@/lib/bot-commands";
 import { graphGet } from "@/lib/channels/meta";
 import { channelOf, type ChannelId } from "@/lib/channels/types";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { decryptSecret, encryptSecret, randomSecret } from "@/lib/crypto";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
@@ -27,7 +27,14 @@ export function publicBot(row: typeof bots.$inferSelect) {
   };
 }
 
-export async function connectBot(token: string, origin?: string) {
+/** One channel account can only live in one workspace; refuse to take it over from another user. */
+function assertOwnable(match: typeof bots.$inferSelect | undefined, ownerId: string) {
+  if (match?.ownerId && match.ownerId !== ownerId) {
+    throw new Error("This account is already connected to another Relay workspace");
+  }
+}
+
+export async function connectBot(token: string, ownerId: string, origin?: string) {
   const me = await getMe(token.trim());
   const db = await getDb();
   const existing = await db.select().from(bots);
@@ -38,6 +45,7 @@ export async function connectBot(token: string, origin?: string) {
       return row.telegramBotId === String(me.id);
     }
   });
+  assertOwnable(match, ownerId);
 
   const webhookSecret = match?.webhookSecret ?? randomSecret();
   const id = match?.id ?? crypto.randomUUID();
@@ -49,6 +57,7 @@ export async function connectBot(token: string, origin?: string) {
   }
 
   const values = {
+    ownerId,
     name: me.username ? `@${me.username}` : me.first_name ?? "Telegram bot",
     channel: "telegram",
     telegramUsername: me.username ?? null,
@@ -76,6 +85,8 @@ export async function connectBot(token: string, origin?: string) {
 
 export type ChannelConnectInput = {
   channel: ChannelId;
+  /** The user connecting the account; they become its owner. */
+  ownerId: string;
   token: string;
   /** Page id / Instagram account id / WhatsApp phone number id. Required for Meta channels. */
   externalAccountId?: string | null;
@@ -115,7 +126,7 @@ async function describeMetaAccount(channel: ChannelId, token: string, accountId:
  * validate it against the Graph API, and hand back the webhook URL + verify token to paste in Meta's dashboard.
  */
 export async function connectChannelAccount(input: ChannelConnectInput) {
-  if (input.channel === "telegram") return connectBot(input.token, input.origin);
+  if (input.channel === "telegram") return connectBot(input.token, input.ownerId, input.origin);
   const token = input.token.trim();
   const accountId = (input.externalAccountId ?? "").trim();
   if (!accountId) {
@@ -128,12 +139,14 @@ export async function connectChannelAccount(input: ChannelConnectInput) {
   const db = await getDb();
   const existing = await db.select().from(bots);
   const match = existing.find((row) => channelOf(row.channel) === input.channel && row.externalAccountId === accountId);
+  assertOwnable(match, input.ownerId);
   const id = match?.id ?? crypto.randomUUID();
   const webhookSecret = input.verifyToken?.trim() || match?.webhookSecret || randomSecret(12);
   const originUrl = publicUrl(input.origin);
   const webhookUrl = originUrl ? `${originUrl}/api/meta/webhook/${id}` : null;
 
   const values = {
+    ownerId: input.ownerId,
     name: info.name,
     channel: input.channel,
     telegramUsername: info.handle,
@@ -208,15 +221,21 @@ export async function healthCheckBot(botId: string, origin?: string) {
   return { bot: publicBot(updated!), webhook: info, me };
 }
 
-export async function listBots() {
+/** The channel accounts one user owns. */
+export async function listBots(ownerId: string) {
   const db = await getDb();
-  const rows = await db.select().from(bots);
+  const rows = await db.select().from(bots).where(eq(bots.ownerId, ownerId));
   return rows.map(publicBot);
 }
 
-export async function getBot(botId: string) {
+/** A channel account, only if `ownerId` owns it. */
+export async function getBot(botId: string, ownerId: string) {
   const db = await getDb();
-  const [row] = await db.select().from(bots).where(eq(bots.id, botId)).limit(1);
+  const [row] = await db
+    .select()
+    .from(bots)
+    .where(and(eq(bots.id, botId), eq(bots.ownerId, ownerId)))
+    .limit(1);
   return row ? publicBot(row) : null;
 }
 

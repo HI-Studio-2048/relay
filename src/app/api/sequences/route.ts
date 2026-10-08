@@ -1,3 +1,4 @@
+import { requireBotAccess } from "@/lib/auth";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { sequences } from "@/lib/db/schema";
@@ -8,6 +9,7 @@ export async function GET(request: Request) {
   try {
     const botId = new URL(request.url).searchParams.get("botId");
     if (!botId) return json({ error: "botId is required" }, 400);
+    await requireBotAccess(botId);
     return json({ sequences: await listSequences(botId) });
   } catch (error) {
     return fail(error);
@@ -22,6 +24,7 @@ export async function POST(request: Request) {
       steps?: { delaySeconds?: number; body?: string }[];
     }>(request);
     if (!body.botId || !body.name?.trim()) return json({ error: "botId and name are required" }, 400);
+    await requireBotAccess(body.botId);
     const steps = (body.steps ?? []).map((step) => ({
       delaySeconds: step.delaySeconds ?? 0,
       body: step.body ?? "",
@@ -42,6 +45,7 @@ export async function DELETE(request: Request) {
     if (!body.id || !body.botId || body.confirm !== true) {
       return json({ error: "id, botId, and confirm: true are required" }, 400);
     }
+    await requireBotAccess(body.botId);
     const db = await getDb();
     await db.delete(sequences).where(and(eq(sequences.id, body.id), eq(sequences.botId, body.botId)));
     return json({ ok: true });

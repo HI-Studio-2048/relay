@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import { ownsBot } from "@/lib/auth/resources";
 import { getDb } from "@/lib/db";
 import { broadcasts } from "@/lib/db/schema";
 import { BroadcastDetail } from "./broadcast-detail";
@@ -17,7 +18,7 @@ export default async function BroadcastDetailPage({
   const query = await searchParams;
   const db = await getDb();
   const [broadcast] = await db.select().from(broadcasts).where(eq(broadcasts.id, id)).limit(1);
-  if (!broadcast) notFound();
+  if (!broadcast || !(await ownsBot(broadcast.botId))) notFound();
   return (
     <BroadcastDetail
       notice={query.queued ? "queued" : query.error}

@@ -10,6 +10,20 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+/** A customer login. Each user owns the channel accounts (bots) they connect. */
+export const users = pgTable(
+  "users",
+  {
+    id: text("id").primaryKey(),
+    email: text("email").notNull(),
+    name: text("name").notNull().default(""),
+    /** scrypt$<salt>$<hash>, see lib/auth/password.ts. */
+    passwordHash: text("password_hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("users_email_idx").on(table.email)],
+);
+
 /**
  * A connected channel account. Historically a Telegram bot; `channel` now selects the adapter.
  * `telegramUsername` doubles as the account handle (page name, IG username, WhatsApp display number)
@@ -18,6 +32,8 @@ import {
 export const bots = pgTable("bots", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  /** The user who connected this account; null only for rows created before accounts existed. */
+  ownerId: text("owner_id").references(() => users.id, { onDelete: "cascade" }),
   channel: text("channel").notNull().default("telegram"),
   telegramUsername: text("telegram_username"),
   telegramBotId: text("telegram_bot_id"),
@@ -54,6 +70,8 @@ export const contacts = pgTable(
     welcomed: boolean("welcomed").notNull().default(false),
     notes: text("notes").notNull().default(""),
     inboxStatus: text("inbox_status").notNull().default("open"),
+    /** Last time an agent opened the thread; inbound messages after this count as unread. */
+    inboxReadAt: timestamp("inbox_read_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

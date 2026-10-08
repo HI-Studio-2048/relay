@@ -1,3 +1,4 @@
+import { requireBotAccess } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { flows, growthLinks } from "@/lib/db/schema";
@@ -16,6 +17,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const botId = url.searchParams.get("botId");
     if (!botId) return json({ error: "botId is required" }, 400);
+    await requireBotAccess(botId);
     const flowId = url.searchParams.get("flowId");
     return json({
       links: await listGrowthLinks(botId, {
@@ -42,6 +44,7 @@ export async function POST(request: Request) {
       ensure?: boolean;
     }>(request);
     if (!body.botId) return json({ error: "botId is required" }, 400);
+    await requireBotAccess(body.botId);
     const db = await getDb();
     const origin = originFromRequest(request);
 

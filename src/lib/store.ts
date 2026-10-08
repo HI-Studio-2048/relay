@@ -280,7 +280,16 @@ export async function saveMessage(input: {
   });
 }
 
-export async function listInbox(botId: string) {
+export type InboxThreadRow = {
+  contact: typeof contacts.$inferSelect;
+  lastAt: Date;
+  lastBody: string | null;
+  lastDirection: string | null;
+  unread: boolean;
+};
+
+/** Conversations for the inbox list, newest first, with the last message and an unread flag. */
+export async function listInbox(botId: string): Promise<InboxThreadRow[]> {
   const db = await getDb();
   const latest = db
     .select({
@@ -292,14 +301,41 @@ export async function listInbox(botId: string) {
     .groupBy(messages.contactId)
     .as("latest");
 
-  return db
+  const rows = await db
     .select({
       contact: contacts,
       lastAt: latest.lastAt,
+      lastBody: messages.body,
+      lastDirection: messages.direction,
     })
     .from(latest)
     .innerJoin(contacts, eq(contacts.id, latest.contactId))
+    .leftJoin(messages, and(eq(messages.contactId, latest.contactId), eq(messages.createdAt, latest.lastAt)))
     .orderBy(desc(latest.lastAt));
+
+  const seen = new Set<string>();
+  return rows
+    .filter((row) => {
+      if (seen.has(row.contact.id)) return false;
+      seen.add(row.contact.id);
+      return true;
+    })
+    .map((row) => ({
+      ...row,
+      lastAt: new Date(row.lastAt),
+      unread: threadIsUnread(row.lastDirection, new Date(row.lastAt), row.contact.inboxReadAt),
+    }));
+}
+
+export function threadIsUnread(lastDirection: string | null, lastAt: Date, readAt: Date | null): boolean {
+  if (lastDirection !== "inbound") return false;
+  if (!readAt) return true;
+  return lastAt.getTime() > readAt.getTime();
+}
+
+export async function markInboxRead(contactId: string) {
+  const db = await getDb();
+  await db.update(contacts).set({ inboxReadAt: now() }).where(eq(contacts.id, contactId));
 }
 
 export async function listMessages(contactId: string) {

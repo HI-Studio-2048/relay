@@ -1,3 +1,4 @@
+import { requireBotAccess } from "@/lib/auth";
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { broadcasts, tags } from "@/lib/db/schema";
@@ -8,6 +9,7 @@ export async function GET(request: Request) {
   try {
     const botId = new URL(request.url).searchParams.get("botId");
     if (!botId) return json({ error: "botId is required" }, 400);
+    await requireBotAccess(botId);
     const db = await getDb();
     const rows = await db
       .select()
@@ -34,6 +36,7 @@ export async function POST(request: Request) {
     if (!body.botId || !body.text?.trim() || (!everyone && !body.tagId)) {
       return json({ error: "botId and text are required, plus a tagId unless audience is \"all\"." }, 400);
     }
+    await requireBotAccess(body.botId);
     const db = await getDb();
     let tagName: string | null = null;
     if (!everyone && body.tagId) {

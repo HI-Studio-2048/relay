@@ -1,3 +1,4 @@
+import { requireBotAccess } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { customFields } from "@/lib/db/schema";
@@ -7,6 +8,7 @@ export async function GET(request: Request) {
   try {
     const botId = new URL(request.url).searchParams.get("botId");
     if (!botId) return json({ error: "botId is required" }, 400);
+    await requireBotAccess(botId);
     const db = await getDb();
     const rows = await db.select().from(customFields).where(eq(customFields.botId, botId));
     return json({ fields: rows.filter((field) => !field.key.startsWith("_")) });
@@ -26,6 +28,7 @@ export async function POST(request: Request) {
     if (!body.botId || !body.key?.trim() || !body.label?.trim()) {
       return json({ error: "botId, key, and label are required" }, 400);
     }
+    await requireBotAccess(body.botId);
     const db = await getDb();
     const [field] = await db
       .insert(customFields)

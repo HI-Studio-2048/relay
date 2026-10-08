@@ -1,4 +1,11 @@
-import { applyCapturedValue, assignFieldValue, parseCaptureField } from "@/lib/lead-capture";
+import {
+  applyCapturedValue,
+  assignFieldValue,
+  defaultRetryText,
+  effectiveValidation,
+  parseCaptureField,
+  validateAnswer,
+} from "@/lib/lead-capture";
 import {
   compareKeywordPriority,
   isKeywordTrigger,
@@ -170,6 +177,15 @@ function applySubscribe(
   };
 }
 
+/** Reply options shared by a User Input question and its retry message. */
+function captureReplyExtras(step: Extract<FlowStep, { type: "capture" }>) {
+  return {
+    source: "flow" as const,
+    ...(step.field === "phone" ? { requestContact: true } : {}),
+    ...(step.skippable ? { keyboard: [SKIP_LABEL] } : {}),
+  };
+}
+
 /** ManyChat "Skip" quick reply on a User Input step. */
 export const SKIP_LABEL = "Skip";
 
@@ -278,12 +294,7 @@ export function executeFrom(
     }
 
     if (step.type === "capture") {
-      replies.push({
-        text: step.prompt,
-        source: "flow",
-        ...(step.field === "phone" ? { requestContact: true } : {}),
-        ...(step.skippable ? { keyboard: [SKIP_LABEL] } : {}),
-      });
+      replies.push({ text: step.prompt, ...captureReplyExtras(step) });
       current = { ...current, awaitingInput: true, formIndex: undefined, resumeAt: null };
       return { session: current, replies, contact: nextContact, effects };
     }
@@ -568,8 +579,20 @@ export function processInboundEvent(input: {
           inboundSaved,
         );
       }
+      const validation = effectiveValidation(step.field, step.validation);
+      const value = validateAnswer(validation, answer);
+      if (value === null) {
+        // ManyChat retry: stay on this question and say what a valid answer looks like.
+        return {
+          contact,
+          session: input.session,
+          replies: [{ text: step.retryText?.trim() || defaultRetryText(validation), ...captureReplyExtras(step) }],
+          inboundSaved,
+          effects: [],
+        };
+      }
       try {
-        contact = applyCapturedValue(contact, parseCaptureField(step.field), answer);
+        contact = applyCapturedValue(contact, parseCaptureField(step.field), value);
         const executed = executeFrom(
           flow.definition,
           { ...input.session, stepId: step.next, awaitingInput: false, formIndex: undefined },

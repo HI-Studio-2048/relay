@@ -4,8 +4,22 @@
     {
       "name": "relay-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 43173
+    },
+    {
+      "name": "relay-mcp-worktree",
+      "runtimeExecutable": "../Relay-mcp/node_modules/.bin/next",
+      "runtimeArgs": [
+        "dev",
+        "../Relay-mcp",
+        "--port",
+        "43174"
+      ],
+      "port": 43174
     }
   ]
 }

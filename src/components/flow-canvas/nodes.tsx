@@ -22,6 +22,7 @@ import { MediaThumb } from "@/components/flow-canvas/media-picker";
 import { MANYCHAT, NODE_TONE } from "@/components/flow-canvas/node-colors";
 import { cn } from "@/lib/utils";
 import { blockLabel, isMediaBlock, type CanvasNodeData } from "@/lib/flow-canvas";
+import { CAPTURE_VALIDATIONS } from "@/lib/lead-capture";
 
 type FlowNode<K extends CanvasNodeData["kind"]> = Node<Extract<CanvasNodeData, { kind: K }>, K>;
 
@@ -289,6 +290,12 @@ export function CaptureNode({ selected, data }: NodeProps<FlowNode<"capture">>) 
   const fieldLabel = data.field.startsWith("custom:")
     ? `custom · ${data.field.slice("custom:".length)}`
     : data.field;
+  const validation = data.validation && data.validation !== "text" ? data.validation : null;
+  const badges = [
+    validation ? `${CAPTURE_VALIDATIONS.find((item) => item.value === validation)!.label} only` : null,
+    data.field === "phone" ? "Share-phone button" : null,
+    data.skippable ? "Skip button" : null,
+  ].filter(Boolean);
   return (
     <NodeFrame selected={selected} kind="capture" icon={UserRound} title="User input">
       <Handle type="target" position={Position.Left} id="in" className={handleClass()} style={handleStyle("capture")} />
@@ -296,11 +303,9 @@ export function CaptureNode({ selected, data }: NodeProps<FlowNode<"capture">>) 
         {fieldLabel}
       </p>
       <Preview>{data.prompt || "Ask a question"}</Preview>
-      {data.field === "phone" || data.skippable ? (
+      {badges.length > 0 ? (
         <p className="text-[11px]" style={{ color: MANYCHAT.muted }}>
-          {[data.field === "phone" ? "Share-phone button" : null, data.skippable ? "Skip button" : null]
-            .filter(Boolean)
-            .join(" · ")}
+          {badges.join(" · ")}
         </p>
       ) : null}
       <Handle type="source" position={Position.Right} id="next" className={handleClass()} style={handleStyle("capture")} />

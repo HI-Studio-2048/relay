@@ -198,4 +198,16 @@ ALTER TABLE broadcasts ALTER COLUMN tag_id DROP NOT NULL;
 ALTER TABLE bots ADD COLUMN IF NOT EXISTS channel text NOT NULL DEFAULT 'telegram';
 ALTER TABLE bots ADD COLUMN IF NOT EXISTS external_account_id text;
 ALTER TABLE bots ADD COLUMN IF NOT EXISTS app_secret_encrypted text;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS inbox_read_at timestamptz;
+
+CREATE TABLE IF NOT EXISTS users (
+  id text PRIMARY KEY,
+  email text NOT NULL,
+  name text NOT NULL DEFAULT '',
+  password_hash text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx ON users(email);
+ALTER TABLE bots ADD COLUMN IF NOT EXISTS owner_id text REFERENCES users(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS bots_owner_idx ON bots(owner_id);
 `;

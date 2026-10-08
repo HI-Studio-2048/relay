@@ -1,3 +1,4 @@
+import { requireRowAccess } from "@/lib/auth/resources";
 import { eq } from "drizzle-orm";
 import { assertConfirm } from "@/lib/broadcast";
 import { getDb } from "@/lib/db";
@@ -7,6 +8,7 @@ import { json, fail, readJson, type RouteParams } from "@/lib/http";
 export async function DELETE(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("field", id);
     const body = await readJson<{ confirm?: unknown }>(request);
     assertConfirm(body.confirm, "Delete field");
     const db = await getDb();
