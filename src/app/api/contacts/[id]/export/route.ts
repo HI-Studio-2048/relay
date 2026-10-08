@@ -1,4 +1,5 @@
 import { asc, eq } from "drizzle-orm";
+import { requireRowAccess } from "@/lib/auth/resources";
 import { getDb } from "@/lib/db";
 import { flowEvents, flows, messages } from "@/lib/db/schema";
 import { publicContact } from "@/lib/developer";
@@ -9,6 +10,7 @@ import { loadContactRecord } from "@/lib/store";
 export async function GET(_request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("contact", id);
     const contact = await loadContactRecord(id);
     if (!contact) return json({ error: "Contact not found" }, 404);
     const db = await getDb();

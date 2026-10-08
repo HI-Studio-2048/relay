@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { bots, growthLinkEvents, growthLinks } from "@/lib/db/schema";
 import { nextShareSlug, presentGrowthLink, slugifyName } from "@/lib/growth";
@@ -35,10 +35,30 @@ export async function findGrowthLink(botId: string, slug: string) {
   return row ?? null;
 }
 
+/**
+ * Public /go and /widget links are shared across workspaces, so the oldest link with a slug wins;
+ * new links can't claim a slug another workspace already uses (see slugTakenElsewhere).
+ */
 export async function findGrowthLinkBySlug(slug: string) {
   const db = await getDb();
-  const [row] = await db.select().from(growthLinks).where(slugEquals(slug)).limit(1);
+  const [row] = await db
+    .select()
+    .from(growthLinks)
+    .where(slugEquals(slug))
+    .orderBy(growthLinks.createdAt)
+    .limit(1);
   return row ?? null;
+}
+
+/** True when another channel account already uses this slug for its public link. */
+export async function slugTakenElsewhere(botId: string, slug: string) {
+  const db = await getDb();
+  const [row] = await db
+    .select({ id: growthLinks.id })
+    .from(growthLinks)
+    .where(and(slugEquals(slug), ne(growthLinks.botId, botId)))
+    .limit(1);
+  return Boolean(row);
 }
 
 export async function recordGrowthClick(linkId: string) {
@@ -107,12 +127,10 @@ export async function findGrowthLinkByFlowId(botId: string, flowId: string) {
   return row ?? null;
 }
 
-export async function uniqueShareSlug(botId: string, preferred: string) {
+/** A slug free across every workspace, since /go/<slug> is one shared namespace. */
+export async function uniqueShareSlug(preferred: string) {
   const db = await getDb();
-  const rows = await db
-    .select({ slug: growthLinks.slug })
-    .from(growthLinks)
-    .where(eq(growthLinks.botId, botId));
+  const rows = await db.select({ slug: growthLinks.slug }).from(growthLinks);
   return nextShareSlug(
     preferred,
     rows.map((row) => row.slug),
@@ -129,7 +147,7 @@ export async function ensureFlowShareLink(input: {
   if (existing) return { link: existing, created: false };
 
   const preferred = input.preferredSlug?.trim() || slugifyName(input.flowName);
-  const slug = await uniqueShareSlug(input.botId, preferred);
+  const slug = await uniqueShareSlug(preferred);
   const db = await getDb();
   const [link] = await db
     .insert(growthLinks)

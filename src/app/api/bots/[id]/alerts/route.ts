@@ -1,3 +1,4 @@
+import { requireBotAccess } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
@@ -7,6 +8,7 @@ import { json, fail, readJson, type RouteParams } from "@/lib/http";
 export async function GET(_request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireBotAccess(id);
     const db = await getDb();
     const [bot] = await db.select().from(bots).where(eq(bots.id, id)).limit(1);
     if (!bot) return json({ error: "Account not found" }, 404);
@@ -20,6 +22,7 @@ export async function GET(_request: Request, context: RouteParams<{ id: string }
 export async function PUT(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireBotAccess(id);
     const body = await readJson<{ webhookUrl?: string }>(request);
     const url = body.webhookUrl?.trim() ?? "";
     if (url && !readAlerts({ alerts: { webhookUrl: url } }).webhookUrl) return json({ error: "Use the https:// webhook URL from Slack, Discord or Teams" }, 400);
@@ -37,6 +40,7 @@ export async function PUT(request: Request, context: RouteParams<{ id: string }>
 export async function POST(_request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireBotAccess(id);
     const delivered = await notifyAdmin("✅ Relay test alert: hand-offs, Notify admin steps and rule alerts will arrive here.", { botId: id });
     return delivered ? json({ ok: true }) : json({ error: "Nothing delivered — check the webhook URL" }, 400);
   } catch (error) {

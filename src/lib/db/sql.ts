@@ -328,4 +328,16 @@ CREATE TABLE IF NOT EXISTS contact_aliases (
   PRIMARY KEY (bot_id, external_user_id)
 );
 ALTER TABLE contact_tags ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+
+CREATE TABLE IF NOT EXISTS users (
+  id text PRIMARY KEY,
+  email text NOT NULL,
+  name text NOT NULL DEFAULT '',
+  password_hash text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx ON users(email);
+ALTER TABLE bots ADD COLUMN IF NOT EXISTS owner_id text REFERENCES users(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS bots_owner_idx ON bots(owner_id);
+ALTER TABLE team_members ADD COLUMN IF NOT EXISTS owner_id text REFERENCES users(id) ON DELETE CASCADE;
 `;

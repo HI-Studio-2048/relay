@@ -1,3 +1,4 @@
+import { requireBotAccess } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import { encryptSecret } from "@/lib/crypto";
 import { getDb } from "@/lib/db";
@@ -8,6 +9,7 @@ import { readStripe } from "@/lib/stripe";
 export async function GET(_request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireBotAccess(id);
     const db = await getDb();
     const [bot] = await db.select().from(bots).where(eq(bots.id, id)).limit(1);
     if (!bot) return json({ error: "Account not found" }, 404);
@@ -22,6 +24,7 @@ export async function GET(_request: Request, context: RouteParams<{ id: string }
 export async function PUT(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireBotAccess(id);
     const body = await readJson<{ webhookSecret?: string; goalName?: string; tag?: string; disconnect?: boolean }>(request);
     const db = await getDb();
     const [bot] = await db.select().from(bots).where(eq(bots.id, id)).limit(1);

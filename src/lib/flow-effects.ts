@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { channelTarget, sendChannelTyping, channelOf, type ChannelAccount } from "@/lib/channels";
 import { decryptSecret } from "@/lib/crypto";
 import { getDb } from "@/lib/db";
-import { bots } from "@/lib/db/schema";
+import { bots, users } from "@/lib/db/schema";
 import { adminTelegramChatId, publicUrl } from "@/lib/env";
 import { log } from "@/lib/logger";
 import { saveMessage } from "@/lib/store";
@@ -47,6 +47,23 @@ async function postAlert(botId: string, text: string, link?: string | null) {
 }
 
 /**
+ * The server operator's ADMIN_TELEGRAM_CHAT_ID only hears about the workspace owner's own accounts
+ * (RELAY_OWNER_EMAIL), and only through a Telegram bot that owner connected. Other customers'
+ * alerts go to their own alert webhook and never reach the operator's chat.
+ */
+async function ownerTelegramBot(botId: string | undefined) {
+  const ownerEmail = process.env.RELAY_OWNER_EMAIL?.trim().toLowerCase();
+  if (!botId || !ownerEmail) return null;
+  const db = await getDb();
+  const [owner] = await db.select({ id: users.id }).from(users).where(eq(users.email, ownerEmail)).limit(1);
+  if (!owner) return null;
+  const [target] = await db.select({ ownerId: bots.ownerId }).from(bots).where(eq(bots.id, botId)).limit(1);
+  if (target?.ownerId !== owner.id) return null;
+  const rows = await db.select().from(bots).where(eq(bots.ownerId, owner.id));
+  return rows.find((row) => channelOf(row.channel) === "telegram") ?? null;
+}
+
+/**
  * Tell the team: the account's alert webhook (Slack, Discord…) when set, plus the Telegram admin chat
  * when configured. Pass the contact to include a link to their conversation.
  */
@@ -62,12 +79,10 @@ export async function notifyAdmin(text: string, target?: { botId: string; contac
   }
   const adminChat = adminTelegramChatId();
   if (!adminChat) return delivered;
-  const db = await getDb();
-  const rows = await db.select().from(bots);
-  const telegram = rows.find((row) => channelOf(row.channel) === "telegram");
+  const telegram = await ownerTelegramBot(target?.botId);
   if (!telegram) {
-    log.warn("Admin notify skipped: no Telegram bot connected to deliver it");
-    return false;
+    log.warn("Admin Telegram notify skipped: not the workspace owner's account, or no Telegram bot to deliver it");
+    return delivered;
   }
   await sendMessage(decryptSecret(telegram.tokenEncrypted), adminChat, text);
   return true;

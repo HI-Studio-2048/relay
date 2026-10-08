@@ -1,6 +1,7 @@
 import { and, eq, gte, sql } from "drizzle-orm";
 import { Building2 } from "lucide-react";
 import { PageHeader } from "@/components/chrome/page-header";
+import { currentUserId } from "@/lib/auth";
 import { listBots } from "@/lib/bots";
 import { getDb } from "@/lib/db";
 import { contacts, flowEvents, flows } from "@/lib/db/schema";
@@ -13,7 +14,8 @@ export const dynamic = "force-dynamic";
 /** Agencies: every connected account (brand) at a glance, with one-click switching. */
 export default async function AccountsPage() {
   const db = await getDb();
-  const bots = await listBots();
+  const userId = await currentUserId();
+  const bots = userId ? await listBots(userId) : [];
   const weekAgo = new Date(Date.now() - 7 * 86_400_000);
   const monthAgo = new Date(Date.now() - 30 * 86_400_000);
   const rows: AccountRow[] = await Promise.all(

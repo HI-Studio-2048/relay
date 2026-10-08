@@ -1,5 +1,6 @@
 import { and, desc, eq, like, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import { ownsRow } from "@/lib/auth/resources";
 import { getDb } from "@/lib/db";
 import { contacts, customFields, flowEvents, flows, growthLinkEvents, growthLinks, messages, tags } from "@/lib/db/schema";
 import { loadContactRecord } from "@/lib/store";
@@ -10,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ContactDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  if (!(await ownsRow("contact", id))) notFound();
   const contact = await loadContactRecord(id);
   if (!contact) notFound();
   const db = await getDb();

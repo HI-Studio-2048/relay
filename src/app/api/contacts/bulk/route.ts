@@ -1,5 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { assertConfirm } from "@/lib/broadcast";
+import { requireBotAccess } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
 import { startFlowForContact } from "@/lib/flow-dispatch";
@@ -16,6 +17,7 @@ export async function POST(request: Request) {
     const ids = [...new Set(body.contactIds ?? [])].slice(0, 5000);
     const value = body.value?.trim() ?? "";
     if (!body.botId || ids.length === 0 || !body.action) return json({ error: "botId, contactIds and action are required" }, 400);
+    await requireBotAccess(body.botId);
     const db = await getDb();
     const owned = await db
       .select({ id: contacts.id })

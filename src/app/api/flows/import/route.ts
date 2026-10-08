@@ -1,3 +1,4 @@
+import { requireBotAccess } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { flows } from "@/lib/db/schema";
 import { FlowImportError, parseFlowImport } from "@/lib/flow-import";
@@ -8,6 +9,7 @@ export async function POST(request: Request) {
   try {
     const body = await readJson<{ botId?: string; flow?: unknown }>(request);
     if (!body.botId) return json({ error: "botId is required" }, 400);
+    await requireBotAccess(body.botId);
     const { flow, warnings } = parseFlowImport(body.flow);
     const db = await getDb();
     const [row] = await db

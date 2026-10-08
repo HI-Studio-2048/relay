@@ -58,7 +58,8 @@ Local-only `POST /api/dev/seed` (disabled in production) creates a demo bot, a l
 | `REDIS_URL` | prod | Queue + rate limits. Local fallback: memory |
 | `ENCRYPTION_KEY` | prod | 32-byte key (64 hex chars, base64, or 32-char utf8). Encrypts bot tokens |
 | `PUBLIC_URL` | prod | Public HTTPS origin used for `setWebhook` |
-| `ADMIN_PASSWORD` | recommended | Shared console password. If unset, the UI is open |
+| `SESSION_SECRET` | prod | Signs login cookies. Falls back to `ENCRYPTION_KEY` |
+| `RELAY_OWNER_EMAIL` / `RELAY_OWNER_PASSWORD` | first boot | Creates the workspace owner if missing and assigns accounts connected before logins existed. `RELAY_OWNER_NAME` is optional |
 | `WORKER_MODE` | no | `all` (default), `web`, or `worker` |
 | `TELEGRAM_SENDS_PER_SECOND` | no | Default 20, capped at 25 |
 | `PORT` | Railway | Next.js reads this automatically |
@@ -153,7 +154,7 @@ On a **Message**, **Image / GIF**, or **Buttons** node, upload or drop a JPEG/PN
 
 Instagram and Facebook allow one private reply to a comment until the person answers, so a comment flow's first message should carry a button (Relay adds a **Continue** button when it has none); the rest of the flow continues from the tap.
 
-When `ADMIN_PASSWORD` is set, Meta webhooks must be signed: add the app secret when connecting Instagram, Messenger or WhatsApp directly. Meta channels only deliver free-form messages inside the 24-hour window — use the **Last message within 24 hours** broadcast condition.
+In production, Meta webhooks must be signed: add the app secret when connecting Instagram, Messenger or WhatsApp directly. Meta channels only deliver free-form messages inside the 24-hour window — use the **Last message within 24 hours** broadcast condition.
 
 ## AI
 
@@ -198,7 +199,7 @@ v1 is a single web service: HTTP + webhook + in-process worker.
 1. Create a Railway project. Add **Postgres** and **Redis**.
 2. Create one service from this repo (or deploy the Dockerfile). Nixpacks: `npm run build` / `npm run start`.
 3. Attach `DATABASE_URL` and `REDIS_URL` from those plugins.
-4. Set `ENCRYPTION_KEY` (32 bytes), `PUBLIC_URL` (the Railway HTTPS domain), and `ADMIN_PASSWORD`.
+4. Set `ENCRYPTION_KEY` (32 bytes), `PUBLIC_URL` (the Railway HTTPS domain), and `RELAY_OWNER_EMAIL` / `RELAY_OWNER_PASSWORD` for your own login. Anyone else can sign up at `/signup` and gets their own workspace.
 5. Health check: `/api/health`.
 6. Generate a domain. Confirm `PUBLIC_URL` matches it, then connect the bot so the webhook URL is public.
 

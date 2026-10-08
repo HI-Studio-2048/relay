@@ -20,7 +20,9 @@ import {
   MessageCircleQuestion,
   Search,
   Building2,
+  LogOut,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useBot } from "@/components/bot-provider";
 import { CommandPalette } from "@/components/command-palette";
@@ -29,7 +31,9 @@ import { RelayLogo } from "@/components/chrome/relay-logo";
 import { StatusPill } from "@/components/chrome/status-pill";
 import { CanvasCard, ToneChip, type ToneName } from "@/components/chrome/tone";
 import { Button } from "@/components/ui/button";
+import type { PublicUser } from "@/lib/auth";
 import { CHANNELS } from "@/lib/channels/types";
+import { api } from "@/lib/client";
 import { cn } from "@/lib/utils";
 
 const GROUPS: {
@@ -106,7 +110,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
       {compact ? null : (
         <span>
           <span className="block font-heading text-[15px] leading-none tracking-tight text-[#1b1f24]">Relay</span>
-          <span className="mt-0.5 block text-[11px] text-[#6b7280]">HI Studio · Social automation</span>
+          <span className="mt-0.5 block text-[11px] text-[#6b7280]">Social automation</span>
         </span>
       )}
     </Link>
@@ -215,14 +219,53 @@ function BotDock({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+function AccountCard({ user }: { user: PublicUser }) {
+  const router = useRouter();
+  const [leaving, setLeaving] = useState(false);
+  const label = user.name || user.email;
+  const signOut = async () => {
+    setLeaving(true);
+    try {
+      await api("/api/auth/logout", { method: "POST" });
+    } finally {
+      router.replace("/login");
+      router.refresh();
+    }
+  };
+  return (
+    <div className="flex items-center gap-2.5 border-t border-[#e5e7eb] px-2 pt-3">
+      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#eef6ff] text-[12px] font-semibold text-[#0084ff] uppercase">
+        {label.slice(0, 1)}
+      </span>
+      <span className="min-w-0 flex-1">
+        {user.name ? <span className="block truncate text-[13px] font-medium text-[#1b1f24]">{user.name}</span> : null}
+        <span className="block truncate text-[11px] text-[#6b7280]">{user.email}</span>
+      </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        type="button"
+        aria-label="Sign out"
+        title="Sign out"
+        disabled={leaving}
+        onClick={() => void signOut()}
+      >
+        <LogOut className="size-4" />
+      </Button>
+    </div>
+  );
+}
+
 function Sidebar({
   onNavigate,
   inboxCount,
   confirmCount,
+  user,
 }: {
   onNavigate?: () => void;
   inboxCount: number;
   confirmCount: number;
+  user: PublicUser;
 }) {
   return (
     <div className="flex h-full flex-col">
@@ -230,8 +273,9 @@ function Sidebar({
         <Brand />
       </div>
       <SidebarNav onNavigate={onNavigate} inboxCount={inboxCount} confirmCount={confirmCount} />
-      <div className="mt-auto pt-6">
+      <div className="mt-auto space-y-3 pt-6">
         <BotDock onNavigate={onNavigate} />
+        <AccountCard user={user} />
       </div>
     </div>
   );
@@ -239,10 +283,12 @@ function Sidebar({
 
 export function AppShell({
   children,
+  user,
   inboxCount = 0,
   confirmCount = 0,
 }: {
   children: React.ReactNode;
+  user: PublicUser;
   inboxCount?: number;
   confirmCount?: number;
 }) {
@@ -269,7 +315,7 @@ export function AppShell({
       <CommandPalette />
       <ShortcutsHelp />
       <aside className="hidden w-64 shrink-0 border-r border-[#e5e7eb] bg-white p-4 md:flex md:flex-col">
-        <Sidebar inboxCount={inboxCount} confirmCount={confirmCount} />
+        <Sidebar inboxCount={inboxCount} confirmCount={confirmCount} user={user} />
       </aside>
 
       <div className={cn("flex min-w-0 flex-1 flex-col", immersive && "min-h-0")}>
@@ -297,7 +343,7 @@ export function AppShell({
           <header className="relay-topbar hidden items-center justify-between border-b border-[#e5e7eb] bg-white px-6 py-3 md:flex">
             <div>
               <p className="text-[11px] font-semibold tracking-[0.14em] text-[#8b95a1] uppercase">
-                HI Studio · {bot ? CHANNELS[bot.channel ?? "telegram"].label : "Relay"}
+                {user.name ? `${user.name}’s workspace` : "Workspace"} · {bot ? CHANNELS[bot.channel ?? "telegram"].label : "Relay"}
               </p>
               <p className="font-heading text-[15px] tracking-tight text-[#1b1f24]">{title}</p>
             </div>
@@ -338,6 +384,7 @@ export function AppShell({
                 onNavigate={() => setOpen(false)}
                 inboxCount={inboxCount}
                 confirmCount={confirmCount}
+                user={user}
               />
             </div>
           </div>

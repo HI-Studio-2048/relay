@@ -1,5 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { listScheduled } from "@/lib/agent-reply";
+import { requireBotAccess } from "@/lib/auth";
+import { requireRowAccess } from "@/lib/auth/resources";
 import { getDb } from "@/lib/db";
 import { contacts, scheduledMessages } from "@/lib/db/schema";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
@@ -8,6 +10,7 @@ import { agentIdFromCookieHeader, findMember } from "@/lib/team";
 export async function GET(_request: Request, context: RouteParams<{ contactId: string }>) {
   try {
     const { contactId } = await context.params;
+    await requireRowAccess("contact", contactId);
     return json({ scheduled: await listScheduled(contactId) });
   } catch (error) {
     return fail(error);
@@ -18,6 +21,7 @@ export async function GET(_request: Request, context: RouteParams<{ contactId: s
 export async function POST(request: Request, context: RouteParams<{ contactId: string }>) {
   try {
     const { contactId } = await context.params;
+    const userId = await requireBotAccess(await requireRowAccess("contact", contactId));
     const body = await readJson<{ text?: string; sendAt?: string }>(request);
     const text = body.text?.trim();
     const sendAt = body.sendAt ? new Date(body.sendAt) : null;
@@ -29,7 +33,7 @@ export async function POST(request: Request, context: RouteParams<{ contactId: s
     const db = await getDb();
     const [contact] = await db.select().from(contacts).where(eq(contacts.id, contactId)).limit(1);
     if (!contact) return json({ error: "Contact not found" }, 404);
-    const agent = await findMember(agentIdFromCookieHeader(request.headers.get("cookie")));
+    const agent = await findMember(agentIdFromCookieHeader(request.headers.get("cookie")), userId);
     const [row] = await db
       .insert(scheduledMessages)
       .values({ id: crypto.randomUUID(), botId: contact.botId, contactId, body: text, sendAt, author: agent?.name ?? null, authorId: agent?.id ?? null })
@@ -43,6 +47,7 @@ export async function POST(request: Request, context: RouteParams<{ contactId: s
 export async function DELETE(request: Request, context: RouteParams<{ contactId: string }>) {
   try {
     const { contactId } = await context.params;
+    await requireRowAccess("contact", contactId);
     const id = new URL(request.url).searchParams.get("id");
     if (!id) return json({ error: "id is required" }, 400);
     const db = await getDb();

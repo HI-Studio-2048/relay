@@ -1,3 +1,4 @@
+import { requireBotAccess } from "@/lib/auth";
 import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { savedReplies } from "@/lib/db/schema";
@@ -7,6 +8,7 @@ export async function GET(request: Request) {
   try {
     const botId = new URL(request.url).searchParams.get("botId");
     if (!botId) return json({ error: "botId is required" }, 400);
+    await requireBotAccess(botId);
     const db = await getDb();
     const rows = await db.select().from(savedReplies).where(eq(savedReplies.botId, botId)).orderBy(asc(savedReplies.title));
     return json({ replies: rows });
@@ -21,6 +23,7 @@ export async function POST(request: Request) {
     const title = body.title?.trim();
     const text = body.body?.trim();
     if (!body.botId || !title || !text) return json({ error: "botId, title and body are required" }, 400);
+    await requireBotAccess(body.botId);
     const db = await getDb();
     const [reply] = await db
       .insert(savedReplies)

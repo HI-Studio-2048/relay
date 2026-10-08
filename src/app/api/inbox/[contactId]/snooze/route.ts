@@ -1,3 +1,4 @@
+import { requireRowAccess } from "@/lib/auth/resources";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
 import { snoozeContact } from "@/lib/store";
 
@@ -5,6 +6,7 @@ import { snoozeContact } from "@/lib/store";
 export async function POST(request: Request, context: RouteParams<{ contactId: string }>) {
   try {
     const { contactId } = await context.params;
+    await requireRowAccess("contact", contactId);
     const body = await readJson<{ until?: unknown }>(request);
     if (body.until === null || body.until === undefined) {
       await snoozeContact(contactId, null);

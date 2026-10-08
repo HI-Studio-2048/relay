@@ -587,7 +587,7 @@ export async function broadcastAudience(botId: string, tagId: string | null | un
   const db = await getDb();
   let tagName: string | null = null;
   if (tagId) {
-    const [tag] = await db.select().from(tags).where(eq(tags.id, tagId)).limit(1);
+    const [tag] = await db.select().from(tags).where(and(eq(tags.id, tagId), eq(tags.botId, botId))).limit(1);
     if (!tag) return [];
     tagName = tag.name;
   }

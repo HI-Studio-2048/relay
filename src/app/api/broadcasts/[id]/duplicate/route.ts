@@ -1,5 +1,6 @@
 import { logActivity } from "@/lib/activity";
 import { eq } from "drizzle-orm";
+import { requireRowAccess } from "@/lib/auth/resources";
 import { getDb } from "@/lib/db";
 import { broadcasts, flows } from "@/lib/db/schema";
 import { json, fail, type RouteParams } from "@/lib/http";
@@ -10,6 +11,7 @@ import { broadcastAudience } from "@/lib/store";
 export async function POST(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("broadcast", id);
     const db = await getDb();
     const [source] = await db.select().from(broadcasts).where(eq(broadcasts.id, id)).limit(1);
     if (!source) return json({ error: "Broadcast not found" }, 404);

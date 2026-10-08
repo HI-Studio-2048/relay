@@ -1,4 +1,5 @@
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
+import { requireUserId } from "@/lib/auth";
 import { encryptSecret, randomSecret } from "@/lib/crypto";
 import { getDb } from "@/lib/db";
 import { bots, broadcasts, contacts, flows, growthLinks, messages, tags } from "@/lib/db/schema";
@@ -12,13 +13,15 @@ export async function POST() {
   }
 
   try {
+    const ownerId = await requireUserId();
     const db = await getDb();
-    const existing = await db.select().from(bots);
+    const existing = await db.select().from(bots).where(eq(bots.ownerId, ownerId)).orderBy(asc(bots.createdAt));
     let bot = existing[0];
     if (!bot) {
       const id = crypto.randomUUID();
       await db.insert(bots).values({
         id,
+        ownerId,
         name: "@relay_demo_bot",
         telegramUsername: "relay_demo_bot",
         telegramBotId: "0",
@@ -35,7 +38,7 @@ export async function POST() {
       await seedBotDefaults(bot.id);
     }
 
-    const contactId = "demo-contact-daniel";
+    const contactId = `demo-contact-${bot.id}`;
     await persistContact(bot.id, {
       id: contactId,
       telegramUserId: "1001",
@@ -107,7 +110,7 @@ export async function POST() {
           id: crypto.randomUUID(),
           botId: bot.id,
           name: "Instagram bio",
-          slug: "ig_bio",
+          slug: `ig_bio_${bot.id.slice(0, 6)}`,
           tagName: "lead",
           utmSource: "instagram",
           utmMedium: "bio",
@@ -119,7 +122,7 @@ export async function POST() {
           id: crypto.randomUUID(),
           botId: bot.id,
           name: "Promo campaign",
-          slug: "promo",
+          slug: `promo_${bot.id.slice(0, 6)}`,
           tagName: "lead",
           flowId: promo?.id ?? null,
           utmSource: "ads",

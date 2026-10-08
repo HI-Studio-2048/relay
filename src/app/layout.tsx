@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Relay · HI Studio",
-  description: "Telegram inbox, lead capture, flows, and tag broadcasts.",
+  title: "Relay",
+  description: "Chat automation, lead capture and a shared inbox for Telegram, Instagram, Messenger and WhatsApp.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

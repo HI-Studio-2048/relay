@@ -4,7 +4,6 @@ import { verifyMetaSignature } from "@/lib/channels/meta";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
 import { json, type RouteParams } from "@/lib/http";
-import { adminPassword } from "@/lib/env";
 import { log } from "@/lib/logger";
 import { enqueueWebhook, shouldRunWorker } from "@/lib/queue";
 import { drainJobs } from "@/lib/worker";
@@ -41,8 +40,8 @@ export async function POST(request: Request, context: RouteParams<{ botId: strin
     return json({ error: "Unauthorized" }, 401);
   }
   if (!account.appSecret) {
-    // With a console password set this route is public, so unsigned payloads are refused outright.
-    if (adminPassword()) {
+    // This route is public, so in production unsigned payloads are refused outright.
+    if (process.env.NODE_ENV === "production") {
       log.warn("Meta webhook rejected: add the app secret in Settings so signatures can be verified", botId);
       return json({ error: "App secret required" }, 401);
     }

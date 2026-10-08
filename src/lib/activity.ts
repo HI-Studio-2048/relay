@@ -1,6 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { activityLog } from "@/lib/db/schema";
+import { USER_HEADER } from "@/lib/auth/session";
 import { agentIdFromCookieHeader, findMember } from "@/lib/team";
 
 /**
@@ -10,7 +11,10 @@ import { agentIdFromCookieHeader, findMember } from "@/lib/team";
 export async function logActivity(request: Request | null, botId: string, action: string, detail?: string | null) {
   try {
     let actor = request?.headers.get("authorization") ? "API" : "Admin";
-    const member = await findMember(agentIdFromCookieHeader(request?.headers.get("cookie") ?? null));
+    const member = await findMember(
+      agentIdFromCookieHeader(request?.headers.get("cookie") ?? null),
+      request?.headers.get(USER_HEADER),
+    );
     if (member) actor = member.name;
     const db = await getDb();
     await db.insert(activityLog).values({

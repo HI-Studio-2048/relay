@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { requireRowAccess } from "@/lib/auth/resources";
 import { getDb } from "@/lib/db";
 import { flowVersions, flows } from "@/lib/db/schema";
 import { json, fail, type RouteParams } from "@/lib/http";
@@ -7,6 +8,7 @@ import { json, fail, type RouteParams } from "@/lib/http";
 export async function POST(_request: Request, context: RouteParams<{ id: string; versionId: string }>) {
   try {
     const { id, versionId } = await context.params;
+    await requireRowAccess("flow", id);
     const db = await getDb();
     const [version] = await db
       .select()

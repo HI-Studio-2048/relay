@@ -1,3 +1,4 @@
+import { requireBotAccess } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { flows } from "@/lib/db/schema";
 import { findTemplate } from "@/lib/flow-templates";
@@ -9,6 +10,7 @@ export async function POST(request: Request) {
     const body = await readJson<{ botId?: string; templateId?: string }>(request);
     const template = body.templateId ? findTemplate(body.templateId) : null;
     if (!body.botId || !template) return json({ error: "botId and a valid templateId are required" }, 400);
+    await requireBotAccess(body.botId);
     const db = await getDb();
     const [flow] = await db
       .insert(flows)

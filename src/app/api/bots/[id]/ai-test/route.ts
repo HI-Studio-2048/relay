@@ -1,3 +1,4 @@
+import { requireBotAccess } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import { AiUnavailableError, converse, readAiSettings, type HistoryLine } from "@/lib/ai";
 import { getDb } from "@/lib/db";
@@ -11,6 +12,7 @@ import { json, fail, readJson, type RouteParams } from "@/lib/http";
 export async function POST(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireBotAccess(id);
     const body = await readJson<{ settings?: unknown; history?: HistoryLine[] }>(request);
     const db = await getDb();
     const [bot] = await db.select().from(bots).where(eq(bots.id, id)).limit(1);

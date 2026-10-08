@@ -1,6 +1,8 @@
 import { eq } from "drizzle-orm";
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { BotProvider } from "@/components/bot-provider";
+import { currentUser, ensureOwnerAccount } from "@/lib/auth";
 import { listBots } from "@/lib/bots";
 import { currentBot } from "@/lib/current-bot";
 import { getDb } from "@/lib/db";
@@ -10,7 +12,11 @@ import { listInbox } from "@/lib/store";
 export const dynamic = "force-dynamic";
 
 export default async function ConsoleLayout({ children }: { children: React.ReactNode }) {
-  const [bots, bot] = await Promise.all([listBots(), currentBot()]);
+  await ensureOwnerAccount();
+  const user = await currentUser();
+  // A valid cookie for a deleted user: clear it and go back through login.
+  if (!user) redirect("/api/auth/logout");
+  const [bots, bot] = await Promise.all([listBots(user.id), currentBot()]);
   let inboxCount = 0;
   let confirmCount = 0;
   if (bot) {
@@ -24,7 +30,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
   }
   return (
     <BotProvider initialBots={bots} initialBotId={bot?.id ?? null}>
-      <AppShell inboxCount={inboxCount} confirmCount={confirmCount}>
+      <AppShell user={user} inboxCount={inboxCount} confirmCount={confirmCount}>
         {children}
       </AppShell>
     </BotProvider>

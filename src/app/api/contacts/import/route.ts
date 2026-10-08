@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { contactsFromCsv } from "@/lib/csv";
+import { requireBotAccess } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { contactAliases, contacts } from "@/lib/db/schema";
 import { json, fail, readJson } from "@/lib/http";
@@ -14,6 +15,7 @@ export async function POST(request: Request) {
   try {
     const body = await readJson<{ botId?: string; csv?: string; tag?: string }>(request);
     if (!body.botId || !body.csv?.trim()) return json({ error: "botId and csv are required" }, 400);
+    await requireBotAccess(body.botId);
     if (body.csv.length > 5_000_000) return json({ error: "CSV is too large (5 MB max)" }, 413);
     const rows = contactsFromCsv(body.csv);
     if (rows.length === 0) return json({ error: "No rows found. The first line must be a header." }, 400);

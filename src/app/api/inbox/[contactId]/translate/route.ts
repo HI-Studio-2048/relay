@@ -1,4 +1,5 @@
 import { AiUnavailableError, translateText } from "@/lib/ai";
+import { requireRowAccess } from "@/lib/auth/resources";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
 import { listMessages } from "@/lib/store";
 
@@ -9,6 +10,7 @@ import { listMessages } from "@/lib/store";
 export async function POST(request: Request, context: RouteParams<{ contactId: string }>) {
   try {
     const { contactId } = await context.params;
+    await requireRowAccess("contact", contactId);
     const body = await readJson<{ text?: unknown; to?: unknown; language?: unknown }>(request);
     const text = typeof body.text === "string" ? body.text.trim() : "";
     if (!text) return json({ error: "Nothing to translate" }, 400);

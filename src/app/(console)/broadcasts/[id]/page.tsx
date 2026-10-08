@@ -1,5 +1,6 @@
 import { and, eq, gt, isNotNull, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import { ownsBot } from "@/lib/auth/resources";
 import { getDb } from "@/lib/db";
 import { broadcastRecipients, broadcasts } from "@/lib/db/schema";
 import { describeCondition, sanitizeSegment, type Segment } from "@/lib/segments";
@@ -23,7 +24,7 @@ export default async function BroadcastDetailPage({
   const query = await searchParams;
   const db = await getDb();
   const [broadcast] = await db.select().from(broadcasts).where(eq(broadcasts.id, id)).limit(1);
-  if (!broadcast) notFound();
+  if (!broadcast || !(await ownsBot(broadcast.botId))) notFound();
   const waiting = broadcast.smartTiming
     ? await db
         .select({ sendAt: broadcastRecipients.sendAt })

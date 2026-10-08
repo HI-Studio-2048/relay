@@ -1,7 +1,14 @@
 import QRCode from "qrcode";
+import { requireUserId } from "@/lib/auth";
+import { fail } from "@/lib/http";
 
 /** QR code as SVG, rendered locally (links are not sent to a third-party QR service). */
 export async function GET(request: Request) {
+  try {
+    await requireUserId();
+  } catch (error) {
+    return fail(error);
+  }
   const data = new URL(request.url).searchParams.get("data") ?? "";
   if (!data || data.length > 2000) return new Response("data is required (max 2000 chars)", { status: 400 });
   const svg = await QRCode.toString(data, { type: "svg", margin: 1, width: 180, errorCorrectionLevel: "M" });

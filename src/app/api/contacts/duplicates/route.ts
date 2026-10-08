@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { findDuplicatePairs } from "@/lib/contact-merge";
+import { requireBotAccess } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { contacts, messages } from "@/lib/db/schema";
 import { json, fail } from "@/lib/http";
@@ -9,6 +10,7 @@ export async function GET(request: Request) {
   try {
     const botId = new URL(request.url).searchParams.get("botId");
     if (!botId) return json({ error: "botId is required" }, 400);
+    await requireBotAccess(botId);
     const db = await getDb();
     const rows = await db
       .select({

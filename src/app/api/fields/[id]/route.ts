@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { assertConfirm } from "@/lib/broadcast";
+import { requireRowAccess } from "@/lib/auth/resources";
 import { getDb } from "@/lib/db";
 import { customFields } from "@/lib/db/schema";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
@@ -8,6 +9,7 @@ import { json, fail, readJson, type RouteParams } from "@/lib/http";
 export async function PATCH(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("field", id);
     const body = await readJson<{ label?: string }>(request);
     const label = body.label?.trim().slice(0, 80);
     if (!label) return json({ error: "Label is required" }, 400);
@@ -23,6 +25,7 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
 export async function DELETE(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("field", id);
     const body = await readJson<{ confirm?: unknown }>(request);
     assertConfirm(body.confirm, "Delete field");
     const db = await getDb();

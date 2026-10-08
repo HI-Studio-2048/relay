@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { requireBotAccess } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { flows, sequences } from "@/lib/db/schema";
 import { fail, json, readJson } from "@/lib/http";
@@ -8,6 +9,7 @@ export async function GET(request: Request) {
   try {
     const botId = new URL(request.url).searchParams.get("botId");
     if (!botId) return json({ error: "botId is required" }, 400);
+    await requireBotAccess(botId);
     return json({ sequences: await listSequences(botId) });
   } catch (error) {
     return fail(error);
@@ -22,6 +24,7 @@ export async function POST(request: Request) {
       steps?: { delaySeconds?: number; body?: string; flowId?: string | null }[];
     }>(request);
     if (!body.botId || !body.name?.trim()) return json({ error: "botId and name are required" }, 400);
+    await requireBotAccess(body.botId);
     const db = await getDb();
     const owned = new Set((await db.select({ id: flows.id }).from(flows).where(eq(flows.botId, body.botId))).map((flow) => flow.id));
     const steps = (body.steps ?? []).map((step) => ({
@@ -44,6 +47,7 @@ export async function PUT(request: Request) {
   try {
     const body = await readJson<{ id?: string; botId?: string; steps?: { delaySeconds?: number; body?: string; flowId?: string | null }[] }>(request);
     if (!body.id || !body.botId) return json({ error: "id and botId are required" }, 400);
+    await requireBotAccess(body.botId);
     const db = await getDb();
     const [sequence] = await db.select().from(sequences).where(and(eq(sequences.id, body.id), eq(sequences.botId, body.botId))).limit(1);
     if (!sequence) return json({ error: "Sequence not found" }, 404);
@@ -66,6 +70,7 @@ export async function PATCH(request: Request) {
   try {
     const body = await readJson<{ id?: string; botId?: string; isActive?: boolean }>(request);
     if (!body.id || !body.botId || typeof body.isActive !== "boolean") return json({ error: "id, botId and isActive are required" }, 400);
+    await requireBotAccess(body.botId);
     const db = await getDb();
     await db.update(sequences).set({ isActive: body.isActive }).where(and(eq(sequences.id, body.id), eq(sequences.botId, body.botId)));
     return json({ ok: true });
@@ -80,6 +85,7 @@ export async function DELETE(request: Request) {
     if (!body.id || !body.botId || body.confirm !== true) {
       return json({ error: "id, botId, and confirm: true are required" }, 400);
     }
+    await requireBotAccess(body.botId);
     const db = await getDb();
     await db.delete(sequences).where(and(eq(sequences.id, body.id), eq(sequences.botId, body.botId)));
     return json({ ok: true });

@@ -1,3 +1,4 @@
+import { requireBotAccess } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import { AiUnavailableError, extractKnowledge } from "@/lib/ai";
 import { getDb } from "@/lib/db";
@@ -9,6 +10,7 @@ import { WebImportError, checkImportUrl, fetchPageText } from "@/lib/web-import"
 export async function POST(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireBotAccess(id);
     const body = await readJson<{ url?: string }>(request);
     if (!body.url?.trim()) return json({ error: "Paste a link to import" }, 400);
     const db = await getDb();

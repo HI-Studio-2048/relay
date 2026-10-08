@@ -1,3 +1,4 @@
+import { requireBotAccess } from "@/lib/auth";
 import { and, eq, ilike, or } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { contacts, flows } from "@/lib/db/schema";
@@ -10,6 +11,7 @@ export async function GET(request: Request) {
     const botId = url.searchParams.get("botId");
     const q = url.searchParams.get("q")?.trim().slice(0, 80) ?? "";
     if (!botId) return json({ error: "botId is required" }, 400);
+    await requireBotAccess(botId);
     if (q.length < 2) return json({ flows: [], contacts: [] });
     const like = `%${q.replace(/[%_\\]/g, (char) => `\\${char}`)}%`;
     const db = await getDb();

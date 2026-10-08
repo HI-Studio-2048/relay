@@ -125,7 +125,12 @@ export async function loadChecklist(botId: string): Promise<ChecklistItem[]> {
     db.select().from(bots).where(eq(bots.id, botId)).limit(1),
     db.select({ isActive: flows.isActive, triggerType: flows.triggerType }).from(flows).where(eq(flows.botId, botId)),
     db.select({ id: growthLinks.id }).from(growthLinks).where(eq(growthLinks.botId, botId)).limit(1),
-    db.select({ id: teamMembers.id }).from(teamMembers).limit(1),
+    db
+      .select({ id: teamMembers.id })
+      .from(teamMembers)
+      .innerJoin(bots, eq(bots.ownerId, teamMembers.ownerId))
+      .where(eq(bots.id, botId))
+      .limit(1),
     db.select({ id: flowEvents.id }).from(flowEvents).where(eq(flowEvents.botId, botId)).limit(1),
   ]);
   const ai = readAiSettings(bot?.settings);

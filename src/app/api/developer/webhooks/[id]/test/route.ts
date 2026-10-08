@@ -1,3 +1,4 @@
+import { requireRowAccess } from "@/lib/auth/resources";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { webhookSubscriptions } from "@/lib/db/schema";
@@ -8,6 +9,7 @@ import { json, fail, type RouteParams } from "@/lib/http";
 export async function POST(_request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("webhook", id);
     const db = await getDb();
     const [sub] = await db.select().from(webhookSubscriptions).where(eq(webhookSubscriptions.id, id)).limit(1);
     if (!sub) return json({ error: "Webhook not found" }, 404);

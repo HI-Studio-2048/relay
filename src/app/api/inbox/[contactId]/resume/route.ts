@@ -1,3 +1,4 @@
+import { requireRowAccess } from "@/lib/auth/resources";
 import { json, fail, type RouteParams } from "@/lib/http";
 import { resumeContactAutomation } from "@/lib/store";
 
@@ -5,6 +6,7 @@ import { resumeContactAutomation } from "@/lib/store";
 export async function POST(_request: Request, context: RouteParams<{ contactId: string }>) {
   try {
     const { contactId } = await context.params;
+    await requireRowAccess("contact", contactId);
     const session = await resumeContactAutomation(contactId);
     return json({ ok: true, automation: session?.status ?? "idle" });
   } catch (error) {
