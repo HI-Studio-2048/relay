@@ -62,13 +62,13 @@ function zernioName(accounts: LinkedAccount[]) {
 
 /**
  * Connect a Zernio workspace. The API key reaches every social account in it; externalAccountId
- * optionally narrows Relay to a comma-separated list of Zernio account ids. Relay registers its own
+ * optionally narrows Recatch to a comma-separated list of Zernio account ids. Recatch registers its own
  * webhook (message.received, comment.received, referral.received) signed with a fresh secret.
  */
 /** One channel account can only live in one workspace; refuse to take it over from another user. */
 function assertOwnable(match: typeof bots.$inferSelect | undefined, ownerId: string) {
   if (match?.ownerId && match.ownerId !== ownerId) {
-    throw new Error("This account is already connected to another Relay workspace");
+    throw new Error("This account is already connected to another Recatch workspace");
   }
 }
 

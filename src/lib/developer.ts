@@ -24,7 +24,7 @@ export function publicContact(contact: ContactRecord) {
   };
 }
 
-/** Events Relay can push to your endpoints. */
+/** Events Recatch can push to your endpoints. */
 export { WEBHOOK_EVENTS };
 
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number]["value"];

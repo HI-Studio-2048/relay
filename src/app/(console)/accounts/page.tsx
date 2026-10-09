@@ -62,7 +62,7 @@ export default async function AccountsPage() {
         title="All accounts"
         icon={Building2}
         tone="start"
-        description="Every brand you run in Relay, side by side. Open one to work in it; Live Chat, flows and contacts follow the selected account."
+        description="Every brand you run in Recatch, side by side. Open one to work in it; Live Chat, flows and contacts follow the selected account."
       />
       <AccountsTable rows={rows.sort((a, b) => b.needsReply - a.needsReply || b.contacts - a.contacts)} />
     </div>

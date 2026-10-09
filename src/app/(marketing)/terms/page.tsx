@@ -7,8 +7,8 @@ import { LEGAL } from "@/lib/legal";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Terms of service · Relay",
-  description: "The rules for using Relay.",
+  title: "Terms of service · Recatch",
+  description: "The rules for using Recatch.",
 };
 
 export default function TermsPage() {
@@ -30,7 +30,7 @@ export default function TermsPage() {
       </LegalSection>
 
       <LegalSection heading="Messaging people the right way">
-        <p>Relay sends messages in your name, so you&apos;re responsible for them. You agree to:</p>
+        <p>Recatch sends messages in your name, so you&apos;re responsible for them. You agree to:</p>
         <ul>
           <li>
             Only message people who contacted you first or agreed to hear from you, and stop when they ask you to.
@@ -42,20 +42,20 @@ export default function TermsPage() {
           <li>Follow the laws that apply to you, including privacy and marketing laws.</li>
           <li>
             Tell the people you message how you use their data. Our{" "}
-            <Link href="/privacy" className="text-[#0084ff] hover:underline">privacy policy</Link> covers what Relay
+            <Link href="/privacy" className="text-[#0084ff] hover:underline">privacy policy</Link> covers what Recatch
             does, but your own policy has to cover what you do.
           </li>
         </ul>
         <p>
-          Don&apos;t use Relay for spam, scams, harassment, illegal content, or to get around a platform&apos;s limits
+          Don&apos;t use Recatch for spam, scams, harassment, illegal content, or to get around a platform&apos;s limits
           or bans. We can suspend accounts that do.
         </p>
       </LegalSection>
 
       <LegalSection heading="Connected platforms">
         <p>
-          Relay depends on Telegram, Meta, Zernio and other services that we don&apos;t control. If one of them changes
-          its API, limits your account or goes down, parts of Relay may stop working until it&apos;s fixed. We
+          Recatch depends on Telegram, Meta, Zernio and other services that we don&apos;t control. If one of them changes
+          its API, limits your account or goes down, parts of Recatch may stop working until it&apos;s fixed. We
           aren&apos;t responsible for their decisions.
         </p>
       </LegalSection>
@@ -69,7 +69,7 @@ export default function TermsPage() {
 
       <LegalSection heading="Your data">
         <p>
-          Your flows, contacts and conversations belong to you. We only use them to run Relay for you, as set out in
+          Your flows, contacts and conversations belong to you. We only use them to run Recatch for you, as set out in
           the privacy policy. You can export your contacts at any time.
         </p>
       </LegalSection>
@@ -83,7 +83,7 @@ export default function TermsPage() {
 
       <LegalSection heading="The service as it is">
         <p>
-          We work hard to keep Relay running and your data safe, but we provide it as it is, without a promise that it
+          We work hard to keep Recatch running and your data safe, but we provide it as it is, without a promise that it
           will never fail or lose a message. As far as the law allows, our total liability to you is limited to what
           you paid us in the 12 months before the claim.
         </p>
@@ -91,7 +91,7 @@ export default function TermsPage() {
 
       <LegalSection heading="Ending things">
         <p>
-          You can stop using Relay and ask us to delete your account at any time. We can suspend or close accounts
+          You can stop using Recatch and ask us to delete your account at any time. We can suspend or close accounts
           that break these terms, and we&apos;ll tell you why unless the law stops us.
         </p>
       </LegalSection>

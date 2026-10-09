@@ -13,7 +13,7 @@ export async function POST(_request: Request, context: RouteParams<{ id: string 
     const db = await getDb();
     const [sub] = await db.select().from(webhookSubscriptions).where(eq(webhookSubscriptions.id, id)).limit(1);
     if (!sub) return json({ error: "Webhook not found" }, 404);
-    const body = JSON.stringify({ id: crypto.randomUUID(), event: "ping", created_at: new Date().toISOString(), data: { message: "Hello from Relay" } });
+    const body = JSON.stringify({ id: crypto.randomUUID(), event: "ping", created_at: new Date().toISOString(), data: { message: "Hello from Recatch" } });
     let status: number | null = null;
     let error: string | null = null;
     try {

@@ -6,5 +6,5 @@ import { log } from "@/lib/logger";
 export async function ensureReady() {
   await getDb();
   if (shouldRunWorker()) startWorker();
-  log.info("Relay ready");
+  log.info("Recatch ready");
 }

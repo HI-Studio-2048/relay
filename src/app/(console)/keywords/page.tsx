@@ -53,7 +53,7 @@ export default async function KeywordsPage() {
         icon={MessageSquareText}
         tone="content"
         title="Keywords"
-        description="DM keyword rules: message is, contains, whole word, begins with, and doesn't contain. Top of the list wins when several match — test a message below and Relay flags keywords another flow steals."
+        description="DM keyword rules: message is, contains, whole word, begins with, and doesn't contain. Top of the list wins when several match — test a message below and Recatch flags keywords another flow steals."
       />
       <KeywordsBoard botId={bot.id} initial={rows} others={others} />
       {rows.length === 0 ? (

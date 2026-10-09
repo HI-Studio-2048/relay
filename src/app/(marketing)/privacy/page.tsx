@@ -7,8 +7,8 @@ import { LEGAL } from "@/lib/legal";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Privacy policy · Relay",
-  description: "What Relay collects, why, who it's shared with, and how to get it deleted.",
+  title: "Privacy policy · Recatch",
+  description: "What Recatch collects, why, who it's shared with, and how to get it deleted.",
 };
 
 export default function PrivacyPage() {
@@ -19,20 +19,20 @@ export default function PrivacyPage() {
         <p>
           {LEGAL.product} is run by {LEGAL.company}. Businesses use it to answer the messages and comments they get on
           Telegram, Instagram, Messenger, WhatsApp and other networks. This page covers two groups of people: the
-          businesses who sign up for Relay, and the people who message those businesses.
+          businesses who sign up for Recatch, and the people who message those businesses.
         </p>
       }
     >
       <LegalSection heading="Who decides what happens to message data">
         <p>
-          When you message a business that uses Relay, that business decides how your conversation is used. Relay
+          When you message a business that uses Recatch, that business decides how your conversation is used. Recatch
           processes it on their behalf. If you want to know what a business does with your data, or want it removed,
           ask the business first. You can also contact us directly (see the bottom of this page).
         </p>
       </LegalSection>
 
       <LegalSection heading="What we collect">
-        <p>From businesses with a Relay account:</p>
+        <p>From businesses with a Recatch account:</p>
         <ul>
           <li>Name, email address and a password, which is stored hashed and never in plain text.</li>
           <li>
@@ -41,7 +41,7 @@ export default function PrivacyPage() {
           </li>
           <li>The flows, messages, tags and settings they create, and a log of actions taken by their team.</li>
         </ul>
-        <p>From people who message a business that uses Relay:</p>
+        <p>From people who message a business that uses Recatch:</p>
         <ul>
           <li>
             The public profile details the platform shares with the business, such as name, username and profile
@@ -55,7 +55,7 @@ export default function PrivacyPage() {
           <li>Whether you clicked a link the business sent, and any purchase it can attribute to that link.</li>
         </ul>
         <p>
-          We don&apos;t collect payment card details. If a business uses Stripe, payment happens on Stripe and Relay
+          We don&apos;t collect payment card details. If a business uses Stripe, payment happens on Stripe and Recatch
           only receives the amount, currency and which contact it belongs to.
         </p>
       </LegalSection>
@@ -78,7 +78,7 @@ export default function PrivacyPage() {
       </LegalSection>
 
       <LegalSection heading="Who it's shared with">
-        <p>Only the services needed to run Relay, and only what each one needs:</p>
+        <p>Only the services needed to run Recatch, and only what each one needs:</p>
         <ul>
           <li>The messaging platforms themselves (Telegram, Meta, and the others), to send and receive messages.</li>
           <li>Zernio, when a business connects its social accounts through it.</li>
@@ -91,7 +91,7 @@ export default function PrivacyPage() {
 
       <LegalSection heading="Cookies">
         <p>
-          Relay sets one cookie, to keep you signed in. There are no advertising or tracking cookies. The app also
+          Recatch sets one cookie, to keep you signed in. There are no advertising or tracking cookies. The app also
           remembers a few display preferences in your browser.
         </p>
       </LegalSection>
@@ -99,7 +99,7 @@ export default function PrivacyPage() {
       <LegalSection heading="How long we keep it">
         <p>
           Conversation data stays until the business deletes it or closes its account. A business can erase a person
-          from Relay at any time. That removes their messages, tags and fields, and leaves only an anonymous count in
+          from Recatch at any time. That removes their messages, tags and fields, and leaves only an anonymous count in
           the business&apos;s reports.
         </p>
       </LegalSection>

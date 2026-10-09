@@ -8,7 +8,7 @@ import type { FlowMedia, OutboundReply } from "@/lib/types";
 /**
  * Zernio: one REST API (https://zernio.com/api) for DMs and comments across Instagram, Facebook,
  * WhatsApp, Telegram, X, TikTok, Bluesky, Reddit, LinkedIn, Threads, YouTube and SMS.
- * One Relay account holds one Zernio API key; every social account in that workspace (or the ones
+ * One Recatch account holds one Zernio API key; every social account in that workspace (or the ones
  * listed in externalAccountId) routes through it. Shapes follow the official @zernio/node SDK.
  */
 export function zernioBase() {
@@ -77,7 +77,7 @@ export type ZernioAccount = {
 };
 
 /**
- * Platforms people can connect from Relay's Channels page, through Zernio's hosted connect flow
+ * Platforms people can connect from Recatch's Channels page, through Zernio's hosted connect flow
  * (Zernio runs the consent screen and any Page / account / number picking, then sends them back).
  */
 export const ZERNIO_CONNECTABLE = [
@@ -100,14 +100,14 @@ export function isZernioConnectable(value: unknown): value is ZernioConnectable 
 
 type ZernioProfile = { _id?: string; name?: string; isDefault?: boolean };
 
-/** The Zernio profile new accounts join: the one saved for this Relay account, else the default, else a new "Relay" profile. */
+/** The Zernio profile new accounts join: the one saved for this Recatch account, else the default, else a new "Recatch" profile. */
 export async function resolveZernioProfile(apiKey: string, saved?: string | null): Promise<string> {
   const data = await zernioRequest<{ profiles?: ZernioProfile[] }>("GET", "/v1/profiles", apiKey);
   const profiles = (data.profiles ?? []).filter((profile) => profile._id);
   if (saved && profiles.some((profile) => profile._id === saved)) return saved;
   const pick = profiles.find((profile) => profile.isDefault) ?? profiles[0];
   if (pick?._id) return pick._id;
-  const created = await zernioRequest<{ profile?: ZernioProfile; _id?: string }>("POST", "/v1/profiles", apiKey, { name: "Relay" });
+  const created = await zernioRequest<{ profile?: ZernioProfile; _id?: string }>("POST", "/v1/profiles", apiKey, { name: "Recatch" });
   const id = created.profile?._id ?? created._id;
   if (!id) throw new ChannelApiError("Zernio did not return a profile");
   return id;
@@ -128,7 +128,7 @@ export async function zernioConnectUrl(
   return data.authUrl;
 }
 
-/** Disconnect a social account from the Zernio workspace (it stops receiving DMs in Relay). */
+/** Disconnect a social account from the Zernio workspace (it stops receiving DMs in Recatch). */
 export async function disconnectZernioAccount(apiKey: string, accountId: string) {
   await zernioRequest("DELETE", `/v1/accounts/${encodeURIComponent(accountId)}`, apiKey);
 }
@@ -138,10 +138,10 @@ export async function listZernioAccounts(apiKey: string): Promise<ZernioAccount[
   return data.accounts ?? [];
 }
 
-/** Register (or refresh) the webhook that feeds this Relay account. Returns the Zernio webhook id. */
+/** Register (or refresh) the webhook that feeds this Recatch account. Returns the Zernio webhook id. */
 export async function registerZernioWebhook(apiKey: string, input: { url: string; secret: string; existingId?: string | null; accountIds?: string[] }) {
   const body = {
-    name: "Relay",
+    name: "Recatch",
     url: input.url,
     secret: input.secret,
     events: [...ZERNIO_WEBHOOK_EVENTS],

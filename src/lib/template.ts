@@ -1,7 +1,7 @@
 import type { ContactRecord } from "@/lib/types";
 
 /**
- * Personalization. ManyChat names ({{first_name}}, {{last_name}}, {{full_name}}) plus Relay's
+ * Personalization. ManyChat names ({{first_name}}, {{last_name}}, {{full_name}}) plus Recatch's
  * {{name}} / {{field:key}}, any custom field by bare key ({{company}}), and a fallback after a pipe
  * for empty values: {{first_name|there}}.
  */

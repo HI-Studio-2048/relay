@@ -37,7 +37,7 @@ type Assist = {
   sentiment: "positive" | "neutral" | "negative";
 };
 
-/** Inbox lines Relay writes for non-DM events. Shown as labeled cards instead of chat bubbles. */
+/** Inbox lines Recatch writes for non-DM events. Shown as labeled cards instead of chat bubbles. */
 const EVENT_PREFIX = /^\[(comment|story reply|public reply|mentioned you in their story)\]\s*/i;
 
 function SourceLabel({ message }: { message: Message }) {

@@ -114,7 +114,7 @@ export function growthRedirectPath(slug: string): string {
   return `/go/${encodeURIComponent(slug)}`;
 }
 
-/** Rendered by Relay itself (/api/qr), so links never go to a third-party QR service. */
+/** Rendered by Recatch itself (/api/qr), so links never go to a third-party QR service. */
 export function qrImageUrl(target: string): string {
   return `/api/qr?data=${encodeURIComponent(target)}`;
 }

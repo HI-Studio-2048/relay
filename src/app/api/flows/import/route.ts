@@ -4,7 +4,7 @@ import { flows } from "@/lib/db/schema";
 import { FlowImportError, parseFlowImport } from "@/lib/flow-import";
 import { json, fail, readJson } from "@/lib/http";
 
-/** POST { botId, flow } — create an inactive flow from an exported Relay flow file. */
+/** POST { botId, flow } — create an inactive flow from an exported Recatch flow file. */
 export async function POST(request: Request) {
   try {
     const body = await readJson<{ botId?: string; flow?: unknown }>(request);

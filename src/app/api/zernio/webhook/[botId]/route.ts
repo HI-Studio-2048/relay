@@ -30,7 +30,7 @@ export async function POST(request: Request, context: RouteParams<{ botId: strin
   } catch {
     return json({ error: "Invalid JSON" }, 400);
   }
-  // webhook.test and every event Relay does not act on are acknowledged so Zernio stops retrying.
+  // webhook.test and every event Recatch does not act on are acknowledged so Zernio stops retrying.
   if (payload.event === "message.received" || payload.event === "comment.received" || payload.event === "referral.received") {
     await enqueueWebhook({ kind: "webhook", botId, update: payload, eventId: request.headers.get("x-zernio-event-id") });
     if (shouldRunWorker()) void drainJobs(5);

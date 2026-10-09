@@ -1,7 +1,7 @@
-/** Who runs Relay, for the privacy policy, terms and data deletion pages. */
+/** Who runs Recatch, for the privacy policy, terms and data deletion pages. */
 export const LEGAL = {
   company: "HI Studio",
-  product: "Relay",
+  product: "Recatch",
   updated: "9 October 2026",
 };
 

@@ -23,11 +23,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
       status,
       headers: { "content-type": "application/javascript; charset=utf-8", "cache-control": "public, max-age=300", "access-control-allow-origin": "*" },
     });
-  if (!link) return js(`console.warn("Relay widget: link not found");`, 404);
+  if (!link) return js(`console.warn("Recatch widget: link not found");`, 404);
 
   const db = await getDb();
   const [bot] = await db.select().from(bots).where(eq(bots.id, link.botId)).limit(1);
-  if (!bot) return js(`console.warn("Relay widget: account not found");`, 404);
+  if (!bot) return js(`console.warn("Recatch widget: account not found");`, 404);
 
   const origin = publicUrl(request.url)!;
   const go = (via?: string) => `${origin}/go/${encodeURIComponent(link.slug)}${via ? `?via=${encodeURIComponent(via)}` : ""}`;

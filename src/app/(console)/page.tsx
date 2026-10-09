@@ -76,7 +76,7 @@ export default async function OverviewPage() {
           eyebrow="Workspace"
           icon={LayoutDashboard}
           tone="start"
-          title="Relay is ready for your accounts"
+          title="Recatch is ready for your accounts"
           description="Comment-to-DM, story replies, AI conversations, a shared inbox and segmented broadcasts across every social network."
         />
         <ConnectPrompt />

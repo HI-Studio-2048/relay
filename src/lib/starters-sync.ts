@@ -17,7 +17,7 @@ async function attempt(target: string, run: () => Promise<unknown>): Promise<Syn
 /**
  * Push ice breakers and the persistent menu to every platform the account reaches.
  * Zernio: per linked Instagram / Facebook account. Direct Meta: the Messenger Profile API.
- * Telegram uses bot commands instead, which Relay already syncs from command flows.
+ * Telegram uses bot commands instead, which Recatch already syncs from command flows.
  */
 export async function syncStarters(bot: BotRow): Promise<SyncResult[]> {
   const starters = readStarters(bot.settings);

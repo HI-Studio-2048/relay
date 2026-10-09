@@ -10,7 +10,7 @@ export function RelayLogo({ className }: { className?: string }) {
       viewBox="0 0 64 64"
       fill="none"
       role="img"
-      aria-label="Relay"
+      aria-label="Recatch"
       className={cn("size-8 shrink-0", className)}
     >
       <defs>

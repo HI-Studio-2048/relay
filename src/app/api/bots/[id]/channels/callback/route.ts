@@ -14,7 +14,7 @@ export async function GET(request: Request, context: RouteParams<{ id: string }>
     if (result.ok) await logActivity(request, id, "Connected", result.message.split(" is connected")[0]);
   } catch (error) {
     log.warn("Channel connect callback failed", error instanceof Error ? error.message : error);
-    back.searchParams.set("error", "The account was connected in Zernio, but Relay could not sync it. Press Refresh on the Channels page.");
+    back.searchParams.set("error", "The account was connected in Zernio, but Recatch could not sync it. Press Refresh on the Channels page.");
   }
   return Response.redirect(back.toString(), 303);
 }

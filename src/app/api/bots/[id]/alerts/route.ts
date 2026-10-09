@@ -41,7 +41,7 @@ export async function POST(_request: Request, context: RouteParams<{ id: string 
   try {
     const { id } = await context.params;
     await requireBotAccess(id);
-    const delivered = await notifyAdmin("✅ Relay test alert: hand-offs, Notify admin steps and rule alerts will arrive here.", { botId: id });
+    const delivered = await notifyAdmin("✅ Recatch test alert: hand-offs, Notify admin steps and rule alerts will arrive here.", { botId: id });
     return delivered ? json({ ok: true }) : json({ error: "Nothing delivered — check the webhook URL" }, 400);
   } catch (error) {
     return fail(error);

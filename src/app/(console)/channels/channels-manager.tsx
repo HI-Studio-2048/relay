@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 type Linked = { id: string; platform: string; username: string | null; picture: string | null; needsReconnection?: boolean };
 type Notice = { tone: "ok" | "error"; text: string } | null;
 
-/** What each network brings into Relay, in the order people usually connect them. */
+/** What each network brings into Recatch, in the order people usually connect them. */
 const NETWORKS: { platform: string; mark: string; what: string }[] = [
   { platform: "instagram", mark: "IG", what: "DMs, comments, story replies and mentions" },
   { platform: "facebook", mark: "f", what: "Messenger DMs and Page comments" },
@@ -256,7 +256,7 @@ export function ZernioSetup({ currentName, currentChannel, notice }: { currentNa
       <CanvasCard className="space-y-3 p-4">
         <p className="font-heading text-[15px] text-[#1b1f24]">Step 1: connect your Zernio workspace</p>
         <p className="text-[13px] text-[#6b7280]">
-          Relay reaches Instagram, Facebook, WhatsApp, X, TikTok and the rest through{" "}
+          Recatch reaches Instagram, Facebook, WhatsApp, X, TikTok and the rest through{" "}
           <a href="https://zernio.com" target="_blank" rel="noreferrer" className="text-[#0084ff] hover:underline">
             Zernio
           </a>

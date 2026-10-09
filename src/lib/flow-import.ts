@@ -75,7 +75,7 @@ export function exportFlow(flow: { name: string; triggerType: string; triggerVal
  */
 export function parseFlowImport(raw: unknown): { flow: FlowExport; warnings: string[] } {
   const input = raw as Partial<FlowExport> | null;
-  if (!input || typeof input !== "object" || input.relay !== "flow") throw new FlowImportError("This is not a Relay flow file");
+  if (!input || typeof input !== "object" || input.relay !== "flow") throw new FlowImportError("This is not a Recatch flow file");
   const definition = input.definition as FlowDefinition | undefined;
   if (!definition || !Array.isArray(definition.steps) || definition.steps.length === 0) throw new FlowImportError("The file has no steps");
   if (definition.steps.length > 300) throw new FlowImportError("That flow is too large (300 steps max)");

@@ -16,7 +16,7 @@ export default async function IntegrationsPage() {
         title="API & webhooks"
         icon={Plug}
         tone="action"
-        description="Connect Relay to Zapier, Make, your CRM or your own backend: push events out with webhooks, and tag contacts, update fields, send messages or start flows with the API."
+        description="Connect Recatch to Zapier, Make, your CRM or your own backend: push events out with webhooks, and tag contacts, update fields, send messages or start flows with the API."
       />
       <IntegrationsClient botId={bot.id} origin={publicUrl() ?? ""} />
     </div>

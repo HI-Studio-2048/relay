@@ -94,7 +94,7 @@ function sectionTitle(pathname: string) {
   if (pathname.startsWith("/ai")) return "AI assistant";
   if (pathname.startsWith("/integrations")) return "API & webhooks";
   if (pathname.startsWith("/starters")) return "Conversation starters";
-  return "Relay";
+  return "Recatch";
 }
 
 function NavCount({ value }: { value: number }) {
@@ -112,7 +112,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
       <RelayLogo />
       {compact ? null : (
         <span>
-          <span className="block font-heading text-[15px] leading-none tracking-tight text-[#1b1f24]">Relay</span>
+          <span className="block font-heading text-[15px] leading-none tracking-tight text-[#1b1f24]">Recatch</span>
           <span className="mt-0.5 block text-[11px] text-[#6b7280]">Social automation</span>
         </span>
       )}
@@ -346,7 +346,7 @@ export function AppShell({
           <header className="relay-topbar hidden items-center justify-between border-b border-[#e5e7eb] bg-white px-6 py-3 md:flex">
             <div>
               <p className="text-[11px] font-semibold tracking-[0.14em] text-[#8b95a1] uppercase">
-                {user.name ? `${user.name}’s workspace` : "Workspace"} · {bot ? CHANNELS[bot.channel ?? "telegram"].label : "Relay"}
+                {user.name ? `${user.name}’s workspace` : "Workspace"} · {bot ? CHANNELS[bot.channel ?? "telegram"].label : "Recatch"}
               </p>
               <p className="font-heading text-[15px] tracking-tight text-[#1b1f24]">{title}</p>
             </div>

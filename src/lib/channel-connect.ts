@@ -46,8 +46,8 @@ export async function startChannelConnect(input: { botId: string; platform: Zern
 }
 
 /**
- * Zernio redirected back. On success the new account is synced into Relay (and added to the account
- * filter when this Relay account only routes some of the workspace's accounts) and the webhook re-registered.
+ * Zernio redirected back. On success the new account is synced into Recatch (and added to the account
+ * filter when this Recatch account only routes some of the workspace's accounts) and the webhook re-registered.
  */
 export async function finishChannelConnect(input: { botId: string; params: URLSearchParams; origin: string }) {
   const { params } = input;

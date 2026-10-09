@@ -144,7 +144,7 @@ export async function applyFlowEffects(input: {
         continue;
       }
 
-      const text = interpolateTemplate(effect.text, input.contact).trim() || "New lead from Relay";
+      const text = interpolateTemplate(effect.text, input.contact).trim() || "New lead from Recatch";
       await saveMessage({
         botId: input.botId,
         contactId: input.contact.id,

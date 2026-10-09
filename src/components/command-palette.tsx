@@ -107,7 +107,7 @@ export function CommandPalette() {
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 px-4 pt-[12vh]" onMouseDown={() => setOpen(false)}>
       <div
         role="dialog"
-        aria-label="Search Relay"
+        aria-label="Search Recatch"
         className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/10"
         onMouseDown={(event) => event.stopPropagation()}
       >

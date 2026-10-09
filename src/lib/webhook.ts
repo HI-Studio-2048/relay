@@ -402,7 +402,7 @@ function inboundLabel(kind: string, text: string | null) {
 /**
  * Comment → DM. The public reply goes under the comment; the first flow message goes out as a
  * private reply (the only DM Instagram/Facebook allow before the person writes back). Anything after
- * it waits for a tap: the flow's own button, or a Continue button Relay adds when there is none.
+ * it waits for a tap: the flow's own button, or a Continue button Recatch adds when there is none.
  * Platforms without private replies (TikTok, YouTube, LinkedIn…) only get the public reply.
  * Returns the session to store (undefined keeps the engine's).
  */

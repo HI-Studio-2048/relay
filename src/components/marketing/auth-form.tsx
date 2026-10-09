@@ -88,10 +88,10 @@ export function AuthScreen({ mode }: { mode: Mode }) {
   const copy: Record<Mode, { title: string; subtitle: string; switchText: ReactNode }> = {
     login: {
       title: "Welcome back",
-      subtitle: "Log in to your Relay workspace.",
+      subtitle: "Log in to your Recatch workspace.",
       switchText: (
         <>
-          New to Relay?{" "}
+          New to Recatch?{" "}
           <Link href="/signup" className="font-medium text-[#0084ff] hover:underline">
             Create an account
           </Link>
@@ -100,7 +100,7 @@ export function AuthScreen({ mode }: { mode: Mode }) {
     },
     signup: {
       title: "Create your workspace",
-      subtitle: "Set up Relay and connect your first channel.",
+      subtitle: "Set up Recatch and connect your first channel.",
       switchText: (
         <>
           Already have an account?{" "}

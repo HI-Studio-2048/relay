@@ -6,8 +6,8 @@ import { LEGAL } from "@/lib/legal";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Delete your data · Relay",
-  description: "How to get your messages and profile removed from Relay.",
+  title: "Delete your data · Recatch",
+  description: "How to get your messages and profile removed from Recatch.",
 };
 
 export default function DataDeletionPage() {
@@ -16,13 +16,13 @@ export default function DataDeletionPage() {
       title="Delete your data"
       intro={
         <p>
-          If you messaged a business that uses {LEGAL.product}, or you connected your own account to Relay, here&apos;s
+          If you messaged a business that uses {LEGAL.product}, or you connected your own account to Recatch, here&apos;s
           how to get your data removed.
         </p>
       }
     >
       <LegalSection heading="If you messaged a business">
-        <p>The quickest way is to ask the business. They can erase you from Relay right away.</p>
+        <p>The quickest way is to ask the business. They can erase you from Recatch right away.</p>
         <p>
           You can also email <ContactEmail /> with the subject &ldquo;Delete my data&rdquo;. Tell us:
         </p>
@@ -40,12 +40,12 @@ export default function DataDeletionPage() {
 
       <LegalSection heading="If you connected a Facebook, Instagram or WhatsApp account">
         <p>
-          Disconnect it from the Channels page in Relay, or remove Relay in Facebook under Settings, then Business
+          Disconnect it from the Channels page in Recatch, or remove Recatch in Facebook under Settings, then Business
           integrations. That stops all new data. To delete what was already stored, email us as above.
         </p>
       </LegalSection>
 
-      <LegalSection heading="If you have a Relay account">
+      <LegalSection heading="If you have a Recatch account">
         <p>
           Email <ContactEmail /> from the address on your account, and we&apos;ll delete the account along with its
           connected channels, contacts and conversations. That can&apos;t be undone, so export anything you want to

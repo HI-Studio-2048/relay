@@ -5,7 +5,7 @@ import { log } from "@/lib/logger";
 import type { ContactRecord } from "@/lib/types";
 
 /**
- * Relay's AI layer (Claude). One place for the client, model, structured outputs and refusal
+ * Recatch's AI layer (Claude). One place for the client, model, structured outputs and refusal
  * handling. Every call opts into server-side refusal fallbacks ("default" routes by category).
  */
 export const AI_MODEL = "claude-opus-5-5";
@@ -331,7 +331,7 @@ export function safePublicReply(reply: string): string {
 const DigestSchema = z.object({
   headline: z.string().describe("One sentence: the most important thing about this week."),
   highlights: z.array(z.string()).describe("2-4 short observations grounded in the numbers."),
-  next_steps: z.array(z.string()).describe("2-3 concrete actions to take in Relay this week."),
+  next_steps: z.array(z.string()).describe("2-3 concrete actions to take in Recatch this week."),
 });
 
 export type WeeklyDigest = z.infer<typeof DigestSchema>;

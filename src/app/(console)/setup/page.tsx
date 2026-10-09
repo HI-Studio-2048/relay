@@ -26,7 +26,7 @@ const GUIDES: Record<ChannelId, { title: string; steps: string[]; tokenLabel: st
     steps: [
       "Connect Instagram, Facebook, WhatsApp, TikTok, X, LinkedIn, YouTube, Threads, Bluesky, Reddit and more in Zernio.",
       "Create an API key in Zernio → Settings → API keys and paste it here. Leave the account filter empty to route every account.",
-      "Relay registers its webhook with Zernio (DMs, comments, referrals) and signs it with its own secret. Comment → DM, story replies and live chat work across all of them.",
+      "Recatch registers its webhook with Zernio (DMs, comments, referrals) and signs it with its own secret. Comment → DM, story replies and live chat work across all of them.",
     ],
   },
   telegram: {
@@ -34,7 +34,7 @@ const GUIDES: Record<ChannelId, { title: string; steps: string[]; tokenLabel: st
     tokenLabel: "Bot token",
     steps: [
       "Talk to @BotFather, create a bot, copy the token.",
-      "Relay calls getMe, stores the token encrypted, and sets the webhook for you.",
+      "Recatch calls getMe, stores the token encrypted, and sets the webhook for you.",
     ],
   },
   instagram: {

@@ -127,7 +127,7 @@ export function SocialTriggerEditor({
           onChange={(event) => onChange({ ...value, publicReplies: lines(event.target.value) })}
         />
         <p className="text-[11px] leading-snug text-muted-foreground">
-          One per line. Relay picks one at random so replies do not look automated.
+          One per line. Recatch picks one at random so replies do not look automated.
         </p>
         <label className="flex items-center gap-2 pt-1 text-sm">
           <input

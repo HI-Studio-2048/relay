@@ -14,7 +14,7 @@ describe("flow export / import", () => {
   });
 
   it("rejects bad files and clears cross-account links", () => {
-    expect(() => parseFlowImport({ hello: 1 })).toThrow("not a Relay flow");
+    expect(() => parseFlowImport({ hello: 1 })).toThrow("not a Recatch flow");
     expect(() => parseFlowImport({ relay: "flow", definition: { startStepId: "a", steps: [] } })).toThrow("no steps");
     expect(() => parseFlowImport({ relay: "flow", definition: { startStepId: "x", steps: [{ id: "a", type: "end" }] } })).toThrow("start step");
     expect(() => parseFlowImport({ relay: "flow", definition: { startStepId: "a", steps: [{ id: "a", type: "hack" }] } })).toThrow("Unknown step");

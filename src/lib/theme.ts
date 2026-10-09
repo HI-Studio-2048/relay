@@ -1,5 +1,5 @@
 /**
- * Shared Relay / Flow canvas tokens.
+ * Shared Recatch / Flow canvas tokens.
  *
  * UI chrome should import from here or `@/components/chrome/tone` — not from
  * `flow-canvas/**`. Hex values stay in sync with `--relay-*` in `globals.css`.

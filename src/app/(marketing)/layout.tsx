@@ -35,7 +35,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
             <Link href="/terms" className="hover:text-[#1b1f24]">Terms</Link>
             <Link href="/data-deletion" className="hover:text-[#1b1f24]">Delete your data</Link>
           </div>
-          <p>© {new Date().getFullYear()} Relay</p>
+          <p>© {new Date().getFullYear()} Recatch</p>
         </div>
       </footer>
     </div>

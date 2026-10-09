@@ -1,8 +1,8 @@
 # Integrations log
 
-Where each platform stands in Relay, as of 2026-10-09.
+Where each platform stands in Recatch, as of 2026-10-09.
 
-"Direct" means Relay talks to the platform's own API with our credentials. "Zernio" means it comes in through the Zernio hub (one API key, Zernio holds the platform approvals).
+"Direct" means Recatch talks to the platform's own API with our credentials. "Zernio" means it comes in through the Zernio hub (one API key, Zernio holds the platform approvals).
 
 ## Working
 
@@ -24,8 +24,8 @@ Public `/privacy`, `/terms` and `/data-deletion` pages are in, linked from the s
 | Platform | Why |
 | --- | --- |
 | Meta (Instagram, Messenger, WhatsApp, Threads) direct | Code is ready. Waiting on Meta Business Verification and App Review, and the status of both is unknown. |
-| Telegram, one bot for all of Relay | Telegram has no company-wide API. The only way is Telegram Business, which needs every customer to pay for Telegram Premium. Dropped. |
-| Bluesky direct | No adapter yet. Keys are instant. Bluesky doesn't push DMs, so Relay would have to poll for them. |
+| Telegram, one bot for all of Recatch | Telegram has no company-wide API. The only way is Telegram Business, which needs every customer to pay for Telegram Premium. Dropped. |
+| Bluesky direct | No adapter yet. Keys are instant. Bluesky doesn't push DMs, so Recatch would have to poll for them. |
 | Discord direct | No adapter yet. Keys are instant. Discord is only used for team alerts right now. |
 | Slack direct | No adapter yet. Keys are instant. Slack is only used for team alerts right now. |
 | Reddit direct | API access form not sent. The subreddit we made for it got auto-banned by Reddit's spam filter, so it's parked. |
@@ -39,11 +39,26 @@ Public `/privacy`, `/terms` and `/data-deletion` pages are in, linked from the s
 | Google | Google shut down Business Messages in 2024. What's left handles reviews and posts, not chat. |
 | WordPress, Shopify | Not messaging platforms. They'd be separate integrations (publishing, order lookups), not inbox channels. Not scoped yet. |
 
+## Domain
+
+The Google, Pinterest, TikTok, LinkedIn and Meta applications all ask for a website, privacy and terms URL on a domain the company owns, and they tie the approval to it. The domain is `recatch.app` (Cloudflare, pointed at the Railway service, `PUBLIC_URL` set to it). The product is renamed from Relay to Recatch in the app and docs. The repo, the Railway project, the `relay_session` cookie, the `rly_` API key prefix and the `X-Relay-Signature` webhook header keep their old names on purpose, so nothing already deployed or integrated breaks.
+
+Use these URLs on every application: `https://recatch.app/privacy`, `https://recatch.app/terms` and `https://recatch.app/data-deletion`.
+
+Done so far, under the admin account (`admin@hiiiiiiiiiii.com`, so the company owns the apps and not a personal login):
+
+- Google Cloud project `Recatch` (`relay-510909`) in the company Workspace organization. YouTube Data API v3 is enabled. OAuth consent screen and credentials not set up yet.
+- Pinterest developer account signed in. No app connected yet. Starts on Trial access (1,000 calls a day), then needs a Standard access request.
+- TikTok for Developers signed in. Nothing created yet.
+- LinkedIn: no account yet. Needs a company Page for HI Studio first.
+
 ## Next up
 
-1. **Put the legal pages live.** Set `PUBLIC_CONTACT_EMAIL` on Railway, push, and check `/privacy`, `/terms` and `/data-deletion` load on the production domain. Get the wording signed off.
-2. **Meta in development mode.** Create the Meta app under the company's Business Manager. In dev mode the direct Instagram, Messenger and WhatsApp adapters already work with our own accounts added as testers (WhatsApp gives a free test number). Prove it works and record the screencast App Review wants.
-3. **Meta applications.** Submit Business Verification with the company docs, then App Review for `instagram_manage_messages`, `pages_messaging` and the WhatsApp permissions. Use the legal page URLs from step 1.
-4. **The other applications, in parallel.** Google (YouTube), Pinterest, TikTok and LinkedIn. Same company docs, same legal URLs. They take weeks, so start them together.
-5. **Discord and Slack adapters.** No approval needed, so this is pure code work while the applications wait. Both push events to us, same shape as Telegram.
-6. **Bluesky adapter.** Also instant, but needs a polling job because Bluesky doesn't push DMs.
+1. **Run a health check on the Telegram bot** (Setup page) so its webhook moves to `recatch.app`. The old Railway address still works until then.
+2. **Google consent screen and credentials.** App name Recatch, support email the admin address, the new domain and legal URLs. Then the OAuth client ID and secret. Verification comes after, with a demo video, and a quota increase if needed.
+3. **Pinterest and TikTok apps.** Create each one with the new domain and company details, then request Standard access (Pinterest) and the scopes needed (TikTok).
+4. **LinkedIn.** Create the company Page, then apply to the Community Management API.
+5. **Meta in development mode.** Create the Meta app under the company's Business Manager. In dev mode the direct Instagram, Messenger and WhatsApp adapters already work with our own accounts as testers (WhatsApp gives a free test number). Record the screencast App Review wants.
+6. **Meta applications.** Business Verification with the company docs, then App Review for `instagram_manage_messages`, `pages_messaging` and the WhatsApp permissions.
+7. **Discord and Slack adapters.** No approval needed, so this is code work that can happen now. Slack pushes events to a URL, like Telegram. Discord delivers DMs over a persistent websocket (the Gateway), so Recatch has to hold a live connection per bot.
+8. **Bluesky adapter.** Also instant, but needs a polling job because Bluesky doesn't push DMs.

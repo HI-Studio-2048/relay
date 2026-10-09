@@ -42,7 +42,7 @@ export const FLOW_TEMPLATES: FlowTemplate[] = [
   {
     id: "giveaway-entry",
     name: "Giveaway entry",
-    description: "Comment WIN to enter. Relay confirms the entry by DM, tags the entrant, and pings your team.",
+    description: "Comment WIN to enter. Recatch confirms the entry by DM, tags the entrant, and pings your team.",
     category: "Instagram growth",
     channels: ["instagram", "facebook"],
     triggerType: "comment",

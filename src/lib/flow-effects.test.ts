@@ -51,7 +51,7 @@ describe("interpolateTemplate", () => {
     expect(interpolateTemplate("{{company}}", { ...contact, customFields: { company: "https://acme.test/x" } }, {}, "url")).toBe("https://acme.test/x");
   });
 
-  it("keeps {{contact_id}} as Relay's id (Stripe matches on it); an imported field stays reachable via field:", () => {
+  it("keeps {{contact_id}} as Recatch's id (Stripe matches on it); an imported field stays reachable via field:", () => {
     const imported = { ...contact, customFields: { contact_id: "mc-77" } };
     expect(interpolateTemplate("{{contact_id}}", imported)).toBe("c");
     expect(interpolateTemplate("{{field:contact_id}}", imported)).toBe("mc-77");

@@ -9,7 +9,7 @@ import { addContactTag } from "@/lib/store";
 import { readStripe, stripeAmount, verifyStripeSignature } from "@/lib/stripe";
 
 /**
- * Stripe → Relay: a completed Checkout (Payment Link) whose client_reference_id is a Relay contact id
+ * Stripe → Recatch: a completed Checkout (Payment Link) whose client_reference_id is a Recatch contact id
  * becomes a goal with the amount paid, credited to the flow that sent the link, plus a tag.
  * Public route; authenticated by the Stripe signature.
  */

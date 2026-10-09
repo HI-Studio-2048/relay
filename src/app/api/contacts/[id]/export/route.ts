@@ -6,7 +6,7 @@ import { publicContact } from "@/lib/developer";
 import { fail, json, type RouteParams } from "@/lib/http";
 import { loadContactRecord } from "@/lib/store";
 
-/** Data-access request: everything Relay holds about one person, as a JSON download. */
+/** Data-access request: everything Recatch holds about one person, as a JSON download. */
 export async function GET(_request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;

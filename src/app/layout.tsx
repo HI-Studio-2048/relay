@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Relay",
+  title: "Recatch",
   description: "Chat automation, lead capture and a shared inbox for Telegram, Instagram, Messenger and WhatsApp.",
 };
 

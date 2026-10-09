@@ -1,6 +1,6 @@
 /**
  * Channel catalog. ManyChat runs Instagram, Messenger, WhatsApp, and Telegram from one console;
- * every send and every inbound webhook in Relay goes through the adapter for the account's channel.
+ * every send and every inbound webhook in Recatch goes through the adapter for the account's channel.
  * `zernio` is a hub: one API key brings every social account in a Zernio workspace.
  */
 export type ChannelId = "zernio" | "telegram" | "instagram" | "messenger" | "whatsapp";
@@ -173,7 +173,7 @@ export type ChannelTarget = {
   platform?: string | null;
 };
 
-/** Button payloads Relay itself sends: a flow step (n:), a whole flow (flow:), or a CSAT rating (csat:). */
+/** Button payloads Recatch itself sends: a flow step (n:), a whole flow (flow:), or a CSAT rating (csat:). */
 export function isRelayPayload(value: string | null | undefined): boolean {
   return Boolean(value && (value.startsWith("n:") || value.startsWith("flow:") || /^csat:[1-3]$/.test(value)));
 }

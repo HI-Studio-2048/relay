@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { CHANNEL_IDS, CHANNELS } from "@/lib/channels/types";
 
 export const metadata: Metadata = {
-  title: "Relay · Chat automation for Telegram, Instagram, Messenger and WhatsApp",
+  title: "Recatch · Chat automation for Telegram, Instagram, Messenger and WhatsApp",
   description:
     "Build visual chat flows, capture leads, run a shared inbox, and send confirmed broadcasts across every messaging channel.",
 };
@@ -166,7 +166,7 @@ export default function WelcomePage() {
               Turn every chat into a customer.
             </h1>
             <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-pretty text-[#4b5563]">
-              Relay lets you design conversations visually, capture leads automatically, and step into any
+              Recatch lets you design conversations visually, capture leads automatically, and step into any
               chat from one shared inbox. No code, on every channel your customers already use.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
