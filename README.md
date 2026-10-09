@@ -71,9 +71,9 @@ Never commit tokens or `.env*`. Tokens are never logged (outbound logs are redac
 
 ## Connect every social account (Zernio)
 
-1. Connect Instagram, Facebook, WhatsApp, TikTok, X, LinkedIn and the rest in [Zernio](https://zernio.com).
-2. In Zernio → Settings → API keys, create a key.
-3. In Relay → **Settings**, choose **All socials (Zernio)**, paste the key and connect. Relay lists the linked accounts and registers its own signed webhook (DMs, comments, referrals) — set `PUBLIC_URL` first so Zernio can reach it.
+1. Create a [Zernio](https://zernio.com) workspace and, in Zernio → Settings → API keys, an API key. Set `PUBLIC_URL` first so Zernio can reach Relay.
+2. In Relay → **Channels**, paste the key once. Relay registers its own signed webhook (DMs, comments, referrals).
+3. Still in **Channels**, click **Connect** on Instagram, Facebook, WhatsApp, X, TikTok, Threads, LinkedIn, YouTube, Reddit or Bluesky. You sign in on the network's own screen (Zernio runs it and the Page / account / number picker) and come back to Relay with the account live. Accounts that lose access show **Needs reconnecting** with a one-click **Reconnect**; **Disconnect** stops new DMs from that account and keeps history. Each step is in the activity log.
 4. Optional, also in Settings: **Payments** (Stripe webhook for revenue attribution), **Team alerts** (Slack / Discord / Teams), **Fields**, **Tags** and **Team**.
 5. Start from a template under **Flows**, test it with **Test**, then switch it on.
 

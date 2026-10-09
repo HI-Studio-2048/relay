@@ -30,7 +30,14 @@ export function publicBot(row: typeof bots.$inferSelect) {
   };
 }
 
-export type LinkedAccount = { id: string; platform: string; username: string | null; picture: string | null };
+export type LinkedAccount = {
+  id: string;
+  platform: string;
+  username: string | null;
+  picture: string | null;
+  /** Zernio lost access (token expired or permissions revoked): the person must reconnect. */
+  needsReconnection?: boolean;
+};
 
 function linkedAccounts(accounts: ZernioAccount[], filter: string | null): LinkedAccount[] {
   const allowed = (filter ?? "")
@@ -44,6 +51,7 @@ function linkedAccounts(accounts: ZernioAccount[], filter: string | null): Linke
       platform: account.platform,
       username: account.username ?? account.displayName ?? null,
       picture: account.profilePicture ?? null,
+      needsReconnection: Boolean(account.needsReconnection) || account.isActive === false,
     }));
 }
 
@@ -61,7 +69,6 @@ export async function connectZernio(input: { apiKey: string; accountFilter?: str
   const apiKey = input.apiKey.trim();
   const filter = (input.accountFilter ?? "").trim() || null;
   const accounts = linkedAccounts(await listZernioAccounts(apiKey), filter);
-  if (filter && accounts.length === 0) throw new Error("None of those Zernio account ids belong to this API key");
 
   const db = await getDb();
   const existing = await db.select().from(bots);
@@ -73,6 +80,8 @@ export async function connectZernio(input: { apiKey: string; accountFilter?: str
       return false;
     }
   });
+  // A typo on first connect is an error; an existing account whose last account was disconnected is fine.
+  if (filter && accounts.length === 0 && !match) throw new Error("None of those Zernio account ids belong to this API key");
   const id = match?.id ?? crypto.randomUUID();
   const webhookSecret = match?.webhookSecret ?? randomSecret();
   const originUrl = publicUrl(input.origin);

@@ -76,6 +76,63 @@ export type ZernioAccount = {
   needsReconnection?: boolean;
 };
 
+/**
+ * Platforms people can connect from Relay's Channels page, through Zernio's hosted connect flow
+ * (Zernio runs the consent screen and any Page / account / number picking, then sends them back).
+ */
+export const ZERNIO_CONNECTABLE = [
+  "instagram",
+  "facebook",
+  "whatsapp",
+  "twitter",
+  "tiktok",
+  "threads",
+  "linkedin",
+  "youtube",
+  "reddit",
+  "bluesky",
+] as const;
+export type ZernioConnectable = (typeof ZERNIO_CONNECTABLE)[number];
+
+export function isZernioConnectable(value: unknown): value is ZernioConnectable {
+  return typeof value === "string" && (ZERNIO_CONNECTABLE as readonly string[]).includes(value);
+}
+
+type ZernioProfile = { _id?: string; name?: string; isDefault?: boolean };
+
+/** The Zernio profile new accounts join: the one saved for this Relay account, else the default, else a new "Relay" profile. */
+export async function resolveZernioProfile(apiKey: string, saved?: string | null): Promise<string> {
+  const data = await zernioRequest<{ profiles?: ZernioProfile[] }>("GET", "/v1/profiles", apiKey);
+  const profiles = (data.profiles ?? []).filter((profile) => profile._id);
+  if (saved && profiles.some((profile) => profile._id === saved)) return saved;
+  const pick = profiles.find((profile) => profile.isDefault) ?? profiles[0];
+  if (pick?._id) return pick._id;
+  const created = await zernioRequest<{ profile?: ZernioProfile; _id?: string }>("POST", "/v1/profiles", apiKey, { name: "Relay" });
+  const id = created.profile?._id ?? created._id;
+  if (!id) throw new ChannelApiError("Zernio did not return a profile");
+  return id;
+}
+
+/**
+ * Start connecting a social account: Zernio returns the URL of the platform's consent screen. When
+ * the person finishes, Zernio redirects to `redirectUrl` with connected/accountId (or error) appended.
+ */
+export async function zernioConnectUrl(
+  apiKey: string,
+  input: { platform: ZernioConnectable; profileId: string; redirectUrl: string; reconnectAccountId?: string | null },
+) {
+  const query = new URLSearchParams({ profileId: input.profileId, redirect_url: input.redirectUrl });
+  if (input.reconnectAccountId) query.set("reconnectAccountId", input.reconnectAccountId);
+  const data = await zernioRequest<{ authUrl?: string }>("GET", `/v1/connect/${input.platform}?${query}`, apiKey);
+  if (!data.authUrl) throw new ChannelApiError("Zernio did not return a connect link");
+  return data.authUrl;
+}
+
+/** Disconnect a social account from the Zernio workspace (it stops receiving DMs in Relay). */
+export async function disconnectZernioAccount(apiKey: string, accountId: string) {
+  await zernioRequest("DELETE", `/v1/accounts/${encodeURIComponent(accountId)}`, apiKey);
+}
+
 export async function listZernioAccounts(apiKey: string): Promise<ZernioAccount[]> {
   const data = await zernioRequest<{ accounts?: ZernioAccount[] }>("GET", "/v1/accounts", apiKey);
   return data.accounts ?? [];
