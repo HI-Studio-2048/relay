@@ -1,12 +1,12 @@
 # Integrations log
 
-Where each platform stands in Recatch. Parked on 2026-10-09, so this is a snapshot to pick the work back up from.
+Where each platform stands in Recatch. Last updated at the end of the 2026-10-09 session, so this is a snapshot to pick the work back up from. Everything is merged and pushed: `main` is the only branch that matters, and there is no unpushed local work.
 
 "Direct" means Recatch talks to the platform's own API with our credentials. "Zernio" means it comes in through the Zernio hub (one API key, Zernio holds the platform approvals).
 
 ## Snapshot
 
-Live on `recatch.app`: the app, the privacy, terms and data deletion pages, and Connected apps (YouTube and TikTok sign-in, both tested for real).
+Live on `recatch.app`: the app, the privacy, terms and data deletion pages, Connected apps (YouTube and TikTok sign-in, both tested for real), and Discord as a direct channel (a real bot was connected, a DM reached the inbox and the starter flow answered).
 
 Waiting on someone else (nothing for us to do until they answer):
 
@@ -23,6 +23,14 @@ Waiting on a person (we can't do these from the browser):
 | Demo video for the TikTok production review | Same |
 | LinkedIn company Page | Needs a person to create it before any application |
 | Company documents for Meta Business Verification and TikTok business verification | Business registration, proof of address and so on |
+
+Small chores nobody has done yet:
+
+| What | Why |
+| --- | --- |
+| Click Run health check on the Discord card (Setup page) | The card still says "Relay (Discord)". The bot was renamed to Recatch in Discord and the check refreshes the label. |
+| Decide about "Public Bot" on the Discord Bot page | It is on, so anyone could add the test bot to their server. Turn it off unless that is wanted. |
+| Decide about the welcome flow's first line | The seed text contains a dash ("Hey, this is HI Studio" with a long dash). It is old seed data that every new account gets. |
 
 Parked on purpose:
 
@@ -77,7 +85,16 @@ Everything is under the company admin account (`admin@hiiiiiiiiiii.com`), so the
 - **Google Cloud:** project `Recatch` (project id `relay-510909`, which cannot be renamed) in the company Workspace organization. YouTube Data API v3 is on. OAuth consent screen: app name Recatch, External, status Testing, links and authorized domain on `recatch.app`. The Google API Services User Data Policy was accepted on 2026-10-09. OAuth client "Recatch web" with redirect `https://recatch.app/api/connections/google/callback`. While in Testing, only listed test users can sign in (Audience, Test users).
 - **Pinterest:** developer account carrying the company name Human Intelligence Studio Limited. App "Recatch by Human Intelligence Studio Limited", App ID 1621662, purpose "Consumer experience", use cases Pin creation and scheduling plus Reporting, audience Businesses, reads Pins and boards "Yes, mine". The purpose text says the integration is in development, which is true. Only one open request is allowed at a time, and Standard access can only be requested once Trial is granted.
 - **TikTok for Developers:** organization `Human Intelligence Studio Limited`, which already had an old unfinished mini game app ("HI Studio Verification", left alone). New app "Recatch" (type Other), App ID 7694605918150952978. The domain `recatch.app` is verified. **The production form does not keep a half finished draft** (reloading wipes it), because review needs everything at once including the demo video. The working setup is the **sandbox** "Recatch sandbox", which does save: icon (the logo as a 1024 by 1024 PNG), category Business, description, terms and privacy URLs, Web platform, Login Kit with redirect `https://recatch.app/api/connections/tiktok/callback`, and the `user.info.basic` scope. Target user `ezzawan`. The sandbox has its own client key and secret, which are the ones in Railway. The production app has separate credentials.
+- **Discord:** application "Recatch" in the Discord Developer Portal, application id 1557320195750629386, with the Recatch logo and a bot user named Recatch. Its bot token is shown only once (Reset Token on the Bot page) and is entered on the Setup page by a person. The test bot sits in "Human Intelligence Studio's server". Invite link: `https://discord.com/oauth2/authorize?client_id=1557320195750629386&scope=bot&permissions=0`. No privileged intents are needed for DMs. Other businesses connect their own bots the same way.
 - **LinkedIn:** nothing created. Needs a company Page for HI Studio first.
+
+## Start here next session
+
+1. `git pull`, then `npm test` and `npx tsc --noEmit`. The test `broadcast A/B split` is slow (about 1 second alone) and can exceed vitest's 5 second limit when the whole suite runs in parallel. It passes alone, so rerun it by itself before assuming something broke.
+2. Open the Facebook tab: Meta's identity check on the developer account is the first blocker, and only a person can finish it.
+3. Railway builds take 5 to 6 minutes. After a push, check the change in a signed-in browser. A 401 from a signed-out request proves nothing, because `proxy.ts` returns it for any `/api` path.
+4. The browser extension can drop its connection for a minute. Retry before assuming a page is broken.
+5. Never read or enter secrets, passwords, CAPTCHAs or consent screens on someone's behalf. Those are done by a person.
 
 ## Resume checklist
 

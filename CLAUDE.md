@@ -15,7 +15,7 @@ The product is Recatch (renamed from Relay). User-facing text says Recatch. Keep
 
 ## Deploying
 
-Railway deploys every push to `main`, which takes three to four minutes. Live at https://recatch.app (the old `relay-production-71da.up.railway.app` address still works). `GET /api/health` reports the service and database state.
+Railway deploys every push to `main`, which takes five to six minutes (the old build keeps serving until the new one is up, so a change is not live the moment a deploy shows as started). Live at https://recatch.app (the old `relay-production-71da.up.railway.app` address still works). `GET /api/health` reports the service and database state.
 
 Environment variables live in Railway and never in the repo or in chat. `.env.example` and the table in `README.md` list the names.
 
@@ -29,11 +29,13 @@ Environment variables live in Railway and never in the repo or in chat. `.env.ex
 - Pages and routes reachable while signed out are listed in `src/proxy.ts`.
 - Tests that need the database change into a temp directory before the first `getDb()`, mock `@/lib/auth` for `requireUserId`, and stub `fetch` for providers. They never call real services. `src/lib/oauth/oauth.integration.test.ts` is the pattern to copy.
 - The working tree uses CRLF line endings. A script that edits files should keep the file's existing endings.
+- `broadcast A/B split` is slow (about a second alone) and can pass the 5 second limit when the full suite runs in parallel. It passes alone, so rerun it by itself before treating a failure there as real.
 - Pages that read an environment variable at request time need `export const dynamic = "force-dynamic"`, or the build bakes in the value it saw.
 
 ## Where things are
 
-- `src/lib/channels/`: one adapter per messaging channel (Telegram, Meta, WhatsApp, Zernio). `index.ts` dispatches sends and inbound parsing. `src/lib/webhook.ts` runs every inbound event through the flow engine.
+- `src/lib/channels/`: one adapter per messaging channel (Telegram, Meta, WhatsApp, Discord, Zernio). `index.ts` dispatches sends and inbound parsing. `src/lib/webhook.ts` runs every inbound event through the flow engine.
+- Discord is different from the others: it delivers DMs over a persistent websocket, not a webhook. `discord-gateway.ts` is the connection (heartbeat, resume, backoff), and `discord-manager.ts` keeps one per connected bot and re-syncs every minute from `startup.ts`. Run only one instance with the worker on, or every DM is answered twice.
 - `src/lib/oauth/` and `src/app/api/connections/`: Connected apps (YouTube, TikTok). These are sign-in and read connections, not messaging channels. To add a provider, add its config in `providers.ts`, its env keys, and tests. Anything that calls a provider's API gets its token from `getAccessToken`, never from the database directly.
 - `src/app/(marketing)/`: the public site, including the privacy, terms and data deletion pages that every platform application asks for.
 
