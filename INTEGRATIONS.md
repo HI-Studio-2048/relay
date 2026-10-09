@@ -48,7 +48,7 @@ Use these URLs on every application: `https://recatch.app/privacy`, `https://rec
 Done so far, under the admin account (`admin@hiiiiiiiiiii.com`, so the company owns the apps and not a personal login):
 
 - Google Cloud project `Recatch` (project id `relay-510909`, which cannot be renamed) in the company Workspace organization. YouTube Data API v3 is enabled. The OAuth consent screen is set up: app name Recatch, External audience, status Testing, home page, privacy and terms links on `recatch.app`, `recatch.app` as the authorized domain, and the admin address as support and developer contact. The Google API Services User Data Policy was accepted on 2026-10-09. No OAuth client yet.
-- Pinterest developer account signed in. No app connected yet. Starts on Trial access (1,000 calls a day), then needs a Standard access request.
+- Pinterest developer account signed in (the account carries the company name Human Intelligence Studio Limited). The "Connect app" form is filled in but not submitted yet, because it ends in a reCAPTCHA that has to be ticked by a person. App name "Recatch by Human Intelligence Studio Limited", website and privacy link on `recatch.app`, purpose "Consumer experience", use cases Pin creation and scheduling plus Reporting, audience Businesses, reads Pins and boards: Yes, mine (the connected account's own content only). The purpose text says the integration is in development. Pinterest's API has no messaging, so this is for publishing and reporting only. New apps start on Trial access (1,000 calls a day), then need a Standard access request.
 - TikTok for Developers signed in. Nothing created yet.
 - LinkedIn: no account yet. Needs a company Page for HI Studio first.
 
