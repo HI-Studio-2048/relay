@@ -1,3 +1,4 @@
+import { requireBotAccess } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
@@ -10,6 +11,7 @@ import { readCsat } from "@/lib/csat";
 export async function GET(_request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireBotAccess(id);
     const db = await getDb();
     const [bot] = await db.select().from(bots).where(eq(bots.id, id)).limit(1);
     if (!bot) return json({ error: "Account not found" }, 404);
@@ -23,6 +25,7 @@ export async function GET(_request: Request, context: RouteParams<{ id: string }
 export async function PUT(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireBotAccess(id);
     const body = await readJson<{ starters?: unknown; hours?: unknown; moderation?: unknown; csat?: unknown }>(request);
     const db = await getDb();
     const [bot] = await db.select().from(bots).where(eq(bots.id, id)).limit(1);

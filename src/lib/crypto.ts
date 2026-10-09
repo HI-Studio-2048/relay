@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, randomBytes, timingSafeEqual } from "node:crypto";
 import { requireEncryptionInProd } from "@/lib/env";
 
 const DEV_KEY = Buffer.from("dev-only-relay-encryption-key-32"); // 32 bytes
@@ -43,10 +43,6 @@ export function decryptSecret(payload: string): string {
 
 export function randomSecret(bytes = 24): string {
   return randomBytes(bytes).toString("hex");
-}
-
-export function signAdminSession(password: string): string {
-  return createHmac("sha256", password).update("relay-admin-v1").digest("hex");
 }
 
 export function safeEqual(a: string, b: string): boolean {

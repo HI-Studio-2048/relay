@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { requireBotAccess } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { automationRules } from "@/lib/db/schema";
 import { fail, json, readJson } from "@/lib/http";
@@ -8,6 +9,7 @@ export async function GET(request: Request) {
   try {
     const botId = new URL(request.url).searchParams.get("botId");
     if (!botId) return json({ error: "botId is required" }, 400);
+    await requireBotAccess(botId);
     return json({ rules: await listRules(botId) });
   } catch (error) {
     return fail(error);
@@ -28,6 +30,7 @@ export async function POST(request: Request) {
     if (!body.botId || !body.name?.trim() || !body.actionValue?.trim()) {
       return json({ error: "botId, name, and action value are required" }, 400);
     }
+    await requireBotAccess(body.botId);
     const triggerType = body.triggerType ?? "tag_applied";
     const actionType = body.actionType ?? "subscribe_sequence";
     if (!isRuleTrigger(triggerType)) return json({ error: `Unknown trigger "${triggerType}"` }, 400);
@@ -57,6 +60,7 @@ export async function PATCH(request: Request) {
   try {
     const body = await readJson<{ id?: string; botId?: string; isActive?: boolean }>(request);
     if (!body.id || !body.botId || typeof body.isActive !== "boolean") return json({ error: "id, botId and isActive are required" }, 400);
+    await requireBotAccess(body.botId);
     const db = await getDb();
     await db
       .update(automationRules)
@@ -74,6 +78,7 @@ export async function DELETE(request: Request) {
     if (!body.id || !body.botId || body.confirm !== true) {
       return json({ error: "id, botId, and confirm: true are required" }, 400);
     }
+    await requireBotAccess(body.botId);
     const db = await getDb();
     await db
       .delete(automationRules)

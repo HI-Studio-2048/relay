@@ -1,3 +1,4 @@
+import { requireBotAccess } from "@/lib/auth";
 import { and, desc, eq, gte, notLike } from "drizzle-orm";
 import { AiUnavailableError, analyzeConversations, readAiSettings } from "@/lib/ai";
 import { getDb } from "@/lib/db";
@@ -8,6 +9,7 @@ import { json, fail, readJson, type RouteParams } from "@/lib/http";
 export async function POST(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireBotAccess(id);
     const body = await readJson<{ days?: number }>(request);
     const days = Math.min(90, Math.max(1, Number(body.days) || 14));
     const db = await getDb();

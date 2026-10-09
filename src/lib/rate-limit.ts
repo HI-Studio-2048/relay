@@ -20,3 +20,9 @@ export async function acquireSendSlot(botId: string, chatId: string): Promise<vo
   }
   throw new Error("Telegram send rate limit exceeded — retry shortly");
 }
+
+/** Fixed-window attempt counter for auth endpoints; true while `key` is under `limit`. */
+export async function allowAttempt(key: string, limit: number, windowSeconds: number): Promise<boolean> {
+  const count = await incrWithTtl(`relay:auth:${key}`, windowSeconds);
+  return count <= limit;
+}

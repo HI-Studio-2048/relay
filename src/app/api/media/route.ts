@@ -1,3 +1,4 @@
+import { requireUserId } from "@/lib/auth";
 import { fail, json, readJson } from "@/lib/http";
 import { mediaFromPublicUrl, saveMediaFile, toFlowMedia } from "@/lib/media";
 
@@ -5,6 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
+    await requireUserId();
     const contentType = request.headers.get("content-type") ?? "";
     if (contentType.includes("application/json")) {
       const body = await readJson<{ url?: string }>(request);

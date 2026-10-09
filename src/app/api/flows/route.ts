@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { requireBotAccess } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { flows } from "@/lib/db/schema";
 import { EXAMPLE_LEAD_CAPTURE_FLOW } from "@/lib/example-flow";
@@ -10,6 +11,7 @@ export async function GET(request: Request) {
   try {
     const botId = new URL(request.url).searchParams.get("botId");
     if (!botId) return json({ error: "botId is required" }, 400);
+    await requireBotAccess(botId);
     const db = await getDb();
     return json({ flows: await db.select().from(flows).where(eq(flows.botId, botId)) });
   } catch (error) {
@@ -28,6 +30,7 @@ export async function POST(request: Request) {
       definition?: FlowDefinition;
     }>(request);
     if (!body.botId || !body.name?.trim()) return json({ error: "botId and name are required" }, 400);
+    await requireBotAccess(body.botId);
     const db = await getDb();
     const [flow] = await db
       .insert(flows)

@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { requireRowAccess } from "@/lib/auth/resources";
 import { getDb } from "@/lib/db";
 import { flows } from "@/lib/db/schema";
 import { json, fail, type RouteParams } from "@/lib/http";
@@ -7,6 +8,7 @@ import { json, fail, type RouteParams } from "@/lib/http";
 export async function POST(_request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("flow", id);
     const db = await getDb();
     const [source] = await db.select().from(flows).where(eq(flows.id, id)).limit(1);
     if (!source) return json({ error: "Flow not found" }, 404);

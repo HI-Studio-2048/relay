@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { FlowWorkspace } from "@/components/flow-canvas/flow-workspace";
 import { FlowSharePanel } from "@/components/chrome/flow-share-panel";
+import { ownsBot } from "@/lib/auth/resources";
 import { getDb } from "@/lib/db";
 import { channelOf } from "@/lib/channels/types";
 import { bots, customFields, flows, tags } from "@/lib/db/schema";
@@ -14,7 +15,7 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const db = await getDb();
   const [flow] = await db.select().from(flows).where(eq(flows.id, id)).limit(1);
-  if (!flow) notFound();
+  if (!flow || !(await ownsBot(flow.botId))) notFound();
 
   const [fieldRows, tagRows, links, flowRows, botRows] = await Promise.all([
     db.select().from(customFields).where(eq(customFields.botId, flow.botId)),

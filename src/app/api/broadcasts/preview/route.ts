@@ -1,3 +1,5 @@
+import { requireBotAccess } from "@/lib/auth";
+import { requireRowInBot } from "@/lib/auth/resources";
 import { json, fail, readJson } from "@/lib/http";
 import { sanitizeSegment } from "@/lib/segments";
 import { broadcastAudience } from "@/lib/store";
@@ -7,6 +9,8 @@ export async function POST(request: Request) {
   try {
     const body = await readJson<{ botId?: string; tagId?: string | null; segment?: unknown }>(request);
     if (!body.botId) return json({ error: "botId is required" }, 400);
+    await requireBotAccess(body.botId);
+    if (body.tagId) await requireRowInBot("tag", body.tagId, body.botId);
     const audience = await broadcastAudience(body.botId, body.tagId ?? null, sanitizeSegment(body.segment));
     return json({
       count: audience.length,

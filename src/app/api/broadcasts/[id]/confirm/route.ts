@@ -1,5 +1,6 @@
 import { logActivity } from "@/lib/activity";
 import { and, eq, inArray } from "drizzle-orm";
+import { requireRowAccess } from "@/lib/auth/resources";
 import { canDispatchBroadcast } from "@/lib/broadcast";
 import { EmptyAudienceError, materializeBroadcast } from "@/lib/broadcast-dispatch";
 import { getDb } from "@/lib/db";
@@ -32,6 +33,7 @@ async function readConfirm(request: Request): Promise<{ confirm: unknown; viaFor
 export async function POST(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("broadcast", id);
     const { confirm, viaForm, scheduledAt, smartTiming } = await readConfirm(request);
     const origin = new URL(request.url).origin;
     const redirectTo = (query: string) =>

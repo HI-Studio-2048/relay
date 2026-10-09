@@ -2,6 +2,8 @@ import { logActivity } from "@/lib/activity";
 import { desc, eq, inArray } from "drizzle-orm";
 import { syncBotCommands } from "@/lib/bot-commands";
 import { assertConfirm } from "@/lib/broadcast";
+import { requireUserId } from "@/lib/auth";
+import { requireRowAccess } from "@/lib/auth/resources";
 import { getDb } from "@/lib/db";
 import { flowVersions, flows } from "@/lib/db/schema";
 import { agentIdFromCookieHeader, findMember } from "@/lib/team";
@@ -11,6 +13,7 @@ import type { FlowDefinition } from "@/lib/types";
 export async function GET(_request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("flow", id);
     const db = await getDb();
     const [flow] = await db.select().from(flows).where(eq(flows.id, id)).limit(1);
     if (!flow) return json({ error: "Flow not found" }, 404);
@@ -23,6 +26,8 @@ export async function GET(_request: Request, context: RouteParams<{ id: string }
 export async function PATCH(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("flow", id);
+    const userId = await requireUserId();
     const body = await readJson<{
       name?: string;
       triggerType?: string;
@@ -42,7 +47,7 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
         (body.triggerType !== undefined && body.triggerType !== before.triggerType) ||
         (body.triggerValue !== undefined && body.triggerValue !== before.triggerValue));
     if (changed) {
-      const agent = await findMember(agentIdFromCookieHeader(request.headers.get("cookie")));
+      const agent = await findMember(agentIdFromCookieHeader(request.headers.get("cookie")), userId);
       await db.insert(flowVersions).values({
         id: crypto.randomUUID(),
         flowId: id,
@@ -90,6 +95,7 @@ export async function PATCH(request: Request, context: RouteParams<{ id: string 
 export async function DELETE(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("flow", id);
     const body = await readJson<{ confirm?: unknown }>(request);
     assertConfirm(body.confirm, "Delete flow");
     const db = await getDb();

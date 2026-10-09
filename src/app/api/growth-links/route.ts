@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { requireBotAccess } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { flows, growthLinks } from "@/lib/db/schema";
 import {
@@ -8,6 +9,7 @@ import {
   originFromRequest,
   presentStoredGrowthLink,
   slugifyName,
+  slugTakenElsewhere,
 } from "@/lib/growth-links";
 import { fail, json, readJson } from "@/lib/http";
 
@@ -16,6 +18,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const botId = url.searchParams.get("botId");
     if (!botId) return json({ error: "botId is required" }, 400);
+    await requireBotAccess(botId);
     const flowId = url.searchParams.get("flowId");
     return json({
       links: await listGrowthLinks(botId, {
@@ -42,6 +45,7 @@ export async function POST(request: Request) {
       ensure?: boolean;
     }>(request);
     if (!body.botId) return json({ error: "botId is required" }, 400);
+    await requireBotAccess(body.botId);
     const db = await getDb();
     const origin = originFromRequest(request);
 
@@ -69,6 +73,9 @@ export async function POST(request: Request) {
     if (body.flowId) {
       const [flow] = await db.select().from(flows).where(eq(flows.id, body.flowId)).limit(1);
       if (!flow || flow.botId !== body.botId) return json({ error: "Flow not found for this bot" }, 404);
+    }
+    if (await slugTakenElsewhere(body.botId, slug)) {
+      return json({ error: "That link name is already taken. Try another." }, 409);
     }
 
     const [link] = await db

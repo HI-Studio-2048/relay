@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { AiUnavailableError, REWRITE_STYLES, readAiSettings, rewriteCopy, type RewriteStyle } from "@/lib/ai";
+import { requireBotAccess } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
 import { json, fail, readJson } from "@/lib/http";
@@ -10,6 +11,7 @@ export async function POST(request: Request) {
     const body = await readJson<{ botId?: string; text?: string; style?: string }>(request);
     const text = body.text?.trim();
     if (!body.botId || !text) return json({ error: "botId and text are required" }, 400);
+    await requireBotAccess(body.botId);
     if (!body.style || !(body.style in REWRITE_STYLES)) return json({ error: "Unknown style" }, 400);
     const db = await getDb();
     const [bot] = await db.select().from(bots).where(eq(bots.id, body.botId)).limit(1);

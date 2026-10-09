@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { accountFromRow, channelTarget, sendChannelReply } from "@/lib/channels";
+import { requireRowAccess } from "@/lib/auth/resources";
 import { getDb } from "@/lib/db";
 import { bots, broadcasts, contacts } from "@/lib/db/schema";
 import { isBroadcastable } from "@/lib/broadcast";
@@ -13,6 +14,7 @@ import { botFieldValues } from "@/lib/template";
 export async function POST(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("broadcast", id);
     const body = await readJson<{ contactId?: string }>(request);
     const db = await getDb();
     const [broadcast] = await db.select().from(broadcasts).where(eq(broadcasts.id, id)).limit(1);

@@ -96,11 +96,11 @@ export async function runRules(botId: string, start: ContactRecord, events: Rule
         continue;
       }
       if (rule.actionType === "assign_to") {
-        const { assignContact, listTeam, pickAssignee } = await import("@/lib/team");
+        const { assignContact, listTeamForBot, pickAssignee } = await import("@/lib/team");
         const member =
           lower(value) === "round robin"
             ? await pickAssignee(botId)
-            : (await listTeam()).find((item) => lower(item.name) === lower(value) || lower(item.email ?? "") === lower(value));
+            : (await listTeamForBot(botId)).find((item) => lower(item.name) === lower(value) || lower(item.email ?? "") === lower(value));
         if (member) await assignContact(contact.id, member.id);
         continue;
       }

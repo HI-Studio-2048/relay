@@ -1,5 +1,6 @@
 import { logActivity } from "@/lib/activity";
 import { and, eq, ne } from "drizzle-orm";
+import { requireRowAccess } from "@/lib/auth/resources";
 import { getDb } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
@@ -10,6 +11,7 @@ import { emitWebhookSoon, publicContact } from "@/lib/developer";
 export async function GET(_request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("contact", id);
     const contact = await loadContactRecord(id);
     if (!contact) return json({ error: "Contact not found" }, 404);
     return json({ contact });
@@ -22,6 +24,7 @@ export async function GET(_request: Request, context: RouteParams<{ id: string }
 export async function DELETE(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("contact", id);
     const body = await readJson<{ confirm?: unknown }>(request).catch(() => ({ confirm: undefined }));
     if (body.confirm !== true) return json({ error: "Erasing a contact requires confirm: true", code: "CONFIRM_REQUIRED" }, 409);
     const db = await getDb();
@@ -38,6 +41,7 @@ export async function DELETE(request: Request, context: RouteParams<{ id: string
 export async function PATCH(request: Request, context: RouteParams<{ id: string }>) {
   try {
     const { id } = await context.params;
+    await requireRowAccess("contact", id);
     const contact = await loadContactRecord(id);
     if (!contact) return json({ error: "Contact not found" }, 404);
     const db = await getDb();

@@ -12,6 +12,20 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+/** A customer login. Each user owns the channel accounts (bots) they connect. */
+export const users = pgTable(
+  "users",
+  {
+    id: text("id").primaryKey(),
+    email: text("email").notNull(),
+    name: text("name").notNull().default(""),
+    /** scrypt$<salt>$<hash>, see lib/auth/password.ts. */
+    passwordHash: text("password_hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("users_email_idx").on(table.email)],
+);
+
 /**
  * A connected channel account. Historically a Telegram bot; `channel` now selects the adapter.
  * `telegramUsername` doubles as the account handle (page name, IG username, WhatsApp display number)
@@ -20,6 +34,8 @@ import {
 export const bots = pgTable("bots", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
+  /** The user who connected this account; null only for rows created before accounts existed. */
+  ownerId: text("owner_id").references(() => users.id, { onDelete: "cascade" }),
   channel: text("channel").notNull().default("telegram"),
   telegramUsername: text("telegram_username"),
   telegramBotId: text("telegram_bot_id"),
@@ -409,9 +425,10 @@ export const webhookSubscriptions = pgTable("webhook_subscriptions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** People who answer in Live Chat. App-wide (one login), picked per browser. */
+/** People who answer in Live Chat, per workspace owner; picked per browser. */
 export const teamMembers = pgTable("team_members", {
   id: text("id").primaryKey(),
+  ownerId: text("owner_id").references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   email: text("email"),
   color: text("color").notNull().default("#0084FF"),
