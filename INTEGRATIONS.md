@@ -36,6 +36,7 @@ Parked on purpose:
 | Platform | How | Notes |
 | --- | --- | --- |
 | Telegram | Direct | Each customer connects their own bot with a BotFather token. Flows, buttons, media, `/` commands and phone share all work. |
+| Discord | Direct | Confirmed with a real bot on 2026-10-09: a DM reached the inbox as a new contact and the starter flow answered with working buttons. A bot token connects it on the Setup page. Discord delivers DMs over a persistent websocket (the Gateway), so Recatch holds a live connection per bot, and only one running instance should hold it. People can only DM the bot if they share a server with it. |
 | Instagram | Direct + Zernio | Direct adapter is built. Going direct on real accounts needs Meta App Review. |
 | Messenger | Direct + Zernio | Same Meta adapter and same approval as Instagram. |
 | WhatsApp | Direct + Zernio | Cloud API adapter is built. Needs the same Meta approval. |
@@ -53,7 +54,6 @@ Public `/privacy`, `/terms` and `/data-deletion` pages are live, linked from the
 | Meta (Instagram, Messenger, WhatsApp, Threads) direct | Code is ready. Needs the developer account confirmed, then a Meta app in development mode, then Business Verification and App Review. |
 | Telegram, one bot for all of Recatch | Telegram has no company-wide API. The only way is Telegram Business, which needs every customer to pay for Telegram Premium. Dropped. |
 | Bluesky direct | No adapter yet. Keys are instant. Bluesky doesn't push DMs, so Recatch would have to poll for them. |
-| Discord direct | Adapter is merged and deployed (2026-10-09) and tested against a fake Discord, but not yet confirmed with a real bot. Discord delivers DMs over a persistent websocket, so Recatch holds a live connection per bot, and only one running instance should hold it. |
 | Slack direct | No adapter yet. Keys are instant. Slack is only used for team alerts right now. It pushes events to a URL, like Telegram. |
 | Reddit direct | API access form not sent (see Snapshot). |
 | YouTube direct | Sign-in works. Verification (sensitive scope) and a quota increase are still to do. Comments only anyway, since YouTube has no DMs. |
@@ -89,5 +89,5 @@ In the order that unlocks the most:
 4. **TikTok.** Record the same kind of demo for the sandbox sign-in. Then fill in the production form in one go (the same fields, Login Kit, a written explanation and the video) and use the production client key and secret. Business verification on the organization is a separate step that needs the company documents.
 5. **Pinterest.** When Trial access arrives, build the Pinterest connection (sign-in, publish, read boards) so there is something to show, then request Standard access.
 6. **LinkedIn.** Create the company Page, then apply to the Community Management API.
-7. **Discord.** The adapter is deployed. Confirm it with a real bot: the application "Recatch" exists in the Discord Developer Portal (application id 1557320195750629386), connect its bot token on the Setup page (the token is shown once, via Reset Token), invite the bot to a server and DM it, then check the contact, the welcome reply and the bot's status in the app. Then build Slack, which is closer to Telegram.
+7. **Slack.** Discord is done and confirmed. Slack is closer to Telegram, since it pushes events to a URL. The Discord application "Recatch" (application id 1557320195750629386) is in the Developer Portal if more Discord work is needed. Its bot token is shown only once, via Reset Token.
 8. **Bluesky.** Instant keys, but it needs a polling job because Bluesky doesn't push DMs.

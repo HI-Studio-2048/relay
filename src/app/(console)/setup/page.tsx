@@ -159,7 +159,14 @@ export default function SetupPage() {
               <button
                 key={id}
                 type="button"
-                onClick={() => setChannel(id)}
+                onClick={() => {
+                  if (id === channel) return;
+                  // What was typed for one platform must never be sent to another.
+                  setToken("");
+                  setAccountId("");
+                  setAppSecret("");
+                  setChannel(id);
+                }}
                 className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
                 style={{
                   borderColor: channel === id ? CHANNELS[id].color : undefined,
