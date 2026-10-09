@@ -3,6 +3,9 @@ import type { Metadata } from "next";
 import { ContactEmail, LegalPage, LegalSection } from "@/components/marketing/legal-page";
 import { LEGAL } from "@/lib/legal";
 
+/** Reads PUBLIC_CONTACT_EMAIL per request, so changing it on the host needs no rebuild. */
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Privacy policy · Relay",
   description: "What Relay collects, why, who it's shared with, and how to get it deleted.",
