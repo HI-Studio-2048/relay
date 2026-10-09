@@ -340,4 +340,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx ON users(email);
 ALTER TABLE bots ADD COLUMN IF NOT EXISTS owner_id text REFERENCES users(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS bots_owner_idx ON bots(owner_id);
 ALTER TABLE team_members ADD COLUMN IF NOT EXISTS owner_id text REFERENCES users(id) ON DELETE CASCADE;
+
+CREATE TABLE IF NOT EXISTS oauth_connections (
+  id text PRIMARY KEY,
+  owner_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider text NOT NULL,
+  external_account_id text NOT NULL,
+  display_name text,
+  avatar_url text,
+  scopes text NOT NULL DEFAULT '',
+  access_token_encrypted text NOT NULL,
+  refresh_token_encrypted text,
+  expires_at timestamptz,
+  refresh_expires_at timestamptz,
+  status text NOT NULL DEFAULT 'connected',
+  last_error text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS oauth_connections_account_idx ON oauth_connections(owner_id, provider, external_account_id);
+CREATE INDEX IF NOT EXISTS oauth_connections_owner_idx ON oauth_connections(owner_id);
 `;

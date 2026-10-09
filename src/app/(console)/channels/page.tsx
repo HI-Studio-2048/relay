@@ -1,6 +1,10 @@
 import { RadioTower } from "lucide-react";
 import { PageHeader } from "@/components/chrome/page-header";
+import { ConnectedApps, type ConnectedApp } from "@/components/connected-apps";
 import { currentBot } from "@/lib/current-bot";
+import { currentUserId } from "@/lib/auth";
+import { listConnections } from "@/lib/oauth/connections";
+import { PROVIDER_IDS, PROVIDERS, providerConfigured } from "@/lib/oauth/providers";
 import { ChannelsManager, ZernioSetup } from "./channels-manager";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +13,15 @@ export const dynamic = "force-dynamic";
 export default async function ChannelsPage({ searchParams }: { searchParams: Promise<{ connected?: string; error?: string }> }) {
   const bot = await currentBot();
   const query = await searchParams;
+  const userId = await currentUserId();
+  const connections = userId ? await listConnections(userId) : [];
+  const apps: ConnectedApp[] = PROVIDER_IDS.map((id) => ({
+    provider: id,
+    label: PROVIDERS[id].label,
+    purpose: PROVIDERS[id].purpose,
+    configured: providerConfigured(id),
+    connections: connections.filter((connection) => connection.provider === id),
+  }));
   const notice = query.connected
     ? { tone: "ok" as const, text: query.connected.slice(0, 240) }
     : query.error
@@ -33,6 +46,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
       ) : (
         <ZernioSetup currentName={bot?.name ?? null} currentChannel={bot?.channel ?? null} notice={notice} />
       )}
+      <ConnectedApps apps={apps} />
     </div>
   );
 }
