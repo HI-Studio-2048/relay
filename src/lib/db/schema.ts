@@ -435,6 +435,37 @@ export const teamMembers = pgTable("team_members", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * An account a user connected to Recatch through OAuth (Google / YouTube, TikTok...). These are not
+ * messaging channels, so they live apart from `bots`. Tokens are encrypted at rest.
+ */
+export const oauthConnections = pgTable(
+  "oauth_connections",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    externalAccountId: text("external_account_id").notNull(),
+    displayName: text("display_name"),
+    avatarUrl: text("avatar_url"),
+    scopes: text("scopes").notNull().default(""),
+    accessTokenEncrypted: text("access_token_encrypted").notNull(),
+    refreshTokenEncrypted: text("refresh_token_encrypted"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    refreshExpiresAt: timestamp("refresh_expires_at", { withTimezone: true }),
+    status: text("status").notNull().default("connected"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("oauth_connections_account_idx").on(table.ownerId, table.provider, table.externalAccountId),
+    index("oauth_connections_owner_idx").on(table.ownerId),
+  ],
+);
+
 export const botsRelations = relations(bots, ({ many }) => ({
   contacts: many(contacts),
   tags: many(tags),
