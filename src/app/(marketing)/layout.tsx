@@ -10,9 +10,9 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 md:px-8">
           <MarketingBrand />
           <nav className="hidden items-center gap-7 text-[14px] text-[#6b7280] md:flex">
-            <a href="#features" className="hover:text-[#1b1f24]">Features</a>
-            <a href="#channels" className="hover:text-[#1b1f24]">Channels</a>
-            <a href="#how" className="hover:text-[#1b1f24]">How it works</a>
+            <a href="/welcome#features" className="hover:text-[#1b1f24]">Features</a>
+            <a href="/welcome#channels" className="hover:text-[#1b1f24]">Channels</a>
+            <a href="/welcome#how" className="hover:text-[#1b1f24]">How it works</a>
           </nav>
           <div className="flex items-center gap-2">
             <Button variant="ghost" render={<Link href="/login" />}>
@@ -31,6 +31,9 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
           <div className="flex gap-6">
             <Link href="/login" className="hover:text-[#1b1f24]">Log in</Link>
             <Link href="/signup" className="hover:text-[#1b1f24]">Create account</Link>
+            <Link href="/privacy" className="hover:text-[#1b1f24]">Privacy</Link>
+            <Link href="/terms" className="hover:text-[#1b1f24]">Terms</Link>
+            <Link href="/data-deletion" className="hover:text-[#1b1f24]">Delete your data</Link>
           </div>
           <p>© {new Date().getFullYear()} Relay</p>
         </div>

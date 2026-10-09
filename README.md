@@ -58,6 +58,7 @@ Local-only `POST /api/dev/seed` (disabled in production) creates a demo bot, a l
 | `REDIS_URL` | prod | Queue + rate limits. Local fallback: memory |
 | `ENCRYPTION_KEY` | prod | 32-byte key (64 hex chars, base64, or 32-char utf8). Encrypts bot tokens |
 | `PUBLIC_URL` | prod | Public HTTPS origin used for `setWebhook` |
+| `PUBLIC_CONTACT_EMAIL` | prod | Contact address on the privacy, terms and data deletion pages. Meta, Google and TikTok reviews check these pages |
 | `SESSION_SECRET` | prod | Signs login cookies. Falls back to `ENCRYPTION_KEY` |
 | `RELAY_OWNER_EMAIL` / `RELAY_OWNER_PASSWORD` | first boot | Creates the workspace owner if missing and assigns accounts connected before logins existed. `RELAY_OWNER_NAME` is optional |
 | `WORKER_MODE` | no | `all` (default), `web`, or `worker` |
