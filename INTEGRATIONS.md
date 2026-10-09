@@ -47,7 +47,7 @@ Use these URLs on every application: `https://recatch.app/privacy`, `https://rec
 
 Done so far, under the admin account (`admin@hiiiiiiiiiii.com`, so the company owns the apps and not a personal login):
 
-- Google Cloud project `Recatch` (`relay-510909`) in the company Workspace organization. YouTube Data API v3 is enabled. OAuth consent screen and credentials not set up yet.
+- Google Cloud project `Recatch` (project id `relay-510909`, which cannot be renamed) in the company Workspace organization. YouTube Data API v3 is enabled. The OAuth consent screen is set up: app name Recatch, External audience, status Testing, home page, privacy and terms links on `recatch.app`, `recatch.app` as the authorized domain, and the admin address as support and developer contact. The Google API Services User Data Policy was accepted on 2026-10-09. No OAuth client yet.
 - Pinterest developer account signed in. No app connected yet. Starts on Trial access (1,000 calls a day), then needs a Standard access request.
 - TikTok for Developers signed in. Nothing created yet.
 - LinkedIn: no account yet. Needs a company Page for HI Studio first.
@@ -55,7 +55,7 @@ Done so far, under the admin account (`admin@hiiiiiiiiiii.com`, so the company o
 ## Next up
 
 1. **Run a health check on the Telegram bot** (Setup page) so its webhook moves to `recatch.app`. The old Railway address still works until then.
-2. **Google consent screen and credentials.** App name Recatch, support email the admin address, the new domain and legal URLs. Then the OAuth client ID and secret. Verification comes after, with a demo video, and a quota increase if needed.
+2. **Google OAuth client, once YouTube is built.** Recatch has no direct YouTube connection yet, only comments through Zernio. The client ID needs a redirect URL that a Google sign-in flow in the app answers, so build that first. Then create the client, add the YouTube scopes under Data Access, and go for verification with a demo video, plus a quota increase if needed.
 3. **Pinterest and TikTok apps.** Create each one with the new domain and company details, then request Standard access (Pinterest) and the scopes needed (TikTok).
 4. **LinkedIn.** Create the company Page, then apply to the Community Management API.
 5. **Meta in development mode.** Create the Meta app under the company's Business Manager. In dev mode the direct Instagram, Messenger and WhatsApp adapters already work with our own accounts as testers (WhatsApp gives a free test number). Record the screencast App Review wants.
