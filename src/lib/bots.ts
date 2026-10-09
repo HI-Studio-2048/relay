@@ -1,4 +1,5 @@
 import { syncBotCommands } from "@/lib/bot-commands";
+import { fetchDiscordBot } from "@/lib/channels/discord";
 import { graphGet } from "@/lib/channels/meta";
 import { channelOf, type ChannelId } from "@/lib/channels/types";
 import { listZernioAccounts, registerZernioWebhook, type ZernioAccount } from "@/lib/channels/zernio";
@@ -228,11 +229,50 @@ async function describeMetaAccount(channel: ChannelId, token: string, accountId:
 }
 
 /**
+ * Connect a Discord bot. There is no webhook to register: Recatch opens a Gateway connection with the
+ * token, so the account starts disconnected and flips to connected once Discord accepts it.
+ */
+async function connectDiscord(input: ChannelConnectInput) {
+  const token = input.token.trim();
+  const me = await fetchDiscordBot(token);
+  const db = await getDb();
+  const existing = await db.select().from(bots);
+  const match = existing.find((row) => channelOf(row.channel) === "discord" && row.externalAccountId === me.id);
+  assertOwnable(match, input.ownerId);
+  const id = match?.id ?? crypto.randomUUID();
+
+  const values = {
+    ownerId: input.ownerId,
+    name: `${me.global_name ?? me.username} (Discord)`,
+    channel: "discord" as const,
+    telegramUsername: me.username,
+    telegramBotId: null,
+    externalAccountId: me.id,
+    tokenEncrypted: encryptSecret(token),
+    webhookSecret: match?.webhookSecret ?? randomSecret(12),
+    webhookUrl: null,
+    status: "disconnected",
+    lastHealthAt: new Date(),
+    lastHealthError: null,
+    updatedAt: new Date(),
+  };
+  if (match) await db.update(bots).set(values).where(eq(bots.id, id));
+  else await db.insert(bots).values({ id, ...values });
+
+  await seedBotDefaults(id);
+  const { syncDiscordGateways } = await import("@/lib/channels/discord-manager");
+  await syncDiscordGateways();
+  const [row] = await db.select().from(bots).where(eq(bots.id, id)).limit(1);
+  return publicBot(row!);
+}
+
+/**
  * Connect any channel. Telegram keeps its BotFather flow; Meta channels store the access token,
  * validate it against the Graph API, and hand back the webhook URL + verify token to paste in Meta's dashboard.
  */
 export async function connectChannelAccount(input: ChannelConnectInput) {
   if (input.channel === "telegram") return connectBot(input.token, input.ownerId, input.origin);
+  if (input.channel === "discord") return connectDiscord(input);
   if (input.channel === "zernio") {
     return connectZernio({
       apiKey: input.token,
@@ -299,6 +339,25 @@ export async function healthCheckBot(botId: string, origin?: string) {
       origin,
     });
     return { bot: refreshed, webhook: null, me: null };
+  }
+  if (channelOf(bot.channel) === "discord") {
+    let error: string | null = null;
+    let name = bot.name;
+    try {
+      const me = await fetchDiscordBot(token);
+      name = `${me.global_name ?? me.username} (Discord)`;
+      const { syncDiscordGateways, discordGatewayState } = await import("@/lib/channels/discord-manager");
+      await syncDiscordGateways();
+      if (discordGatewayState(botId) !== "running") error = "Recatch is not holding a Discord connection for this bot (the worker is off on this server)";
+    } catch (caught) {
+      error = caught instanceof Error ? caught.message : "Token check failed";
+    }
+    await db
+      .update(bots)
+      .set({ name, status: error ? "error" : bot.status === "error" ? "disconnected" : bot.status, lastHealthAt: new Date(), lastHealthError: error, updatedAt: new Date() })
+      .where(eq(bots.id, botId));
+    const [updated] = await db.select().from(bots).where(eq(bots.id, botId)).limit(1);
+    return { bot: publicBot(updated!), webhook: null, me: null };
   }
   if (channelOf(bot.channel) !== "telegram") {
     let error: string | null = null;

@@ -66,6 +66,15 @@ const GUIDES: Record<ChannelId, { title: string; steps: string[]; tokenLabel: st
       "After connecting, paste the webhook URL and verify token below into WhatsApp webhooks (subscribe to messages).",
     ],
   },
+  discord: {
+    title: "Discord bot",
+    tokenLabel: "Bot token",
+    steps: [
+      "In the Discord Developer Portal, create an application, open Bot, and copy the token.",
+      "People message the bot in a DM, so they need a server in common with it. Invite it with the bot scope from OAuth2 → URL Generator.",
+      "Recatch holds a live connection to Discord with the token. No webhook or public URL is needed.",
+    ],
+  },
 };
 
 export default function SetupPage() {
@@ -77,7 +86,8 @@ export default function SetupPage() {
   const [busy, setBusy] = useState(false);
   const guide = GUIDES[channel];
   const isZernio = channel === "zernio";
-  const isMeta = channel !== "telegram" && !isZernio;
+  const isDiscord = channel === "discord";
+  const isMeta = channel !== "telegram" && !isZernio && !isDiscord;
 
   const connect = async () => {
     setBusy(true);
@@ -189,7 +199,7 @@ export default function SetupPage() {
               id="token"
               type="password"
               autoComplete="off"
-              placeholder={isZernio ? "sk_…" : isMeta ? "EAAG…" : "123456:ABC…"}
+              placeholder={isZernio ? "sk_…" : isMeta ? "EAAG…" : isDiscord ? "MTIz…" : "123456:ABC…"}
               value={token}
               onChange={(event) => setToken(event.target.value)}
             />
@@ -208,7 +218,7 @@ export default function SetupPage() {
             </div>
           ) : null}
           <Button onClick={() => void connect()} disabled={busy || !token.trim() || (isMeta && !accountId.trim())}>
-            {busy ? "Connecting…" : isMeta ? "Connect account" : isZernio ? "Connect Zernio" : "Connect and set webhook"}
+            {busy ? "Connecting…" : isMeta ? "Connect account" : isZernio ? "Connect Zernio" : isDiscord ? "Connect bot" : "Connect and set webhook"}
           </Button>
         </CardContent>
       </Card>
@@ -222,7 +232,7 @@ export default function SetupPage() {
             </CardTitle>
             <CardDescription>
               {CHANNELS[bot.channel].label} · status {bot.status}
-              {bot.webhookUrl ? "" : " · PUBLIC_URL missing, webhook not set"}
+              {bot.webhookUrl || bot.channel === "discord" ? "" : " · PUBLIC_URL missing, webhook not set"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

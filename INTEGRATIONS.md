@@ -9,6 +9,7 @@ Where each platform stands in Recatch, as of 2026-10-09.
 | Platform | How | Notes |
 | --- | --- | --- |
 | Telegram | Direct | Each customer connects their own bot with a BotFather token. Flows, buttons, media, `/` commands and phone share all work. |
+| Discord | Direct | Built 2026-10-09. A bot token connects it, and Recatch holds a live Gateway connection, so there is no webhook or public URL to set up. Direct messages in, replies and buttons out, welcome flow and live chat all work. Tested against a fake Discord API, not yet against a real bot. People can only DM the bot if they share a server with it. |
 | Instagram | Direct + Zernio | Direct adapter is built. Going direct on real accounts needs Meta App Review (see below). |
 | Messenger | Direct + Zernio | Same Meta adapter and same approval as Instagram. |
 | WhatsApp | Direct + Zernio | Cloud API adapter is built. Needs the same Meta approval. |
@@ -26,7 +27,6 @@ Public `/privacy`, `/terms` and `/data-deletion` pages are in, linked from the s
 | Meta (Instagram, Messenger, WhatsApp, Threads) direct | Code is ready. Waiting on Meta Business Verification and App Review, and the status of both is unknown. |
 | Telegram, one bot for all of Recatch | Telegram has no company-wide API. The only way is Telegram Business, which needs every customer to pay for Telegram Premium. Dropped. |
 | Bluesky direct | No adapter yet. Keys are instant. Bluesky doesn't push DMs, so Recatch would have to poll for them. |
-| Discord direct | No adapter yet. Keys are instant. Discord is only used for team alerts right now. |
 | Slack direct | No adapter yet. Keys are instant. Slack is only used for team alerts right now. |
 | Reddit direct | API access form not sent. The subreddit we made for it got auto-banned by Reddit's spam filter, so it's parked. |
 | YouTube direct | Needs Google OAuth verification and a quota increase. Comments only anyway, since YouTube has no DMs. |
@@ -60,5 +60,5 @@ Done so far, under the admin account (`admin@hiiiiiiiiiii.com`, so the company o
 4. **LinkedIn.** Create the company Page, then apply to the Community Management API.
 5. **Meta in development mode.** Create the Meta app under the company's Business Manager. In dev mode the direct Instagram, Messenger and WhatsApp adapters already work with our own accounts as testers (WhatsApp gives a free test number). Record the screencast App Review wants.
 6. **Meta applications.** Business Verification with the company docs, then App Review for `instagram_manage_messages`, `pages_messaging` and the WhatsApp permissions.
-7. **Discord and Slack adapters.** No approval needed, so this is code work that can happen now. Slack pushes events to a URL, like Telegram. Discord delivers DMs over a persistent websocket (the Gateway), so Recatch has to hold a live connection per bot.
+7. **Try Discord for real.** Create a bot in the Discord Developer Portal, connect it on the Setup page, invite it to a server and DM it. Then build the Slack adapter. Slack does push events to a URL, so it is closer to Telegram than Discord was.
 8. **Bluesky adapter.** Also instant, but needs a polling job because Bluesky doesn't push DMs.

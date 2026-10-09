@@ -25,7 +25,12 @@ export async function POST(request: Request) {
     if (!CHANNEL_IDS.includes(channel)) return json({ error: `Unknown channel "${body.channel}"` }, 400);
     if (!body.token?.trim()) {
       return json(
-        { error: channel === "telegram" ? "Paste a bot token from @BotFather" : "Paste the access token" },
+        { error:
+          channel === "telegram"
+            ? "Paste a bot token from @BotFather"
+            : channel === "discord"
+              ? "Paste the bot token from the Discord Developer Portal"
+              : "Paste the access token" },
         400,
       );
     }

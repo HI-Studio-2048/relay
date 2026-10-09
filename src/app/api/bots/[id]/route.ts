@@ -37,6 +37,10 @@ export async function DELETE(request: Request, context: RouteParams<{ id: string
       }
     }
     await db.delete(bots).where(eq(bots.id, id));
+    if (row.channel === "discord") {
+      const { syncDiscordGateways } = await import("@/lib/channels/discord-manager");
+      await syncDiscordGateways();
+    }
     return json({ ok: true });
   } catch (error) {
     return fail(error);

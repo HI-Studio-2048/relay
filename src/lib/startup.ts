@@ -5,6 +5,10 @@ import { log } from "@/lib/logger";
 
 export async function ensureReady() {
   await getDb();
-  if (shouldRunWorker()) startWorker();
+  if (shouldRunWorker()) {
+    startWorker();
+    const { startDiscordGateways } = await import("@/lib/channels/discord-manager");
+    startDiscordGateways();
+  }
   log.info("Recatch ready");
 }

@@ -1,6 +1,7 @@
 import { cardsAsReplies } from "@/lib/channels/cards";
 import { decryptSecret } from "@/lib/crypto";
 import type { bots } from "@/lib/db/schema";
+import { ackDiscordInteraction, parseDiscordEvent, sendDiscordReply, sendDiscordTyping, type DiscordGatewayEvent } from "@/lib/channels/discord";
 import { fetchMetaProfile, parseMetaWebhook, sendMetaReply, sendMetaTyping, type MetaWebhookPayload } from "@/lib/channels/meta";
 import {
   channelOf,
@@ -54,6 +55,7 @@ export async function sendChannelReply(
     return { message_id: String(sent.message_id) };
   }
   if (account.channel === "whatsapp") return sendWhatsAppReply(account, to, reply);
+  if (account.channel === "discord") return sendDiscordReply(account, to, reply);
   return sendMetaReply(account, to, reply);
 }
 
@@ -63,12 +65,16 @@ export async function sendChannelTyping(account: ChannelAccount, recipient: stri
   if (account.channel === "zernio") return sendZernioTyping(account, target);
   if (account.channel === "telegram") return void (await sendChatAction(account.token, to, "typing"));
   if (account.channel === "whatsapp") return;
+  if (account.channel === "discord") return sendDiscordTyping(account, to);
   await sendMetaTyping(account, to);
 }
 
 export async function ackChannelCallback(account: ChannelAccount, inbound: NormalizedInbound) {
   if (account.channel === "telegram" && inbound.ackCallbackId) {
     await answerCallbackQuery(account.token, inbound.ackCallbackId);
+  }
+  if (account.channel === "discord" && inbound.ackCallbackId) {
+    await ackDiscordInteraction(inbound.ackCallbackId);
   }
 }
 
@@ -104,5 +110,6 @@ export function parseChannelUpdate(account: ChannelAccount, payload: unknown): N
   if (account.channel === "zernio") return parseZernioWebhook(payload as ZernioWebhookPayload, account.externalAccountId);
   if (account.channel === "telegram") return parseTelegramUpdate(payload as TelegramUpdate);
   if (account.channel === "whatsapp") return parseWhatsAppWebhook(payload as WhatsAppWebhookPayload);
+  if (account.channel === "discord") return parseDiscordEvent(payload as DiscordGatewayEvent);
   return parseMetaWebhook(payload as MetaWebhookPayload);
 }
