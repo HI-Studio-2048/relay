@@ -18,8 +18,9 @@ const PUBLIC_PREFIXES = [
   "/api/meta/webhook",
   "/api/slack/webhook",
   "/api/slack/events",
-  "/api/bluesky/client-metadata",
-  "/api/bluesky/jwks",
+  // Bluesky fetches these two files by their full names, and a path only matches whole segments.
+  "/api/bluesky/client-metadata.json",
+  "/api/bluesky/jwks.json",
   "/api/zernio/webhook",
   "/api/stripe/webhook",
   "/api/v1",

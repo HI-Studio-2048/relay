@@ -26,7 +26,7 @@ Environment variables live in Railway and never in the repo or in chat. `.env.ex
 - This is a recent Next.js with breaking changes. Read the guide in `node_modules/next/dist/docs/` before using an API you are not sure of (see `AGENTS.md`).
 - A route file may only export HTTP handlers and route config. Put shared constants in `src/lib/`. Sibling dynamic segments must share one name, so use a static segment like `item/[id]` when a second route would clash.
 - A new table goes in two places: `src/lib/db/schema.ts` and the migration SQL in `src/lib/db/sql.ts`. `schema-sql.test.ts` fails when they disagree.
-- Pages and routes reachable while signed out are listed in `src/proxy.ts`.
+- Pages and routes reachable while signed out are listed in `src/proxy.ts`. An entry matches the whole path or whatever sits under it after a slash, so a file with an extension (`client-metadata.json`) needs its full name listed. `src/proxy.test.ts` goes through the real proxy; route tests that call a handler directly skip it and cannot catch a missing entry.
 - Tests that need the database change into a temp directory before the first `getDb()`, mock `@/lib/auth` for `requireUserId`, and stub `fetch` for providers. They never call real services. `src/lib/oauth/oauth.integration.test.ts` is the pattern to copy.
 - The working tree uses CRLF line endings. A script that edits files should keep the file's existing endings.
 - `broadcast A/B split` is slow (about a second alone) and can pass the 5 second limit when the full suite runs in parallel. It passes alone, so rerun it by itself before treating a failure there as real.
@@ -38,6 +38,12 @@ Environment variables live in Railway and never in the repo or in chat. `.env.ex
 - Discord is different from the others: it delivers DMs over a persistent websocket, not a webhook. `discord-gateway.ts` is the connection (heartbeat, resume, backoff), and `discord-manager.ts` keeps one per connected bot and re-syncs every minute from `startup.ts`. Run only one instance with the worker on, or every DM is answered twice.
 - `src/lib/oauth/` and `src/app/api/connections/`: Connected apps (YouTube, TikTok). These are sign-in and read connections, not messaging channels. To add a provider, add its config in `providers.ts`, its env keys, and tests. Anything that calls a provider's API gets its token from `getAccessToken`, never from the database directly.
 - `src/app/(marketing)/`: the public site, including the privacy, terms and data deletion pages that every platform application asks for.
+
+## Looking at the live database
+
+The Railway Postgres is only reachable from inside Railway (`postgres.railway.internal`), and there is no public URL. To run a query, link the CLI to the `recatch.app` project (production) and run it from the service: `railway ssh --service recatch -- node -e "..."` using `require("postgres")` and `process.env.DATABASE_URL`. Nothing prints a secret that way. Start read-only.
+
+Accounts are rows in `users`. Connected channel accounts (`bots`) belong to a user through `owner_id`, and the app only shows a login its own bots. Rows from before logins existed have a null `owner_id`, so they are invisible to everyone until someone assigns them (`update bots set owner_id = <user id> where id = <bot id> and owner_id is null`). Contacts, flows and messages hang off the bot, so they follow it. If someone says an account or its data is missing, check for bots with a null owner first.
 
 ## Platform applications
 
