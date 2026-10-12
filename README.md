@@ -61,6 +61,7 @@ Local-only `POST /api/dev/seed` (disabled in production) creates a demo bot, a l
 | `PUBLIC_CONTACT_EMAIL` | prod | Contact address on the privacy, terms and data deletion pages. Meta, Google and TikTok reviews check these pages |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | no | OAuth client from the Google Cloud project. Turns on Connect for YouTube under Connected apps |
 | `TIKTOK_CLIENT_KEY` / `TIKTOK_CLIENT_SECRET` | no | Client key and secret from the TikTok developer app. Turns on Connect for TikTok |
+| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` / `SLACK_SIGNING_SECRET` | no | From the company Slack app (create it from `slack-app-manifest.json`). All three turn on the Add to Slack button; without them people can still paste their own Slack app's token |
 | `SESSION_SECRET` | prod | Signs login cookies. Falls back to `ENCRYPTION_KEY` |
 | `RELAY_OWNER_EMAIL` / `RELAY_OWNER_PASSWORD` | first boot | Creates the workspace owner if missing and assigns accounts connected before logins existed. `RELAY_OWNER_NAME` is optional |
 | `WORKER_MODE` | no | `all` (default), `web`, or `worker` |

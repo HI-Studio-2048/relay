@@ -116,6 +116,9 @@ export type SlackPayload = {
   type?: string;
   challenge?: string;
   event_id?: string;
+  /** Workspace the delivery came from. Events carry team_id, button taps carry team. */
+  team_id?: string;
+  team?: { id?: string };
   event?: {
     type?: string;
     subtype?: string;
@@ -126,7 +129,7 @@ export type SlackPayload = {
     ts?: string;
     files?: unknown[];
   };
-  user?: { id?: string; username?: string; name?: string };
+  user?: { id?: string; username?: string; name?: string; team_id?: string };
   actions?: { action_id?: string; value?: string; type?: string; text?: { text?: string } }[];
   container?: { message_ts?: string };
   trigger_id?: string;

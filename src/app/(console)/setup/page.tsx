@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useBot } from "@/components/bot-provider";
 import { Button } from "@/components/ui/button";
@@ -103,7 +103,26 @@ export default function SetupPage() {
   const [accountId, setAccountId] = useState("");
   const [appSecret, setAppSecret] = useState("");
   const [busy, setBusy] = useState(false);
+  const [slackInstall, setSlackInstall] = useState(false);
+  const [manualSlack, setManualSlack] = useState(false);
   const guide = GUIDES[channel];
+
+  useEffect(() => {
+    api<{ slackInstall: boolean }>("/api/channels/capabilities")
+      .then((data) => setSlackInstall(data.slackInstall))
+      .catch(() => undefined);
+    // Add to Slack comes back here with the result in the address.
+    const query = new URLSearchParams(window.location.search);
+    const connected = query.get("connected");
+    const failed = query.get("error");
+    if (connected || failed) {
+      if (connected) toast.success(connected);
+      else toast.error(failed ?? "");
+      window.history.replaceState(null, "", window.location.pathname);
+      void refresh();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const isZernio = channel === "zernio";
   const isDiscord = channel === "discord";
   const isSlack = channel === "slack";
@@ -200,6 +219,23 @@ export default function SetupPage() {
             ))}
           </div>
 
+          {channel === "slack" && slackInstall && !manualSlack ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Add Recatch to your Slack workspace and approve it. People then message Recatch in Slack and your flows answer.
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button nativeButton={false} render={<a href="/api/slack/install" />}>
+                  Add to Slack
+                </Button>
+                <button type="button" className="text-sm text-muted-foreground underline" onClick={() => setManualSlack(true)}>
+                  Use my own Slack app instead
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          <div className={channel === "slack" && slackInstall && !manualSlack ? "hidden" : "space-y-4"}>
           <div className="space-y-1">
             <p className="text-sm font-medium">{guide.title}</p>
             <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
@@ -248,6 +284,7 @@ export default function SetupPage() {
           <Button onClick={() => void connect()} disabled={busy || !token.trim() || (isMeta && !accountId.trim()) || (isSlack && !appSecret.trim()) || (isBluesky && !accountId.trim())}>
             {busy ? "Connecting…" : isMeta ? "Connect account" : isZernio ? "Connect Zernio" : isDiscord ? "Connect bot" : isSlack ? "Connect app" : isBluesky ? "Connect account" : "Connect and set webhook"}
           </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -260,7 +297,7 @@ export default function SetupPage() {
             </CardTitle>
             <CardDescription>
               {CHANNELS[bot.channel].label} · status {bot.status}
-              {bot.webhookUrl || bot.channel === "discord" || bot.channel === "bluesky" ? "" : " · PUBLIC_URL missing, webhook not set"}
+              {bot.webhookUrl || bot.channel === "discord" || bot.channel === "bluesky" || bot.channel === "slack" ? "" : " · PUBLIC_URL missing, webhook not set"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

@@ -1,0 +1,37 @@
+{
+  "display_information": {
+    "name": "Recatch",
+    "description": "Answer and automate your Slack DMs with flows, a shared inbox and replies from Recatch.",
+    "background_color": "#1b1f24"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "Recatch",
+      "always_online": false
+    },
+    "app_home": {
+      "home_tab_enabled": false,
+      "messages_tab_enabled": true,
+      "messages_tab_read_only_enabled": false
+    }
+  },
+  "oauth_config": {
+    "redirect_urls": ["https://recatch.app/api/slack/oauth/callback"],
+    "scopes": {
+      "bot": ["chat:write", "im:history", "im:read", "im:write", "users:read"]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://recatch.app/api/slack/events",
+      "bot_events": ["message.im", "app_uninstalled", "tokens_revoked"]
+    },
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://recatch.app/api/slack/events"
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}

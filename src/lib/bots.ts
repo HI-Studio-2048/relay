@@ -1,5 +1,6 @@
 import { syncBotCommands } from "@/lib/bot-commands";
 import { fetchDiscordBot } from "@/lib/channels/discord";
+import { slackEventsUrl, type SlackInstall } from "@/lib/channels/slack-install";
 import { checkBlueskyAccount, forgetBlueskySession, explainBlueskyError } from "@/lib/channels/bluesky";
 import { fetchSlackIdentity } from "@/lib/channels/slack";
 import { graphGet } from "@/lib/channels/meta";
@@ -22,6 +23,8 @@ export function publicBot(row: typeof bots.$inferSelect) {
     telegramBotId: row.telegramBotId,
     externalAccountId: row.externalAccountId ?? null,
     hasAppSecret: Boolean(row.appSecretEncrypted),
+    /** Slack: installed through Add to Slack, so there is nothing to paste into a Slack app. */
+    slackInstalled: row.settings?.slackInstalled === true,
     verifyToken: channelOf(row.channel) === "telegram" ? null : row.webhookSecret,
     webhookUrl: row.webhookUrl,
     /** Zernio: the social accounts this key routes, for badges and the account picker. */
@@ -300,6 +303,44 @@ async function connectSlack(input: ChannelConnectInput) {
     status: webhookUrl ? "connected" : "disconnected",
     lastHealthAt: new Date(),
     lastHealthError: webhookUrl ? null : "PUBLIC_URL not set. Slack cannot reach this server. Set it and reconnect.",
+    updatedAt: new Date(),
+  };
+  if (match) await db.update(bots).set(values).where(eq(bots.id, id));
+  else await db.insert(bots).values({ id, ...values });
+
+  await seedBotDefaults(id);
+  const [row] = await db.select().from(bots).where(eq(bots.id, id)).limit(1);
+  return publicBot(row!);
+}
+
+/**
+ * A workspace that clicked Add to Slack for the shared Recatch app. The token comes from Slack's OAuth
+ * exchange, events arrive at the shared URL and are matched by workspace id, and the signing secret is
+ * the company app's own (from the environment), so none is stored per account.
+ */
+export async function connectSlackInstall(input: { ownerId: string; install: SlackInstall; origin?: string }) {
+  const { install } = input;
+  const db = await getDb();
+  const existing = await db.select().from(bots);
+  const match = existing.find((row) => channelOf(row.channel) === "slack" && (row.externalAccountId === install.botUserId || row.settings?.slackTeamId === install.teamId));
+  assertOwnable(match, input.ownerId);
+  const id = match?.id ?? crypto.randomUUID();
+
+  const values = {
+    ownerId: input.ownerId,
+    name: `${install.teamName} (Slack)`,
+    channel: "slack" as const,
+    telegramUsername: null,
+    telegramBotId: null,
+    externalAccountId: install.botUserId,
+    tokenEncrypted: encryptSecret(install.accessToken),
+    appSecretEncrypted: null,
+    webhookSecret: match?.webhookSecret ?? randomSecret(12),
+    webhookUrl: null,
+    settings: { ...(match?.settings ?? {}), slackTeamId: install.teamId, slackAppId: install.appId, slackInstalled: true },
+    status: "connected",
+    lastHealthAt: new Date(),
+    lastHealthError: null,
     updatedAt: new Date(),
   };
   if (match) await db.update(bots).set(values).where(eq(bots.id, id));
