@@ -1,5 +1,6 @@
 import { syncBotCommands } from "@/lib/bot-commands";
 import { fetchDiscordBot } from "@/lib/channels/discord";
+import { checkBlueskyAccount, forgetBlueskySession, explainBlueskyError } from "@/lib/channels/bluesky";
 import { fetchSlackIdentity } from "@/lib/channels/slack";
 import { graphGet } from "@/lib/channels/meta";
 import { channelOf, type ChannelId } from "@/lib/channels/types";
@@ -310,6 +311,45 @@ async function connectSlack(input: ChannelConnectInput) {
 }
 
 /**
+ * Connect a Bluesky account with its handle and an app password (never the main password). There is
+ * no webhook: the worker polls the account's chat log. The app password needs the "Allow access to
+ * your direct messages" box ticked, which checkBlueskyAccount verifies.
+ */
+async function connectBluesky(input: ChannelConnectInput) {
+  const handle = (input.externalAccountId ?? "").trim().replace(/^@/, "");
+  if (!handle) throw new Error("Enter the Bluesky handle, like name.bsky.social");
+  const session = await checkBlueskyAccount(handle, input.token);
+  const db = await getDb();
+  const existing = await db.select().from(bots);
+  const match = existing.find((row) => channelOf(row.channel) === "bluesky" && row.externalAccountId === session.did);
+  assertOwnable(match, input.ownerId);
+  const id = match?.id ?? crypto.randomUUID();
+  forgetBlueskySession(id);
+
+  const values = {
+    ownerId: input.ownerId,
+    name: `@${session.handle} (Bluesky)`,
+    channel: "bluesky" as const,
+    telegramUsername: session.handle,
+    telegramBotId: null,
+    externalAccountId: session.did,
+    tokenEncrypted: encryptSecret(input.token.trim()),
+    webhookSecret: match?.webhookSecret ?? randomSecret(12),
+    webhookUrl: null,
+    status: "connected",
+    lastHealthAt: new Date(),
+    lastHealthError: null,
+    updatedAt: new Date(),
+  };
+  if (match) await db.update(bots).set(values).where(eq(bots.id, id));
+  else await db.insert(bots).values({ id, ...values });
+
+  await seedBotDefaults(id);
+  const [row] = await db.select().from(bots).where(eq(bots.id, id)).limit(1);
+  return publicBot(row!);
+}
+
+/**
  * Connect any channel. Telegram keeps its BotFather flow; Meta channels store the access token,
  * validate it against the Graph API, and hand back the webhook URL + verify token to paste in Meta's dashboard.
  */
@@ -317,6 +357,7 @@ export async function connectChannelAccount(input: ChannelConnectInput) {
   if (input.channel === "telegram") return connectBot(input.token, input.ownerId, input.origin);
   if (input.channel === "discord") return connectDiscord(input);
   if (input.channel === "slack") return connectSlack(input);
+  if (input.channel === "bluesky") return connectBluesky(input);
   if (input.channel === "zernio") {
     return connectZernio({
       apiKey: input.token,
@@ -399,6 +440,23 @@ export async function healthCheckBot(botId: string, origin?: string) {
     await db
       .update(bots)
       .set({ name, status: error ? "error" : bot.status === "error" ? "disconnected" : bot.status, lastHealthAt: new Date(), lastHealthError: error, updatedAt: new Date() })
+      .where(eq(bots.id, botId));
+    const [updated] = await db.select().from(bots).where(eq(bots.id, botId)).limit(1);
+    return { bot: publicBot(updated!), webhook: null, me: null };
+  }
+  if (channelOf(bot.channel) === "bluesky") {
+    let error: string | null = null;
+    let name = bot.name;
+    try {
+      forgetBlueskySession(bot.id);
+      const session = await checkBlueskyAccount(bot.telegramUsername ?? bot.externalAccountId ?? "", token);
+      name = `@${session.handle} (Bluesky)`;
+    } catch (caught) {
+      error = explainBlueskyError(caught);
+    }
+    await db
+      .update(bots)
+      .set({ name, status: error ? "error" : "connected", lastHealthAt: new Date(), lastHealthError: error, updatedAt: new Date() })
       .where(eq(bots.id, botId));
     const [updated] = await db.select().from(bots).where(eq(bots.id, botId)).limit(1);
     return { bot: publicBot(updated!), webhook: null, me: null };

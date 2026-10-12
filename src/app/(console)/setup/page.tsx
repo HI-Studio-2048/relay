@@ -75,6 +75,16 @@ const GUIDES: Record<ChannelId, { title: string; steps: string[]; tokenLabel: st
       "Recatch holds a live connection to Discord with the token. No webhook or public URL is needed.",
     ],
   },
+  bluesky: {
+    title: "Bluesky account",
+    tokenLabel: "App password",
+    accountLabel: "Bluesky handle",
+    steps: [
+      "In Bluesky open Settings, then Privacy and security, then App passwords, and add one. Tick 'Allow access to your direct messages' or Recatch cannot read them. Never use your main password.",
+      "Paste the handle (like name.bsky.social) and the app password here.",
+      "Bluesky does not push messages, so Recatch checks for new ones every few seconds. Buttons go out as a numbered list and people answer by typing the number. Only messages that arrive after you connect are answered.",
+    ],
+  },
   slack: {
     title: "Slack app",
     tokenLabel: "Bot User OAuth Token",
@@ -97,7 +107,8 @@ export default function SetupPage() {
   const isZernio = channel === "zernio";
   const isDiscord = channel === "discord";
   const isSlack = channel === "slack";
-  const isMeta = channel !== "telegram" && !isZernio && !isDiscord && !isSlack;
+  const isBluesky = channel === "bluesky";
+  const isMeta = channel !== "telegram" && !isZernio && !isDiscord && !isSlack && !isBluesky;
 
   const connect = async () => {
     setBusy(true);
@@ -198,13 +209,13 @@ export default function SetupPage() {
             </ol>
           </div>
 
-          {isMeta || isZernio ? (
+          {isMeta || isZernio || isBluesky ? (
             <div className="space-y-2">
               <Label htmlFor="account">{guide.accountLabel}</Label>
               <Input
                 id="account"
                 autoComplete="off"
-                placeholder={channel === "whatsapp" ? "1234567890123456" : isZernio ? "All accounts" : "Page ID"}
+                placeholder={channel === "whatsapp" ? "1234567890123456" : isZernio ? "All accounts" : isBluesky ? "name.bsky.social" : "Page ID"}
                 value={accountId}
                 onChange={(event) => setAccountId(event.target.value)}
               />
@@ -216,7 +227,7 @@ export default function SetupPage() {
               id="token"
               type="password"
               autoComplete="off"
-              placeholder={isZernio ? "sk_…" : isMeta ? "EAAG…" : isDiscord ? "MTIz…" : isSlack ? "xoxb-…" : "123456:ABC…"}
+              placeholder={isZernio ? "sk_…" : isMeta ? "EAAG…" : isDiscord ? "MTIz…" : isSlack ? "xoxb-…" : isBluesky ? "xxxx-xxxx-xxxx-xxxx" : "123456:ABC…"}
               value={token}
               onChange={(event) => setToken(event.target.value)}
             />
@@ -234,8 +245,8 @@ export default function SetupPage() {
               />
             </div>
           ) : null}
-          <Button onClick={() => void connect()} disabled={busy || !token.trim() || (isMeta && !accountId.trim()) || (isSlack && !appSecret.trim())}>
-            {busy ? "Connecting…" : isMeta ? "Connect account" : isZernio ? "Connect Zernio" : isDiscord ? "Connect bot" : isSlack ? "Connect app" : "Connect and set webhook"}
+          <Button onClick={() => void connect()} disabled={busy || !token.trim() || (isMeta && !accountId.trim()) || (isSlack && !appSecret.trim()) || (isBluesky && !accountId.trim())}>
+            {busy ? "Connecting…" : isMeta ? "Connect account" : isZernio ? "Connect Zernio" : isDiscord ? "Connect bot" : isSlack ? "Connect app" : isBluesky ? "Connect account" : "Connect and set webhook"}
           </Button>
         </CardContent>
       </Card>
@@ -249,7 +260,7 @@ export default function SetupPage() {
             </CardTitle>
             <CardDescription>
               {CHANNELS[bot.channel].label} · status {bot.status}
-              {bot.webhookUrl || bot.channel === "discord" ? "" : " · PUBLIC_URL missing, webhook not set"}
+              {bot.webhookUrl || bot.channel === "discord" || bot.channel === "bluesky" ? "" : " · PUBLIC_URL missing, webhook not set"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">

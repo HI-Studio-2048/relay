@@ -9,6 +9,8 @@ export async function ensureReady() {
     startWorker();
     const { startDiscordGateways } = await import("@/lib/channels/discord-manager");
     startDiscordGateways();
+    const { startBlueskyPolling } = await import("@/lib/channels/bluesky-manager");
+    startBlueskyPolling();
   }
   log.info("Recatch ready");
 }

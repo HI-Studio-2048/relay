@@ -3,9 +3,9 @@
  * every send and every inbound webhook in Recatch goes through the adapter for the account's channel.
  * `zernio` is a hub: one API key brings every social account in a Zernio workspace.
  */
-export type ChannelId = "zernio" | "telegram" | "instagram" | "messenger" | "whatsapp" | "discord" | "slack";
+export type ChannelId = "zernio" | "telegram" | "instagram" | "messenger" | "whatsapp" | "discord" | "slack" | "bluesky";
 
-export const CHANNEL_IDS: ChannelId[] = ["zernio", "telegram", "instagram", "messenger", "whatsapp", "discord", "slack"];
+export const CHANNEL_IDS: ChannelId[] = ["zernio", "telegram", "instagram", "messenger", "whatsapp", "discord", "slack", "bluesky"];
 
 export type ChannelMeta = {
   id: ChannelId;
@@ -113,6 +113,19 @@ export const CHANNELS: Record<ChannelId, ChannelMeta> = {
     maxButtons: 25,
     maxQuickReplies: 25,
     supportsUrlButtons: true,
+    supportsTyping: false,
+    supportsCommands: false,
+    supportsPhoneShare: false,
+    formatting: "plain",
+    linkStyle: "ref",
+  },
+  bluesky: {
+    id: "bluesky",
+    label: "Bluesky",
+    color: "#1185FE",
+    maxButtons: 0,
+    maxQuickReplies: 0,
+    supportsUrlButtons: false,
     supportsTyping: false,
     supportsCommands: false,
     supportsPhoneShare: false,

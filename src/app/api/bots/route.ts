@@ -32,7 +32,9 @@ export async function POST(request: Request) {
               ? "Paste the bot token from the Discord Developer Portal"
               : channel === "slack"
                 ? "Paste the Bot User OAuth Token (xoxb-) from the Slack app"
-                : "Paste the access token" },
+                : channel === "bluesky"
+                  ? "Paste a Bluesky app password"
+                  : "Paste the access token" },
         400,
       );
     }
