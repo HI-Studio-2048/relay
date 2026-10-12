@@ -77,6 +77,16 @@ describe("AI calls through OpenRouter", () => {
     expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string).response_format).toBeUndefined();
   });
 
+  it("puts the account's standing instructions in the system prompt", async () => {
+    const fetchMock = vi.fn(async () => chat(JSON.stringify({ reply: "Hola", goal_complete: false, handoff: false, collected: [] })));
+    vi.stubGlobal("fetch", fetchMock);
+    await converse({ ...input, settings: { instructions: "Always reply in Spanish." }, provider });
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
+    expect(body.messages[0].content).toContain("Standing instructions from the business");
+    expect(body.messages[0].content).toContain("Always reply in Spanish.");
+  });
+
   it("turns provider failures into AiUnavailableError", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 402 })));
     await expect(converse({ ...input, provider })).rejects.toThrow(AiUnavailableError);

@@ -30,6 +30,7 @@ export async function PUT(request: Request, context: RouteParams<{ id: string }>
     const ai = readAiSettings({ ai: { ...readAiSettings(bot.settings), ...body } });
     ai.persona = ai.persona?.slice(0, 4000);
     ai.knowledge = ai.knowledge?.slice(0, 60000);
+    ai.instructions = ai.instructions?.slice(0, 4000);
     ai.handoffMessage = ai.handoffMessage?.slice(0, 500);
     await db
       .update(bots)

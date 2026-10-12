@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Bot, Globe, KeyRound, Lightbulb, MessageSquareDashed, Wand2 } from "lucide-react";
+import { BookOpen, Bot, Globe, ListChecks, KeyRound, Lightbulb, MessageSquareDashed, Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Panel } from "@/components/chrome/panel";
@@ -233,6 +233,18 @@ export function AiSettingsForm({
           onChange={(event) => setSettings({ ...settings, persona: event.target.value })}
           placeholder="You're Maya from HI Studio. Friendly, upbeat, a little playful. Use the customer's first name. Always offer to book a free 15-minute call when someone seems ready."
         />
+      </Panel>
+
+      <Panel tone="content" icon={ListChecks} label="Instructions" title="Standing rules for everything the AI writes">
+        <Textarea
+          rows={4}
+          value={settings.instructions ?? ""}
+          onChange={(event) => setSettings({ ...settings, instructions: event.target.value })}
+          placeholder={"Always reply in Spanish if the customer writes Spanish.\nNever mention competitors or discounts.\nSign off with our first name only."}
+        />
+        <p className="text-[12px] text-[#6b7280]">
+          Anything you want it to always or never do. It applies to replies, Live Chat suggestions, broadcast drafts, rewrites and flow drafts.
+        </p>
       </Panel>
 
       <Panel tone="input" icon={BookOpen} label="Knowledge" title="Facts the AI may use — nothing else">

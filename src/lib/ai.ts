@@ -40,6 +40,8 @@ export type BotAiSettings = {
   persona?: string;
   /** Facts it may use: prices, hours, links, policies, FAQs. */
   knowledge?: string;
+  /** Standing rules for every AI task: things to always or never do, language, topics to avoid. */
+  instructions?: string;
   /** Answer messages that match no flow or keyword with AI. */
   autoReply?: boolean;
   /** Said when the AI hands the conversation to a human. */
@@ -51,12 +53,20 @@ export function readAiSettings(settings: Record<string, unknown> | null | undefi
   return {
     persona: typeof raw.persona === "string" ? raw.persona : "",
     knowledge: typeof raw.knowledge === "string" ? raw.knowledge : "",
+    instructions: typeof raw.instructions === "string" ? raw.instructions : "",
     autoReply: Boolean(raw.autoReply),
     handoffMessage: typeof raw.handoffMessage === "string" ? raw.handoffMessage : "",
   };
 }
 
 export type HistoryLine = { direction: "inbound" | "outbound"; body: string };
+
+/** The account's standing rules as a prompt block, or "" when there are none. */
+function rulesBlock(settings: BotAiSettings) {
+  const rules = settings.instructions?.trim();
+  return rules ? `Standing instructions from the business (follow them in everything you write):
+${rules}` : "";
+}
 
 /** Stable per account, so it is the cached prefix. Per-contact detail goes in the user turn. */
 function systemPrompt(settings: BotAiSettings, brandName: string) {
@@ -66,6 +76,7 @@ function systemPrompt(settings: BotAiSettings, brandName: string) {
     settings.knowledge?.trim()
       ? `Business knowledge (the only facts you may state about the business):\n${settings.knowledge.trim()}`
       : "You have no business knowledge base. Do not invent prices, policies, dates or links.",
+    rulesBlock(settings),
     [
       "How to write replies:",
       "- This is a DM thread: 1-3 short sentences, plain text, no markdown headings or bullet lists unless asked.",
@@ -321,6 +332,7 @@ export async function writeCommentReply(input: {
     system: [
       `You reply publicly to comments on ${input.brandName}'s social posts. A DM with details was just sent to the commenter.`,
       input.settings.persona?.trim() ? `Brand voice:\n${input.settings.persona.trim()}` : "",
+      rulesBlock(input.settings),
       "Write one short, warm, specific reply (under 120 characters, at most one emoji) that acknowledges what they said and tells them to check their DMs. No hashtags, no links, no prices, never promise anything not in the comment.",
       input.examples.length ? `Replies the brand likes:\n${input.examples.slice(0, 5).map((line) => `- ${line}`).join("\n")}` : "",
     ]
@@ -386,6 +398,7 @@ export async function draftBroadcast(input: { provider?: AiProvider; goal: strin
       `You write broadcast DMs that ${input.brandName} sends to subscribers on Instagram, Messenger, WhatsApp and other chat apps.`,
       input.settings.persona?.trim() ? `Brand voice:\n${input.settings.persona.trim()}` : "",
       input.settings.knowledge?.trim() ? `Facts you may use:\n${input.settings.knowledge.trim().slice(0, 4000)}` : "",
+      rulesBlock(input.settings),
       "Rules: under 300 characters each, personal ({{first_name|there}} works), one clear call to action, at most two emoji, no hashtags, never invent prices or dates that the goal or facts do not give.",
     ]
       .filter(Boolean)
@@ -416,6 +429,7 @@ export async function rewriteCopy(input: { provider?: AiProvider; text: string; 
     system: [
       `You edit chat messages that ${input.brandName} sends in DMs.`,
       input.settings.persona?.trim() ? `Brand voice:\n${input.settings.persona.trim()}` : "",
+      rulesBlock(input.settings),
       "Keep {{variables}}, URLs, @handles and **formatting** markers exactly as they are. Same language as the input.",
     ]
       .filter(Boolean)
@@ -460,6 +474,7 @@ export async function generateFlowDraft(prompt: string, settings: BotAiSettings,
     provider,
     system: [
       `You design chat automations (like ManyChat flows) for ${brandName}.`,
+      rulesBlock(settings),
       settings.knowledge?.trim() ? `Business knowledge:\n${settings.knowledge.trim()}` : "",
       [
         "Rules:",

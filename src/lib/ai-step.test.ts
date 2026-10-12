@@ -59,7 +59,7 @@ describe("AI step", () => {
   });
 
   it("reads AI settings defensively", () => {
-    expect(readAiSettings(null)).toEqual({ persona: "", knowledge: "", autoReply: false, handoffMessage: "" });
+    expect(readAiSettings(null)).toEqual({ persona: "", knowledge: "", instructions: "", autoReply: false, handoffMessage: "" });
     expect(readAiSettings({ ai: { autoReply: "yes", persona: 4 } }).autoReply).toBe(true);
   });
 });
