@@ -2,13 +2,13 @@
 
 Social DM automation for HI Studio — a ManyChat-style platform for every network. Comment-to-DM, story replies, flows on a canvas, a shared Live Chat inbox, CRM, segmented broadcasts, analytics, and Claude-powered AI.
 
-Connect every social account at once through **[Zernio](https://zernio.com)** (Instagram, Facebook, WhatsApp, TikTok, X, LinkedIn, YouTube, Threads, Bluesky, Reddit, SMS…), or connect Telegram, Instagram, Messenger and WhatsApp directly. No scraping. Sends are rate-limited.
+Connect every social account at once through **[Zernio](https://zernio.com)** (Instagram, Facebook, WhatsApp, TikTok, X, LinkedIn, YouTube, Threads, Bluesky, Reddit, SMS…), or connect Telegram, Slack, Discord, Bluesky, Instagram, Messenger and WhatsApp directly. Slack, Discord and Bluesky connect with one click through an app the company owns. No scraping. Sends are rate-limited.
 
 Origin is the source of truth for this project.
 
 ## What it does
 
-1. **Channels** — paste a Zernio API key (Recatch registers its own signed webhook and routes every linked account), or a BotFather token / Meta token. Credentials are encrypted at rest (`ENCRYPTION_KEY`).
+1. **Channels** — paste a Zernio API key (Recatch registers its own signed webhook and routes every linked account), or Add to Slack, Add to Discord, Sign in with Bluesky, a BotFather token or a Meta token. Credentials are encrypted at rest (`ENCRYPTION_KEY`).
 2. **Comment → DM** — keyword + post filters, random public replies or **AI-written public replies** to each comment, a private-reply opening DM, once per person per post, optional hide-after-reply. Story reply and story mention triggers. Account-wide **comment moderation** hides comments with blocked words or links before any automation runs.
 3. **Flows** — a drag-and-drop canvas: Send Message (text, media, buttons, quick replies, typing), **Gallery** (swipeable product cards; native carousel on Instagram/Messenger, one message per card elsewhere), User input (with number, date and link reply types), Lead form, Tag, Set field, Subscribe, Condition, Smart Delay, A/B split, Start flow, HTTP request, Notify admin, **AI Step**, **Goal** (conversions + revenue), Stop, sticky **notes** for your team, plus undo/redo (⌘Z / ⇧⌘Z) and copy/paste of steps. Triggers: welcome, keywords, commands, growth links, comments, stories, **AI intent** (Claude matches what someone means, in any wording or language), default reply (every time or once per 24h). Fifteen starter **templates** (follow-to-unlock, product gallery, lead-scoring quiz, AI support router, appointment booking, Stripe checkout, AI qualifier…), an **in-browser simulator**, **version history** with one-click restore, JSON **export / import** to move flows between accounts, and per-node sent/click/conversion stats. `{{bot.key}}` bot fields hold shared values (prices, links) for every flow.
 4. **AI (Claude)** — AI Step (chats toward a goal, collects fields, continues the flow or hands off), AI auto-reply from your knowledge base (paste it, or **import it from your website**) with a **playground** to chat with it before going live, Live Chat reply suggestions + summaries, "describe a flow, get a draft", one-tap **AI rewrite** of any message (shorter, friendlier, more persuasive, emoji, grammar) in the brand voice, and **AI auto-tags** (describe a tag in plain words; Claude applies it when a message fits, which can start sequences, rules and webhooks).
@@ -83,6 +83,14 @@ Never commit tokens or `.env*`. Tokens are never logged (outbound logs are redac
 3. Still in **Channels**, click **Connect** on Instagram, Facebook, WhatsApp, X, TikTok, Threads, LinkedIn, YouTube, Reddit or Bluesky. You sign in on the network's own screen (Zernio runs it and the Page / account / number picker) and come back to Recatch with the account live. Accounts that lose access show **Needs reconnecting** with a one-click **Reconnect**; **Disconnect** stops new DMs from that account and keeps history. Each step is in the activity log.
 4. Optional, also in Settings: **Payments** (Stripe webhook for revenue attribution), **Team alerts** (Slack / Discord / Teams), **Fields**, **Tags** and **Team**.
 5. Start from a template under **Flows**, test it with **Test**, then switch it on.
+
+## Connect Slack, Discord or Bluesky
+
+In **Channels** (the Setup page), pick the platform and use the one-click button. Each needs the company app set up once and its variables in Railway (see the environment table and `INTEGRATIONS.md`). Until then the page shows the paste-your-own form instead.
+
+- **Slack:** **Add to Slack**, approve in the workspace. People message the Recatch app and the flows answer.
+- **Discord:** **Add to Discord**, pick the server. Members type `/chat` in the server and Recatch starts a private chat with them.
+- **Bluesky:** **Sign in with Bluesky**, approve on Bluesky. Recatch polls for new direct messages every few seconds. Buttons arrive as a numbered list and people answer by typing the number.
 
 ## Connect a Telegram bot
 
