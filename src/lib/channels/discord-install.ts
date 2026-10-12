@@ -1,4 +1,6 @@
 import { discordRequest } from "@/lib/channels/discord";
+import { decryptSecret } from "@/lib/crypto";
+import { log } from "@/lib/logger";
 import { ChannelApiError } from "@/lib/channels/meta";
 
 type Fetcher = typeof fetch;
@@ -71,9 +73,36 @@ export async function exchangeDiscordInstall(code: string, redirectUri: string, 
   return { guildId: data.guild.id, guildName: data.guild.name ?? "Discord server" };
 }
 
-/** Take the bot out of a server when its owner disconnects it. Best effort: the local copy is deleted either way. */
-export async function leaveDiscordGuild(guildId: string) {
+/**
+ * True when an account that holds its own bot token is really the shared Recatch bot. Two connections for
+ * one bot would each answer every DM, so such an account must not open its own connection.
+ */
+export function usesSharedBotToken(tokenEncrypted: string): boolean {
+  const shared = sharedDiscordToken();
+  if (!shared) return false;
+  try {
+    return decryptSecret(tokenEncrypted) === shared;
+  } catch {
+    return false;
+  }
+}
+
+export const SHARED_BOT_DUPLICATE_ERROR =
+  "This is the same bot as the shared Recatch bot, so it would answer every message twice and has been paused. Disconnect this account and use Add to Discord instead.";
+
+/**
+ * Take the bot out of a server when its owner disconnects it. The local copy is deleted either way, so a
+ * failure is reported back rather than blocking the disconnect.
+ */
+export async function leaveDiscordGuild(guildId: string): Promise<{ left: boolean; reason?: string }> {
   const token = sharedDiscordToken();
-  if (!token) return;
-  await discordRequest<void>(token, "DELETE", `/users/@me/guilds/${guildId}`).catch(() => undefined);
+  if (!token) return { left: false, reason: "The shared Discord bot is not set up on this server" };
+  try {
+    await discordRequest<void>(token, "DELETE", `/users/@me/guilds/${guildId}`);
+    return { left: true };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "Discord did not let the bot leave";
+    log.warn("Discord bot could not leave the server", guildId, reason);
+    return { left: false, reason };
+  }
 }

@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { discordEventId, parseDiscordEvent } from "@/lib/channels/discord";
+import { SHARED_BOT_DUPLICATE_ERROR, usesSharedBotToken } from "@/lib/channels/discord-install";
 import { DiscordGateway, type GatewayStatus } from "@/lib/channels/discord-gateway";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
@@ -40,7 +41,13 @@ async function recordStatus(botId: string, status: GatewayStatus, error?: string
 export async function syncDiscordGateways() {
   const db = await getDb();
   // Servers added through Add to Discord share one bot, held by discord-shared.ts, not one connection each.
-  const rows = (await db.select().from(bots)).filter((row) => row.channel === "discord" && row.settings?.discordShared !== true);
+  const own = (await db.select().from(bots)).filter((row) => row.channel === "discord" && row.settings?.discordShared !== true);
+  // An account whose token is the shared bot's would answer every DM a second time. Pause it and say why.
+  const rows = own.filter((row) => !usesSharedBotToken(row.tokenEncrypted));
+  for (const row of own) {
+    if (rows.includes(row) || row.lastHealthError === SHARED_BOT_DUPLICATE_ERROR) continue;
+    await db.update(bots).set({ status: "error", lastHealthError: SHARED_BOT_DUPLICATE_ERROR, lastHealthAt: new Date(), updatedAt: new Date() }).where(eq(bots.id, row.id));
+  }
   const wanted = new Set(rows.map((row) => row.id));
 
   for (const [botId, entry] of running) {

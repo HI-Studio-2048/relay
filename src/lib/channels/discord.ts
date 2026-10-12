@@ -17,7 +17,12 @@ type DiscordError = { message?: string; retry_after?: number };
 export async function discordRequest<T>(token: string, method: string, path: string, body?: unknown, attempt = 0): Promise<T> {
   const response = await fetch(`${API}${path}`, {
     method,
-    headers: { authorization: `Bot ${token}`, "content-type": "application/json", "user-agent": "DiscordBot (https://recatch.app, 1.0)" },
+    // A content type with no body is refused by some Discord routes, so it only goes with a body.
+    headers: {
+      authorization: `Bot ${token}`,
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+      "user-agent": "DiscordBot (https://recatch.app, 1.0)",
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (response.status === 429 && attempt < 2) {

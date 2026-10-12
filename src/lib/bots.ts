@@ -1,6 +1,7 @@
 import { syncBotCommands } from "@/lib/bot-commands";
 import { fetchDiscordBot } from "@/lib/channels/discord";
 import { type SlackInstall } from "@/lib/channels/slack-install";
+import { sharedDiscordAppId } from "@/lib/channels/discord-install";
 import { checkBlueskyAccount, forgetBlueskySession, explainBlueskyError } from "@/lib/channels/bluesky";
 import { fetchSlackIdentity } from "@/lib/channels/slack";
 import { graphGet } from "@/lib/channels/meta";
@@ -242,6 +243,7 @@ async function describeMetaAccount(channel: ChannelId, token: string, accountId:
 async function connectDiscord(input: ChannelConnectInput) {
   const token = input.token.trim();
   const me = await fetchDiscordBot(token);
+  if (me.id === sharedDiscordAppId()) throw new Error("That is Recatch's own bot. Use Add to Discord instead of pasting its token.");
   const db = await getDb();
   const existing = await db.select().from(bots);
   const match = existing.find((row) => channelOf(row.channel) === "discord" && row.externalAccountId === me.id);

@@ -40,13 +40,14 @@ export async function DELETE(request: Request, context: RouteParams<{ id: string
     }
     // An account that came from Add to Slack gives the app back to the workspace; one made by hand keeps its token.
     if (row.channel === "slack" && row.settings?.slackInstalled === true) await revokeSlackToken(decryptSecret(row.tokenEncrypted));
-    if (row.channel === "discord" && row.settings?.discordShared === true) await leaveDiscordGuild(String(row.settings.discordGuildId));
+    const left = row.channel === "discord" && row.settings?.discordShared === true ? await leaveDiscordGuild(String(row.settings.discordGuildId)) : null;
     await db.delete(bots).where(eq(bots.id, id));
     if (row.channel === "discord") {
       const { syncDiscordGateways } = await import("@/lib/channels/discord-manager");
       await syncDiscordGateways();
     }
-    return json({ ok: true });
+    // The account is gone either way; if the bot could not leave the server, say so and why.
+    return json({ ok: true, ...(left && !left.left ? { warning: `The account was removed, but the bot could not leave the Discord server (${left.reason}). Remove the Recatch bot from the server in Discord.` } : {}) });
   } catch (error) {
     return fail(error);
   }

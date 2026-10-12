@@ -185,9 +185,10 @@ export default function SetupPage() {
     if (!window.confirm("Disconnect this account and delete its contacts, flows, and messages?")) return;
     setBusy(true);
     try {
-      await api(`/api/bots/${bot.id}`, { method: "DELETE", body: JSON.stringify({ confirm: true }) });
+      const done = await api<{ warning?: string }>(`/api/bots/${bot.id}`, { method: "DELETE", body: JSON.stringify({ confirm: true }) });
       await refresh();
-      toast.success("Account removed");
+      if (done.warning) toast.warning(done.warning, { duration: 12000 });
+      else toast.success("Account removed");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not delete");
     } finally {

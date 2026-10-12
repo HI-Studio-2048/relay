@@ -5,12 +5,12 @@ import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 let signedIn = "owner-1";
-vi.mock("@/lib/auth", () => ({ requireUserId: async () => signedIn }));
+vi.mock("@/lib/auth", () => ({ requireUserId: async () => signedIn, requireBotAccess: async () => undefined }));
 // The shared Gateway would dial discord.com; these tests feed it events directly instead.
 vi.mock("@/lib/channels/discord-manager", () => ({ syncDiscordGateways: vi.fn(async () => undefined), discordGatewayState: () => "stopped" }));
 
 const TOKEN = "SHARED-BOT-TOKEN";
-type Call = { method: string; path: string; body: Record<string, unknown>; auth: string | null };
+type Call = { method: string; path: string; body: Record<string, unknown>; auth: string | null; contentType: string | null };
 const calls: Call[] = [];
 const realFetch = globalThis.fetch;
 const goneGuilds = new Set<string>();
@@ -25,7 +25,7 @@ function fakeDiscord() {
     const type = headers.get("content-type") ?? "";
     const text = init?.body ? String(init.body) : "";
     const body = (type.includes("json") ? (text ? JSON.parse(text) : {}) : Object.fromEntries(new URLSearchParams(text))) as Record<string, unknown>;
-    calls.push({ method: init?.method ?? "GET", path: route, body, auth: headers.get("authorization") });
+    calls.push({ method: init?.method ?? "GET", path: route, body, auth: headers.get("authorization"), contentType: headers.get("content-type") });
     const reply = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
 
     if (route === "/oauth2/token") {
@@ -36,9 +36,11 @@ function fakeDiscord() {
     }
     if (route.startsWith("/interactions/")) return new Response(null, { status: 204 });
     if (headers.get("authorization") !== `Bot ${TOKEN}`) return reply({ message: "401: Unauthorized" }, 401);
+    if (route === "/users/@me") return reply({ id: "app-1", username: "recatch", global_name: "Recatch" });
     if (route === "/users/@me/channels") return reply({ id: `dm-${body.recipient_id}` });
     if (/^\/channels\/dm-[^/]+\/messages$/.test(route)) return reply({ id: `sent-${calls.length}` });
     if (route.startsWith("/guilds/")) return goneGuilds.has(route.split("/")[2]!) ? reply({ message: "Unknown Guild", code: 10004 }, 404) : reply({ id: route.split("/")[2] });
+    if (route === "/users/@me/guilds/G-FAIL") return reply({ message: "Missing Access", code: 50001 }, 403);
     if (route.startsWith("/users/@me/guilds/")) return new Response(null, { status: 204 });
     if (route.startsWith("/applications/")) return reply([]);
     return reply({ message: `Unexpected ${route}` }, 404);
@@ -212,11 +214,34 @@ describe("Add to Discord and the shared bot, through the whole app", () => {
     expect(result.bot.lastHealthError).toMatch(/no longer in this server/);
   });
 
-  it("makes the bot leave the server when the account is disconnected", async () => {
-    const { leaveDiscordGuild } = await import("@/lib/channels/discord-install");
+  it("makes the bot leave the server when the account is disconnected, with no content type on the empty request", async () => {
+    const { DELETE } = await import("@/app/api/bots/[id]/route");
+    const { getDb } = await import("@/lib/db");
+    const { bots } = await import("@/lib/db/schema");
     calls.length = 0;
-    await leaveDiscordGuild("G1");
-    expect(calls[0]).toMatchObject({ method: "DELETE", path: "/users/@me/guilds/G1", auth: `Bot ${TOKEN}` });
+    const response = await DELETE(new Request("https://recatch.test/api/bots/x", { method: "DELETE", body: JSON.stringify({ confirm: true }) }), { params: Promise.resolve({ id: botIds.G1! }) });
+    expect(await response.json()).toEqual({ ok: true });
+    const leave = calls.find((call) => call.method === "DELETE")!;
+    expect(leave).toMatchObject({ path: "/users/@me/guilds/G1", auth: `Bot ${TOKEN}`, contentType: null });
+    expect(await (await getDb()).select().from(bots).where(eq(bots.id, botIds.G1!))).toHaveLength(0);
+  });
+
+  it("still removes the account when the bot cannot leave, and says why", async () => {
+    const { connectDiscordInstall } = await import("@/lib/bots");
+    const { DELETE } = await import("@/app/api/bots/[id]/route");
+    const { getDb } = await import("@/lib/db");
+    const { bots } = await import("@/lib/db/schema");
+    const bot = await connectDiscordInstall({ ownerId: "owner-1", guild: { id: "G-FAIL", name: "Stuck Server" } });
+    const response = await DELETE(new Request("https://recatch.test/api/bots/x", { method: "DELETE", body: JSON.stringify({ confirm: true }) }), { params: Promise.resolve({ id: bot.id }) });
+    const data = (await response.json()) as { ok: boolean; warning?: string };
+    expect(data.ok).toBe(true);
+    expect(data.warning).toMatch(/could not leave the Discord server \(Discord: Missing Access\)/);
+    expect(await (await getDb()).select().from(bots).where(eq(bots.id, bot.id))).toHaveLength(0);
+  });
+
+  it("refuses to connect the shared bot's own token as a bot of someone's own", async () => {
+    const { connectChannelAccount } = await import("@/lib/bots");
+    await expect(connectChannelAccount({ channel: "discord", ownerId: "owner-1", token: TOKEN })).rejects.toThrow(/Recatch's own bot/);
   });
 });
 
