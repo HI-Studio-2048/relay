@@ -360,4 +360,10 @@ CREATE TABLE IF NOT EXISTS oauth_connections (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS oauth_connections_account_idx ON oauth_connections(owner_id, provider, external_account_id);
 CREATE INDEX IF NOT EXISTS oauth_connections_owner_idx ON oauth_connections(owner_id);
+
+CREATE TABLE IF NOT EXISTS discord_routes (
+  discord_user_id text PRIMARY KEY,
+  bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 `;

@@ -26,7 +26,8 @@ export function accountFromRow(row: BotRow): ChannelAccount {
   return {
     id: row.id,
     channel: channelOf(row.channel),
-    token: decryptSecret(row.tokenEncrypted),
+    // Servers added through Add to Discord use the one shared bot, so there is no token of their own to decrypt.
+    token: row.channel === "discord" && row.settings?.discordShared === true ? (process.env.DISCORD_BOT_TOKEN?.trim() ?? "") : decryptSecret(row.tokenEncrypted),
     externalAccountId: row.externalAccountId ?? null,
     handle: row.telegramUsername ?? null,
     appSecret: row.appSecretEncrypted ? decryptSecret(row.appSecretEncrypted) : null,

@@ -1,4 +1,5 @@
 import { requireUserId } from "@/lib/auth";
+import { discordInstallConfigured } from "@/lib/channels/discord-install";
 import { slackInstallConfigured } from "@/lib/channels/slack-install";
 import { fail, json } from "@/lib/http";
 
@@ -6,7 +7,7 @@ import { fail, json } from "@/lib/http";
 export async function GET() {
   try {
     await requireUserId();
-    return json({ slackInstall: slackInstallConfigured() });
+    return json({ slackInstall: slackInstallConfigured(), discordInstall: discordInstallConfigured() });
   } catch (error) {
     return fail(error);
   }

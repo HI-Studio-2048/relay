@@ -102,6 +102,35 @@ export async function ackDiscordInteraction(ackId: string) {
   }).catch((error) => log.warn("Discord interaction ack failed", error instanceof Error ? error.message : error));
 }
 
+/** Answer a slash command with a message only the person who ran it can see. Discord wants this within three seconds. */
+export async function respondToDiscordCommand(id: string, token: string, content: string) {
+  await fetch(`${API}/interactions/${id}/${token}/callback`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ type: 4, data: { content, flags: 64 } }),
+  }).catch((error) => log.warn("Discord command reply failed", error instanceof Error ? error.message : error));
+}
+
+/** A plain direct message from the bot, outside any flow. */
+export async function sendDiscordText(token: string, userId: string, content: string) {
+  const channelId = await openDm(token, userId);
+  await discordRequest<{ id: string }>(token, "POST", `/channels/${channelId}/messages`, { content });
+}
+
+/** The /chat command, for servers only. Bulk overwrite is safe to repeat every start. */
+export function registerDiscordCommands(token: string, appId: string) {
+  return discordRequest(token, "PUT", `/applications/${appId}/commands`, [
+    {
+      name: "chat",
+      type: 1,
+      description: "Start a private chat with this server's assistant",
+      options: [{ type: 3, name: "topic", description: "What you want to talk about (optional)", required: false }],
+      contexts: [0],
+      integration_types: [0],
+    },
+  ]);
+}
+
 type DiscordUser = { id: string; username?: string; global_name?: string | null; bot?: boolean; avatar?: string | null };
 
 /** What the Gateway client hands to the queue: one dispatch event, name and data. */
@@ -117,7 +146,7 @@ export type DiscordGatewayEvent = {
     user?: DiscordUser;
     member?: { user?: DiscordUser };
     attachments?: unknown[];
-    data?: { custom_id?: string };
+    data?: { custom_id?: string; name?: string; options?: { name?: string; value?: unknown }[] };
   };
 };
 
@@ -149,6 +178,13 @@ export function parseDiscordEvent(event: DiscordGatewayEvent): NormalizedInbound
     return [{ ...person(d.author), text, externalMessageId: d.id ?? null }];
   }
   if (event.t === "INTERACTION_CREATE") {
+    // /chat in a server: start the conversation as if they had sent /start (with the topic as a growth link).
+    if (d.type === 2 && d.data?.name === "chat") {
+      const asker = d.member?.user ?? d.user;
+      if (!asker || asker.bot) return [];
+      const topic = String(d.data.options?.find((option) => option.name === "topic")?.value ?? "").trim();
+      return [{ ...person(asker), text: topic ? `/start ${topic}` : "/start", externalMessageId: d.id ?? null }];
+    }
     const user = d.user ?? d.member?.user;
     const customId = d.data?.custom_id;
     if (d.type !== 3 || !user || user.bot || !customId) return [];

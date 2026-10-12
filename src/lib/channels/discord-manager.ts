@@ -39,7 +39,8 @@ async function recordStatus(botId: string, status: GatewayStatus, error?: string
 /** Bring the live connections in line with the connected Discord accounts: start new, restart changed, stop removed. */
 export async function syncDiscordGateways() {
   const db = await getDb();
-  const rows = (await db.select().from(bots)).filter((row) => row.channel === "discord");
+  // Servers added through Add to Discord share one bot, held by discord-shared.ts, not one connection each.
+  const rows = (await db.select().from(bots)).filter((row) => row.channel === "discord" && row.settings?.discordShared !== true);
   const wanted = new Set(rows.map((row) => row.id));
 
   for (const [botId, entry] of running) {
@@ -75,6 +76,7 @@ export async function syncDiscordGateways() {
  * separate web process (or removed there) is picked up here.
  */
 export function startDiscordGateways() {
+  void import("@/lib/channels/discord-shared").then((shared) => shared.startSharedDiscordGateway());
   const tick = () => void syncDiscordGateways().catch((error) => log.warn("Discord sync failed", error instanceof Error ? error.message : error));
   tick();
   const timer = setInterval(tick, 60_000);

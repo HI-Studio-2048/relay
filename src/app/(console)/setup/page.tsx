@@ -103,13 +103,31 @@ export default function SetupPage() {
   const [accountId, setAccountId] = useState("");
   const [appSecret, setAppSecret] = useState("");
   const [busy, setBusy] = useState(false);
-  const [slackInstall, setSlackInstall] = useState(false);
-  const [manualSlack, setManualSlack] = useState(false);
+  const [installs, setInstalls] = useState({ slack: false, discord: false });
+  const [manualInstall, setManualInstall] = useState(false);
   const guide = GUIDES[channel];
+  const oneClick =
+    manualInstall
+      ? null
+      : channel === "slack" && installs.slack
+        ? {
+            href: "/api/slack/install",
+            label: "Add to Slack",
+            own: "Use my own Slack app instead",
+            blurb: "Add Recatch to your Slack workspace and approve it. People then message Recatch in Slack and your flows answer.",
+          }
+        : channel === "discord" && installs.discord
+          ? {
+              href: "/api/discord/install",
+              label: "Add to Discord",
+              own: "Use my own Discord bot instead",
+              blurb: "Add Recatch to your Discord server and approve it. Members type /chat in the server and Recatch starts a private conversation with them, answered by your flows.",
+            }
+          : null;
 
   useEffect(() => {
-    api<{ slackInstall: boolean }>("/api/channels/capabilities")
-      .then((data) => setSlackInstall(data.slackInstall))
+    api<{ slackInstall: boolean; discordInstall: boolean }>("/api/channels/capabilities")
+      .then((data) => setInstalls({ slack: data.slackInstall, discord: data.discordInstall }))
       .catch(() => undefined);
     // Add to Slack comes back here with the result in the address.
     const query = new URLSearchParams(window.location.search);
@@ -205,6 +223,7 @@ export default function SetupPage() {
                   setToken("");
                   setAccountId("");
                   setAppSecret("");
+                  setManualInstall(false);
                   setChannel(id);
                 }}
                 className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"
@@ -219,23 +238,21 @@ export default function SetupPage() {
             ))}
           </div>
 
-          {channel === "slack" && slackInstall && !manualSlack ? (
+          {oneClick ? (
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Add Recatch to your Slack workspace and approve it. People then message Recatch in Slack and your flows answer.
-              </p>
+              <p className="text-sm text-muted-foreground">{oneClick.blurb}</p>
               <div className="flex flex-wrap items-center gap-3">
-                <Button nativeButton={false} render={<a href="/api/slack/install" />}>
-                  Add to Slack
+                <Button nativeButton={false} render={<a href={oneClick.href} />}>
+                  {oneClick.label}
                 </Button>
-                <button type="button" className="text-sm text-muted-foreground underline" onClick={() => setManualSlack(true)}>
-                  Use my own Slack app instead
+                <button type="button" className="text-sm text-muted-foreground underline" onClick={() => setManualInstall(true)}>
+                  {oneClick.own}
                 </button>
               </div>
             </div>
           ) : null}
 
-          <div className={channel === "slack" && slackInstall && !manualSlack ? "hidden" : "space-y-4"}>
+          <div className={oneClick ? "hidden" : "space-y-4"}>
           <div className="space-y-1">
             <p className="text-sm font-medium">{guide.title}</p>
             <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
@@ -357,6 +374,9 @@ export default function SetupPage() {
               </div>
             ) : bot.webhookUrl ? (
               <p className="break-all text-sm text-muted-foreground">Webhook: {bot.webhookUrl}</p>
+            ) : null}
+            {bot.discordShared ? (
+              <p className="text-sm text-muted-foreground">Members of this server start a chat by typing /chat. Recatch then messages them privately and your flows answer.</p>
             ) : null}
             {bot.lastHealthError ? (
               <p className="text-sm text-destructive">{bot.lastHealthError}</p>

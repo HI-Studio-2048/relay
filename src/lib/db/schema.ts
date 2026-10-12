@@ -466,6 +466,18 @@ export const oauthConnections = pgTable(
   ],
 );
 
+/**
+ * Which connected Discord account a person's DMs go to. The shared Recatch bot sits in many servers and a
+ * DM carries none, so running /chat in a server records it here and the latest one wins.
+ */
+export const discordRoutes = pgTable("discord_routes", {
+  discordUserId: text("discord_user_id").primaryKey(),
+  botId: text("bot_id")
+    .notNull()
+    .references(() => bots.id, { onDelete: "cascade" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const botsRelations = relations(bots, ({ many }) => ({
   contacts: many(contacts),
   tags: many(tags),

@@ -12,6 +12,7 @@ export type PublicBot = {
   telegramUsername: string | null;
   externalAccountId?: string | null;
   hasAppSecret?: boolean;
+  discordShared?: boolean;
   verifyToken?: string | null;
   status: string;
   webhookUrl: string | null;

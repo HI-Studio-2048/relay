@@ -1,6 +1,6 @@
 import { syncBotCommands } from "@/lib/bot-commands";
 import { fetchDiscordBot } from "@/lib/channels/discord";
-import { slackEventsUrl, type SlackInstall } from "@/lib/channels/slack-install";
+import { type SlackInstall } from "@/lib/channels/slack-install";
 import { checkBlueskyAccount, forgetBlueskySession, explainBlueskyError } from "@/lib/channels/bluesky";
 import { fetchSlackIdentity } from "@/lib/channels/slack";
 import { graphGet } from "@/lib/channels/meta";
@@ -25,6 +25,8 @@ export function publicBot(row: typeof bots.$inferSelect) {
     hasAppSecret: Boolean(row.appSecretEncrypted),
     /** Slack: installed through Add to Slack, so there is nothing to paste into a Slack app. */
     slackInstalled: row.settings?.slackInstalled === true,
+    /** Discord: a server added through Add to Discord, answered by the shared bot. */
+    discordShared: row.settings?.discordShared === true,
     verifyToken: channelOf(row.channel) === "telegram" ? null : row.webhookSecret,
     webhookUrl: row.webhookUrl,
     /** Zernio: the social accounts this key routes, for badges and the account picker. */
@@ -314,6 +316,43 @@ async function connectSlack(input: ChannelConnectInput) {
 }
 
 /**
+ * A server that clicked Add to Discord. Recatch's one shared bot is already in it, so there is no token to
+ * keep: the account records which server it is, and people reach it by running /chat there.
+ */
+export async function connectDiscordInstall(input: { ownerId: string; guild: { id: string; name: string } }) {
+  const db = await getDb();
+  const existing = await db.select().from(bots);
+  const match = existing.find((row) => channelOf(row.channel) === "discord" && row.settings?.discordGuildId === input.guild.id);
+  assertOwnable(match, input.ownerId);
+  const id = match?.id ?? crypto.randomUUID();
+
+  const values = {
+    ownerId: input.ownerId,
+    name: `${input.guild.name} (Discord)`,
+    channel: "discord" as const,
+    telegramUsername: null,
+    telegramBotId: null,
+    externalAccountId: `guild:${input.guild.id}`,
+    // Not used: the shared bot's token comes from the environment. The column cannot be empty.
+    tokenEncrypted: encryptSecret("shared-discord-bot"),
+    appSecretEncrypted: null,
+    webhookSecret: match?.webhookSecret ?? randomSecret(12),
+    webhookUrl: null,
+    settings: { ...(match?.settings ?? {}), discordShared: true, discordGuildId: input.guild.id, discordGuildName: input.guild.name },
+    status: "connected",
+    lastHealthAt: new Date(),
+    lastHealthError: null,
+    updatedAt: new Date(),
+  };
+  if (match) await db.update(bots).set(values).where(eq(bots.id, id));
+  else await db.insert(bots).values({ id, ...values });
+
+  await seedBotDefaults(id);
+  const [row] = await db.select().from(bots).where(eq(bots.id, id)).limit(1);
+  return publicBot(row!);
+}
+
+/**
  * A workspace that clicked Add to Slack for the shared Recatch app. The token comes from Slack's OAuth
  * exchange, events arrive at the shared URL and are matched by workspace id, and the signing secret is
  * the company app's own (from the environment), so none is stored per account.
@@ -465,6 +504,23 @@ export async function healthCheckBot(botId: string, origin?: string) {
       origin,
     });
     return { bot: refreshed, webhook: null, me: null };
+  }
+  if (channelOf(bot.channel) === "discord" && bot.settings?.discordShared === true) {
+    let error: string | null = null;
+    try {
+      const { discordGuildReachable, discordSharedGatewayState } = await import("@/lib/channels/discord-shared");
+      await discordGuildReachable(String(bot.settings.discordGuildId));
+      if (discordSharedGatewayState() !== "running") error = "Recatch is not holding the shared Discord connection (the worker is off on this server)";
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Discord check failed";
+      error = /unknown guild|missing access/i.test(message) ? "Recatch is no longer in this server. Add it to Discord again to reconnect." : message;
+    }
+    await db
+      .update(bots)
+      .set({ status: error ? "error" : "connected", lastHealthAt: new Date(), lastHealthError: error, updatedAt: new Date() })
+      .where(eq(bots.id, botId));
+    const [updated] = await db.select().from(bots).where(eq(bots.id, botId)).limit(1);
+    return { bot: publicBot(updated!), webhook: null, me: null };
   }
   if (channelOf(bot.channel) === "discord") {
     let error: string | null = null;

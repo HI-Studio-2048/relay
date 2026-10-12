@@ -6,6 +6,7 @@ import { decryptSecret } from "@/lib/crypto";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
+import { leaveDiscordGuild } from "@/lib/channels/discord-install";
 import { revokeSlackToken } from "@/lib/channels/slack-install";
 import { deleteWebhook } from "@/lib/telegram";
 
@@ -39,6 +40,7 @@ export async function DELETE(request: Request, context: RouteParams<{ id: string
     }
     // An account that came from Add to Slack gives the app back to the workspace; one made by hand keeps its token.
     if (row.channel === "slack" && row.settings?.slackInstalled === true) await revokeSlackToken(decryptSecret(row.tokenEncrypted));
+    if (row.channel === "discord" && row.settings?.discordShared === true) await leaveDiscordGuild(String(row.settings.discordGuildId));
     await db.delete(bots).where(eq(bots.id, id));
     if (row.channel === "discord") {
       const { syncDiscordGateways } = await import("@/lib/channels/discord-manager");
