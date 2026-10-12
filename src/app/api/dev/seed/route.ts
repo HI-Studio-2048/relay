@@ -29,7 +29,7 @@ export async function POST() {
         webhookSecret: randomSecret(),
         webhookUrl: null,
         status: "disconnected",
-        lastHealthError: "Demo bot — connect a real BotFather token for Telegram.",
+        lastHealthError: "Demo bot. Connect a real BotFather token for Telegram.",
       });
       await seedBotDefaults(id);
       const [created] = await db.select().from(bots).where(eq(bots.id, id)).limit(1);
@@ -91,7 +91,7 @@ export async function POST() {
             id: crypto.randomUUID(),
             botId: bot.id,
             name: "Demo follow-up",
-            body: "Thanks for leaving your details — HI Studio will follow up shortly.",
+            body: "Thanks for leaving your details, HI Studio will follow up shortly.",
             tagId: lead.id,
             status: "awaiting_confirm",
             totalCount: 1,

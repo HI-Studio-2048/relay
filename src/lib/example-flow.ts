@@ -15,7 +15,7 @@ export const EXAMPLE_LEAD_CAPTURE_FLOW: FlowDefinition = {
     {
       id: "intro_media",
       type: "text",
-      text: "Great — I'll ask a few details.",
+      text: "Great, I'll ask a few details.",
       media: {
         url: "https://upload.wikimedia.org/wikipedia/commons/d/d3/Newtons_cradle_animation_book_2.gif",
         kind: "animation",
@@ -60,7 +60,7 @@ export const EXAMPLE_LEAD_CAPTURE_FLOW: FlowDefinition = {
     {
       id: "thanks",
       type: "end",
-      text: "Thanks — you're on our list. We'll be in touch.",
+      text: "Thanks, you're on our list. We'll be in touch.",
     },
     {
       id: "later",
@@ -70,7 +70,7 @@ export const EXAMPLE_LEAD_CAPTURE_FLOW: FlowDefinition = {
   ],
 };
 
-/** Growth-link demo: /start promo. Fresh seeds only — existing DB rows are not overwritten. */
+/** Growth-link demo: /start promo. Fresh seeds only, existing DB rows are not overwritten. */
 export const EXAMPLE_GROWTH_LINK_FLOW: FlowDefinition = {
   startStepId: "welcome",
   steps: [
@@ -125,7 +125,7 @@ export const EXAMPLE_GROWTH_LINK_FLOW: FlowDefinition = {
     {
       id: "nudge",
       type: "text",
-      text: "No email this time — we will skip the qualified tag.",
+      text: "No email this time, so we will skip the qualified tag.",
       next: "thanks",
     },
     {
