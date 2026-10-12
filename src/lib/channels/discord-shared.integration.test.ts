@@ -82,9 +82,9 @@ describe("Add to Discord and the shared bot, through the whole app", () => {
     const { GET: callback } = await import("@/app/api/discord/oauth/callback/route");
     const began = await start(new Request("https://recatch.test/api/discord/install"));
     expect(began.status).toBe(303);
-    const target = new URL(began.headers.get("location")!);
+    const target = new URL(began.headers.get("location")!, "https://recatch.test");
     const done = await callback(new Request(`https://recatch.test/api/discord/oauth/callback?code=${code}&guild_id=FORGED&state=${encodeURIComponent(target.searchParams.get("state")!)}`));
-    return { target, done: new URL(done.headers.get("location")!) };
+    return { target, done: new URL(done.headers.get("location")!, "https://recatch.test") };
   };
 
   const botFor = async (guildId: string) => {

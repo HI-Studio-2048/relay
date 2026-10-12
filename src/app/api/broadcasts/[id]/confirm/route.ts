@@ -5,7 +5,7 @@ import { canDispatchBroadcast } from "@/lib/broadcast";
 import { EmptyAudienceError, materializeBroadcast } from "@/lib/broadcast-dispatch";
 import { getDb } from "@/lib/db";
 import { broadcasts } from "@/lib/db/schema";
-import { json, fail, readJson, type RouteParams } from "@/lib/http";
+import { json, fail, readJson, redirectTo as redirect, type RouteParams } from "@/lib/http";
 import { shouldRunWorker } from "@/lib/queue";
 import type { BroadcastStatus } from "@/lib/types";
 import { drainJobs } from "@/lib/worker";
@@ -35,9 +35,7 @@ export async function POST(request: Request, context: RouteParams<{ id: string }
     const { id } = await context.params;
     await requireRowAccess("broadcast", id);
     const { confirm, viaForm, scheduledAt, smartTiming } = await readConfirm(request);
-    const origin = new URL(request.url).origin;
-    const redirectTo = (query: string) =>
-      Response.redirect(`${origin}/broadcasts/${id}${query}`, 303);
+    const redirectTo = (query: string) => redirect(`/broadcasts/${id}${query}`);
     const db = await getDb();
     const [broadcast] = await db.select().from(broadcasts).where(eq(broadcasts.id, id)).limit(1);
     if (!broadcast) {

@@ -9,6 +9,18 @@ export function json(data: unknown, status = 200) {
   return Response.json(data, { status });
 }
 
+/** Location for an in-app redirect, optionally with one query parameter. Relative on purpose: behind `next start --hostname 0.0.0.0`
+ * the origin of request.url is http://0.0.0.0:PORT, and a redirect built from it sends the browser to a dead address. */
+export function relativeLocation(path: string, key?: string, value?: string) {
+  const url = new URL(path, "http://relative.invalid");
+  if (key !== undefined && value !== undefined) url.searchParams.set(key, value);
+  return url.pathname + url.search;
+}
+
+export function redirectTo(path: string, key?: string, value?: string) {
+  return new Response(null, { status: 303, headers: { location: relativeLocation(path, key, value) } });
+}
+
 export function fail(error: unknown, fallback = "Request failed") {
   if (error instanceof AccessError) {
     return json({ error: error.message }, error.status);

@@ -67,7 +67,7 @@ describe("OAuth connections through the whole app", () => {
     const ctx = { params: Promise.resolve({ provider }) };
     const began = await start(new Request(`https://recatch.test/api/connections/${provider}/start`), ctx);
     expect(began.status).toBe(303);
-    const target = new URL(began.headers.get("location")!);
+    const target = new URL(began.headers.get("location")!, "https://recatch.test");
     const state = target.searchParams.get("state")!;
     const cookie = (began.headers.get("set-cookie") ?? "").split(";")[0];
     const returned = await callback(
@@ -81,7 +81,7 @@ describe("OAuth connections through the whole app", () => {
     const { began, returned } = await startAndCallback("google");
     expect(began.headers.get("set-cookie")).toMatch(/rc_oauth_verifier=.+HttpOnly.+SameSite=Lax/);
     expect(returned.status).toBe(303);
-    const back = new URL(returned.headers.get("location")!);
+    const back = new URL(returned.headers.get("location")!, "https://recatch.test");
     expect(back.pathname).toBe("/channels");
     expect(back.searchParams.get("connected")).toBe("YouTube connected: Studio Channel");
 
@@ -101,8 +101,8 @@ describe("OAuth connections through the whole app", () => {
   it("signs in with TikTok without PKCE", async () => {
     const { began, returned } = await startAndCallback("tiktok");
     expect(began.headers.get("set-cookie")).toBeNull();
-    expect(new URL(began.headers.get("location")!).searchParams.get("client_key")).toBe("t-key");
-    expect(new URL(returned.headers.get("location")!).searchParams.get("connected")).toBe("TikTok connected: Ada");
+    expect(new URL(began.headers.get("location")!, "https://recatch.test").searchParams.get("client_key")).toBe("t-key");
+    expect(new URL(returned.headers.get("location")!, "https://recatch.test").searchParams.get("connected")).toBe("TikTok connected: Ada");
   });
 
   it("lists connections without ever showing tokens", async () => {
@@ -124,25 +124,25 @@ describe("OAuth connections through the whole app", () => {
     const { GET: callback } = await import("@/app/api/connections/[provider]/callback/route");
     const ctx = { params: Promise.resolve({ provider: "tiktok" }) };
     const began = await start(new Request("https://recatch.test/api/connections/tiktok/start"), ctx);
-    const state = new URL(began.headers.get("location")!).searchParams.get("state")!;
+    const state = new URL(began.headers.get("location")!, "https://recatch.test").searchParams.get("state")!;
     signedIn = "owner-2";
     const before = hits.length;
     const returned = await callback(new Request(`https://recatch.test/api/connections/tiktok/callback?code=C&state=${encodeURIComponent(state)}`), ctx);
     signedIn = "owner-1";
-    expect(new URL(returned.headers.get("location")!).searchParams.get("error")).toMatch(/could not be verified/);
+    expect(new URL(returned.headers.get("location")!, "https://recatch.test").searchParams.get("error")).toMatch(/could not be verified/);
     expect(hits.length).toBe(before);
   });
 
   it("reports a cancelled sign-in and a missing server key without calling the provider", async () => {
     const { GET: callback } = await import("@/app/api/connections/[provider]/callback/route");
     const cancelled = await callback(new Request("https://recatch.test/api/connections/google/callback?error=access_denied"), { params: Promise.resolve({ provider: "google" }) });
-    expect(new URL(cancelled.headers.get("location")!).searchParams.get("error")).toBe("YouTube sign-in was cancelled");
+    expect(new URL(cancelled.headers.get("location")!, "https://recatch.test").searchParams.get("error")).toBe("YouTube sign-in was cancelled");
 
     const { GET: start } = await import("@/app/api/connections/[provider]/start/route");
     vi.stubEnv("GOOGLE_CLIENT_SECRET", "");
     const unset = await start(new Request("https://recatch.test/api/connections/google/start"), { params: Promise.resolve({ provider: "google" }) });
     vi.stubEnv("GOOGLE_CLIENT_SECRET", "g-secret");
-    expect(new URL(unset.headers.get("location")!).searchParams.get("error")).toMatch(/not set up on this server/);
+    expect(new URL(unset.headers.get("location")!, "https://recatch.test").searchParams.get("error")).toMatch(/not set up on this server/);
   });
 
   it("hands out the stored token while it is fresh, and refreshes it once it is about to expire", async () => {

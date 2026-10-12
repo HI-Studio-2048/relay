@@ -117,12 +117,12 @@ describe("Sign in with Bluesky through the whole app", () => {
   const start = async (handle?: string) => {
     const { GET } = await import("@/app/api/bluesky/install/route");
     const response = await GET(new Request(`https://recatch.test/api/bluesky/install${handle ? `?handle=${encodeURIComponent(handle)}` : ""}`));
-    return { status: response.status, location: new URL(response.headers.get("location")!) };
+    return { status: response.status, location: new URL(response.headers.get("location")!, "https://recatch.test") };
   };
   const callback = async (state: string | null, extra = "") => {
     const { GET } = await import("@/app/api/bluesky/oauth/callback/route");
     const response = await GET(new Request(`https://recatch.test/api/bluesky/oauth/callback?code=c&iss=https%3A%2F%2Fbsky.social${state ? `&state=${encodeURIComponent(state)}` : ""}${extra}`));
-    return new URL(response.headers.get("location")!);
+    return new URL(response.headers.get("location")!, "https://recatch.test");
   };
 
   it("sends the person to Bluesky for the handle they typed, asking for DMs, with a signed state", async () => {
@@ -257,6 +257,6 @@ describe("Sign in with Bluesky when it is not set up", () => {
     vi.stubEnv("BLUESKY_OAUTH_KEY", "");
     const { GET } = await import("@/app/api/bluesky/install/route");
     const response = await GET(new Request("https://recatch.test/api/bluesky/install"));
-    expect(new URL(response.headers.get("location")!).searchParams.get("error")).toMatch(/not set up/);
+    expect(new URL(response.headers.get("location")!, "https://recatch.test").searchParams.get("error")).toMatch(/not set up/);
   });
 });

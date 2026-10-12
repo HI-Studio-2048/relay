@@ -72,9 +72,9 @@ describe("Add to Slack through the whole app", () => {
     const { GET: callback } = await import("@/app/api/slack/oauth/callback/route");
     const began = await start(new Request("https://recatch.test/api/slack/install"));
     expect(began.status).toBe(303);
-    const target = new URL(began.headers.get("location")!);
+    const target = new URL(began.headers.get("location")!, "https://recatch.test");
     const done = await callback(new Request(`https://recatch.test/api/slack/oauth/callback?code=${code}&state=${encodeURIComponent(target.searchParams.get("state")!)}`));
-    return { target, done: new URL(done.headers.get("location")!) };
+    return { target, done: new URL(done.headers.get("location")!, "https://recatch.test") };
   };
 
   it("sends the person to Slack with the company app's id, the scopes and a signed state", async () => {
@@ -113,9 +113,9 @@ describe("Add to Slack through the whole app", () => {
     expect(done.searchParams.get("error")).toMatch(/invalid_code/);
     const { GET: callback } = await import("@/app/api/slack/oauth/callback/route");
     const cancelled = await callback(new Request("https://recatch.test/api/slack/oauth/callback?error=access_denied"));
-    expect(new URL(cancelled.headers.get("location")!).searchParams.get("error")).toMatch(/cancelled/);
+    expect(new URL(cancelled.headers.get("location")!, "https://recatch.test").searchParams.get("error")).toMatch(/cancelled/);
     const forged = await callback(new Request("https://recatch.test/api/slack/oauth/callback?code=x&state=nope"));
-    expect(new URL(forged.headers.get("location")!).searchParams.get("error")).toMatch(/could not be verified/);
+    expect(new URL(forged.headers.get("location")!, "https://recatch.test").searchParams.get("error")).toMatch(/could not be verified/);
   });
 
   it("answers the URL check and rejects unsigned or wrongly signed deliveries on the shared URL", async () => {
