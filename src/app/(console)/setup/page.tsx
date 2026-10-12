@@ -103,7 +103,8 @@ export default function SetupPage() {
   const [accountId, setAccountId] = useState("");
   const [appSecret, setAppSecret] = useState("");
   const [busy, setBusy] = useState(false);
-  const [installs, setInstalls] = useState({ slack: false, discord: false });
+  const [installs, setInstalls] = useState({ slack: false, discord: false, bluesky: false });
+  const [bskyHandle, setBskyHandle] = useState("");
   const [manualInstall, setManualInstall] = useState(false);
   const guide = GUIDES[channel];
   const oneClick =
@@ -123,11 +124,20 @@ export default function SetupPage() {
               own: "Use my own Discord bot instead",
               blurb: "Add Recatch to your Discord server and approve it. Members type /chat in the server and Recatch starts a private conversation with them, answered by your flows.",
             }
-          : null;
+          : channel === "bluesky" && installs.bluesky
+            ? {
+                href: `/api/bluesky/install${bskyHandle.trim() ? `?handle=${encodeURIComponent(bskyHandle.trim())}` : ""}`,
+                label: "Sign in with Bluesky",
+                own: "Use an app password instead",
+                blurb:
+                  "Sign in on Bluesky and approve Recatch. Bluesky words the permission broadly, as access to manage the account's content, because that is how it offers direct messages. Recatch only reads your direct messages and replies to them, and never posts.",
+                field: true,
+              }
+            : null;
 
   useEffect(() => {
-    api<{ slackInstall: boolean; discordInstall: boolean }>("/api/channels/capabilities")
-      .then((data) => setInstalls({ slack: data.slackInstall, discord: data.discordInstall }))
+    api<{ slackInstall: boolean; discordInstall: boolean; blueskyOauth: boolean }>("/api/channels/capabilities")
+      .then((data) => setInstalls({ slack: data.slackInstall, discord: data.discordInstall, bluesky: data.blueskyOauth }))
       .catch(() => undefined);
     // Add to Slack comes back here with the result in the address.
     const query = new URLSearchParams(window.location.search);
@@ -242,6 +252,15 @@ export default function SetupPage() {
           {oneClick ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">{oneClick.blurb}</p>
+              {"field" in oneClick && oneClick.field ? (
+                <Input
+                  autoComplete="off"
+                  placeholder="Your handle, like name.bsky.social (optional)"
+                  value={bskyHandle}
+                  onChange={(event) => setBskyHandle(event.target.value)}
+                  aria-label="Bluesky handle"
+                />
+              ) : null}
               <div className="flex flex-wrap items-center gap-3">
                 <Button nativeButton={false} render={<a href={oneClick.href} />}>
                   {oneClick.label}

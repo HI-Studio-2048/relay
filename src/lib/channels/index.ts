@@ -32,6 +32,7 @@ export function accountFromRow(row: BotRow): ChannelAccount {
     handle: row.telegramUsername ?? null,
     appSecret: row.appSecretEncrypted ? decryptSecret(row.appSecretEncrypted) : null,
     verifyToken: row.webhookSecret,
+    oauth: row.channel === "bluesky" && row.settings?.blueskyOauth === true,
   };
 }
 

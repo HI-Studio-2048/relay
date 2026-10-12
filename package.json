@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
+    "@atproto/jwk-jose": "^0.2.4",
+    "@atproto/oauth-client-node": "^0.5.9",
     "@base-ui/react": "^1.8.0",
     "@electric-sql/pglite": "^0.5.8",
     "@xyflow/react": "^12.11.6",

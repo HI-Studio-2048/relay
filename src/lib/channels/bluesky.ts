@@ -92,8 +92,29 @@ export function forgetBlueskySession(accountId: string) {
   sessions.delete(accountId);
 }
 
+/** One chat call through the account's OAuth session, which signs and refreshes itself. */
+async function chatWithOauth<T>(account: ChannelAccount, method: "GET" | "POST", nsid: string, data: { query?: Record<string, string>; body?: unknown }): Promise<T> {
+  const { restoreBlueskySession } = await import("@/lib/channels/bluesky-oauth");
+  let session;
+  try {
+    session = await restoreBlueskySession(account.externalAccountId ?? "");
+  } catch {
+    throw new BlueskyError("Bluesky: the sign-in expired or was revoked. Reconnect the account with Sign in with Bluesky.", 401, "ReauthRequired");
+  }
+  const query = data.query ? `?${new URLSearchParams(data.query)}` : "";
+  const response = await session.fetchHandler(`/xrpc/${nsid}${query}`, {
+    method,
+    headers: { "atproto-proxy": CHAT_PROXY, ...(data.body === undefined ? {} : { "content-type": "application/json" }) },
+    body: data.body === undefined ? undefined : JSON.stringify(data.body),
+  });
+  const parsed = (await response.json().catch(() => ({}))) as T & XrpcError;
+  if (!response.ok) throw new BlueskyError(`Bluesky: ${parsed.message ?? parsed.error ?? "request failed"}`, response.status, parsed.error ?? `http_${response.status}`);
+  return parsed;
+}
+
 /** One chat call as the account. A rejected token drops the cached session and tries once more. */
 async function chat<T>(account: ChannelAccount, method: "GET" | "POST", nsid: string, data: { query?: Record<string, string>; body?: unknown } = {}, retried = false): Promise<T> {
+  if (account.oauth) return chatWithOauth<T>(account, method, nsid, data);
   const session = await blueskySession(account);
   try {
     return await xrpc<T>(method, nsid, { jwt: session.accessJwt, chat: true, base: pdsOf(session), ...data });
@@ -176,6 +197,16 @@ export async function sendBlueskyReply(account: ChannelAccount, to: string, repl
   const convoId = await convoWith(account, to);
   const sent = await chat<{ id: string }>(account, "POST", "chat.bsky.convo.sendMessage", { body: { convoId, message: buildBlueskyMessage(reply) } });
   return { message_id: sent.id };
+}
+
+/** The handle that goes with an account id, from the public profile. Null when Bluesky cannot say. */
+export async function fetchBlueskyHandle(did: string): Promise<string | null> {
+  try {
+    const profile = await xrpc<{ handle?: string }>("GET", "app.bsky.actor.getProfile", { base: PUBLIC_API, query: { actor: did } });
+    return profile.handle ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Name and avatar for a new contact, from the public profile. */

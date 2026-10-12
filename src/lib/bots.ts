@@ -3,6 +3,7 @@ import { fetchDiscordBot } from "@/lib/channels/discord";
 import { type SlackInstall } from "@/lib/channels/slack-install";
 import { sharedDiscordAppId } from "@/lib/channels/discord-install";
 import { checkBlueskyAccount, forgetBlueskySession, explainBlueskyError } from "@/lib/channels/bluesky";
+import { checkBlueskyOauthAccount, revokeBlueskySession } from "@/lib/channels/bluesky-oauth";
 import { fetchSlackIdentity } from "@/lib/channels/slack";
 import { graphGet } from "@/lib/channels/meta";
 import { channelOf, type ChannelId } from "@/lib/channels/types";
@@ -393,6 +394,51 @@ export async function connectSlackInstall(input: { ownerId: string; install: Sla
 }
 
 /**
+ * A Bluesky account that signed in with OAuth. Recatch holds a session for it (in the OAuth store) rather
+ * than a password, so the token column is only a placeholder. Signing in again on an account that used an
+ * app password switches it over.
+ */
+export async function connectBlueskyOauth(input: { ownerId: string; did: string }) {
+  let handle: string;
+  try {
+    handle = (await checkBlueskyOauthAccount(input.did)).handle;
+  } catch (error) {
+    await revokeBlueskySession(input.did);
+    throw error;
+  }
+  const db = await getDb();
+  const existing = await db.select().from(bots);
+  const match = existing.find((row) => channelOf(row.channel) === "bluesky" && row.externalAccountId === input.did);
+  assertOwnable(match, input.ownerId);
+  const id = match?.id ?? crypto.randomUUID();
+  forgetBlueskySession(id);
+
+  const values = {
+    ownerId: input.ownerId,
+    name: `@${handle} (Bluesky)`,
+    channel: "bluesky" as const,
+    telegramUsername: handle,
+    telegramBotId: null,
+    externalAccountId: input.did,
+    // Not used: requests go through the stored OAuth session. The column cannot be empty.
+    tokenEncrypted: encryptSecret("bluesky-oauth"),
+    webhookSecret: match?.webhookSecret ?? randomSecret(12),
+    webhookUrl: null,
+    settings: { ...(match?.settings ?? {}), blueskyOauth: true },
+    status: "connected",
+    lastHealthAt: new Date(),
+    lastHealthError: null,
+    updatedAt: new Date(),
+  };
+  if (match) await db.update(bots).set(values).where(eq(bots.id, id));
+  else await db.insert(bots).values({ id, ...values });
+
+  await seedBotDefaults(id);
+  const [row] = await db.select().from(bots).where(eq(bots.id, id)).limit(1);
+  return publicBot(row!);
+}
+
+/**
  * Connect a Bluesky account with its handle and an app password (never the main password). There is
  * no webhook: the worker polls the account's chat log. The app password needs the "Allow access to
  * your direct messages" box ticked, which checkBlueskyAccount verifies.
@@ -548,8 +594,12 @@ export async function healthCheckBot(botId: string, origin?: string) {
     let name = bot.name;
     try {
       forgetBlueskySession(bot.id);
-      const session = await checkBlueskyAccount(bot.telegramUsername ?? bot.externalAccountId ?? "", token);
-      name = `@${session.handle} (Bluesky)`;
+      if (bot.settings?.blueskyOauth === true) {
+        name = `@${(await checkBlueskyOauthAccount(bot.externalAccountId ?? "")).handle} (Bluesky)`;
+      } else {
+        const session = await checkBlueskyAccount(bot.telegramUsername ?? bot.externalAccountId ?? "", token);
+        name = `@${session.handle} (Bluesky)`;
+      }
     } catch (caught) {
       error = explainBlueskyError(caught);
     }

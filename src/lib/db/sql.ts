@@ -366,4 +366,10 @@ CREATE TABLE IF NOT EXISTS discord_routes (
   bot_id text NOT NULL REFERENCES bots(id) ON DELETE CASCADE,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS bluesky_oauth_store (
+  key text PRIMARY KEY,
+  value_encrypted text NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 `;

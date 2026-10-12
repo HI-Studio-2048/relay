@@ -159,6 +159,8 @@ export type ChannelAccount = {
   /** Meta app secret for X-Hub-Signature-256 checks; verify token lives in webhookSecret. */
   appSecret: string | null;
   verifyToken: string;
+  /** Bluesky: signed in with OAuth, so requests go through a stored session instead of an app password. */
+  oauth?: boolean;
 };
 
 /** Channel-neutral inbound event, produced by each adapter's webhook parser. */

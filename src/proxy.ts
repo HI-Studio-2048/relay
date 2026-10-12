@@ -18,6 +18,8 @@ const PUBLIC_PREFIXES = [
   "/api/meta/webhook",
   "/api/slack/webhook",
   "/api/slack/events",
+  "/api/bluesky/client-metadata",
+  "/api/bluesky/jwks",
   "/api/zernio/webhook",
   "/api/stripe/webhook",
   "/api/v1",

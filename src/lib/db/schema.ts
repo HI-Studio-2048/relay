@@ -478,6 +478,13 @@ export const discordRoutes = pgTable("discord_routes", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Bluesky OAuth: pending sign-ins (state:) and live sessions (session:), encrypted. See channels/bluesky-oauth.ts. */
+export const blueskyOauthStore = pgTable("bluesky_oauth_store", {
+  key: text("key").primaryKey(),
+  valueEncrypted: text("value_encrypted").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const botsRelations = relations(bots, ({ many }) => ({
   contacts: many(contacts),
   tags: many(tags),
