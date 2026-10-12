@@ -24,7 +24,7 @@ export default async function AccountsPage() {
         db
           .select({
             total: sql<number>`count(*)::int`,
-            week: sql<number>`count(*) filter (where ${contacts.createdAt} >= ${weekAgo})::int`,
+            week: sql<number>`count(*) filter (where ${contacts.createdAt} >= ${weekAgo.toISOString()}::timestamptz)::int`,
           })
           .from(contacts)
           .where(eq(contacts.botId, bot.id)),
