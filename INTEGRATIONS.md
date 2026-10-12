@@ -1,6 +1,6 @@
 # Integrations log
 
-Where each platform stands in Recatch. Last updated at the end of the 2026-10-09 session, so this is a snapshot to pick the work back up from. Everything is merged and pushed: `main` is the only branch that matters, and there is no unpushed local work.
+Where each platform stands in Recatch. Last updated on 2026-10-12. The Slack adapter described below is built and tested but not pushed yet, so check `git status` before assuming `main` has it. Otherwise `main` is the only branch that matters.
 
 "Direct" means Recatch talks to the platform's own API with our credentials. "Zernio" means it comes in through the Zernio hub (one API key, Zernio holds the platform approvals).
 
@@ -30,7 +30,6 @@ Small chores nobody has done yet:
 | --- | --- |
 | Click Run health check on the Discord card (Setup page) | The card still says "Relay (Discord)". The bot was renamed to Recatch in Discord and the check refreshes the label. |
 | Decide about "Public Bot" on the Discord Bot page | It is on, so anyone could add the test bot to their server. Turn it off unless that is wanted. |
-| Decide about the welcome flow's first line | The seed text contains a dash ("Hey, this is HI Studio" with a long dash). It is old seed data that every new account gets. |
 
 Parked on purpose:
 
@@ -44,6 +43,7 @@ Parked on purpose:
 | Platform | How | Notes |
 | --- | --- | --- |
 | Telegram | Direct | Each customer connects their own bot with a BotFather token. Flows, buttons, media, `/` commands and phone share all work. |
+| Slack | Direct | Built 2026-10-12 and tested against a fake Slack, not yet against a real app. A person creates a Slack app, adds the bot scopes `chat:write`, `im:history`, `im:read`, `im:write` and `users:read`, installs it, and pastes the Bot User OAuth Token (xoxb-) and the Signing Secret on the Setup page. Recatch then shows one webhook URL, which goes into the app's Event Subscriptions (bot event `message.im`) and Interactivity pages. The Messages tab under App Home has to be on or people can't write to the app. Every request is checked against the signing secret. Direct messages and button taps work, typing indicators don't exist in Slack. This is a separate thing from the team alert webhook in Settings. |
 | Discord | Direct | Confirmed with a real bot on 2026-10-09: a DM reached the inbox as a new contact and the starter flow answered with working buttons. A bot token connects it on the Setup page. Discord delivers DMs over a persistent websocket (the Gateway), so Recatch holds a live connection per bot, and only one running instance should hold it. People can only DM the bot if they share a server with it. |
 | Instagram | Direct + Zernio | Direct adapter is built. Going direct on real accounts needs Meta App Review. |
 | Messenger | Direct + Zernio | Same Meta adapter and same approval as Instagram. |
@@ -62,7 +62,6 @@ Public `/privacy`, `/terms` and `/data-deletion` pages are live, linked from the
 | Meta (Instagram, Messenger, WhatsApp, Threads) direct | Code is ready. Needs the developer account confirmed, then a Meta app in development mode, then Business Verification and App Review. |
 | Telegram, one bot for all of Recatch | Telegram has no company-wide API. The only way is Telegram Business, which needs every customer to pay for Telegram Premium. Dropped. |
 | Bluesky direct | No adapter yet. Keys are instant. Bluesky doesn't push DMs, so Recatch would have to poll for them. |
-| Slack direct | No adapter yet. Keys are instant. Slack is only used for team alerts right now. It pushes events to a URL, like Telegram. |
 | Reddit direct | API access form not sent (see Snapshot). |
 | YouTube direct | Sign-in works. Verification (sensitive scope) and a quota increase are still to do. Comments only anyway, since YouTube has no DMs. |
 | Pinterest direct | Waiting for Trial access, then a Standard access request. Its API covers pins and boards, not messages. There is no Pinterest connection in Recatch yet. |
@@ -106,5 +105,5 @@ In the order that unlocks the most:
 4. **TikTok.** Record the same kind of demo for the sandbox sign-in. Then fill in the production form in one go (the same fields, Login Kit, a written explanation and the video) and use the production client key and secret. Business verification on the organization is a separate step that needs the company documents.
 5. **Pinterest.** When Trial access arrives, build the Pinterest connection (sign-in, publish, read boards) so there is something to show, then request Standard access.
 6. **LinkedIn.** Create the company Page, then apply to the Community Management API.
-7. **Slack.** Discord is done and confirmed. Slack is closer to Telegram, since it pushes events to a URL. The Discord application "Recatch" (application id 1557320195750629386) is in the Developer Portal if more Discord work is needed. Its bot token is shown only once, via Reset Token.
+7. **Slack.** The adapter is built. What is left is a real test: create the Slack app in the company workspace, connect it on the Setup page, send it a DM and tap a button. The Discord application "Recatch" (application id 1557320195750629386) is in the Developer Portal if more Discord work is needed. Its bot token is shown only once, via Reset Token.
 8. **Bluesky.** Instant keys, but it needs a polling job because Bluesky doesn't push DMs.

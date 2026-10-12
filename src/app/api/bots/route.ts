@@ -30,7 +30,9 @@ export async function POST(request: Request) {
             ? "Paste a bot token from @BotFather"
             : channel === "discord"
               ? "Paste the bot token from the Discord Developer Portal"
-              : "Paste the access token" },
+              : channel === "slack"
+                ? "Paste the Bot User OAuth Token (xoxb-) from the Slack app"
+                : "Paste the access token" },
         400,
       );
     }

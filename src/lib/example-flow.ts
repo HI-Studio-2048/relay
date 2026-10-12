@@ -6,7 +6,7 @@ export const EXAMPLE_LEAD_CAPTURE_FLOW: FlowDefinition = {
     {
       id: "welcome",
       type: "text",
-      text: "Hey — this is HI Studio. Want to leave your details so we can follow up?",
+      text: "Hey, this is HI Studio. Want to leave your details so we can follow up?",
       buttons: [
         { text: "Yes, let's go", next: "intro_media" },
         { text: "Not now", next: "later" },

@@ -75,6 +75,15 @@ const GUIDES: Record<ChannelId, { title: string; steps: string[]; tokenLabel: st
       "Recatch holds a live connection to Discord with the token. No webhook or public URL is needed.",
     ],
   },
+  slack: {
+    title: "Slack app",
+    tokenLabel: "Bot User OAuth Token",
+    steps: [
+      "At api.slack.com/apps create an app. Under OAuth & Permissions add the bot scopes chat:write, im:history, im:read, im:write and users:read, then install it to your workspace and copy the Bot User OAuth Token (xoxb-).",
+      "Copy the Signing Secret from Basic Information and paste it below. Recatch uses it to check that events really come from Slack.",
+      "After connecting, paste the webhook URL below into Event Subscriptions (subscribe to the bot event message.im) and into Interactivity & Shortcuts. Under App Home, turn on the Messages tab so people can write to the app.",
+    ],
+  },
 };
 
 export default function SetupPage() {
@@ -87,7 +96,8 @@ export default function SetupPage() {
   const guide = GUIDES[channel];
   const isZernio = channel === "zernio";
   const isDiscord = channel === "discord";
-  const isMeta = channel !== "telegram" && !isZernio && !isDiscord;
+  const isSlack = channel === "slack";
+  const isMeta = channel !== "telegram" && !isZernio && !isDiscord && !isSlack;
 
   const connect = async () => {
     setBusy(true);
@@ -206,26 +216,26 @@ export default function SetupPage() {
               id="token"
               type="password"
               autoComplete="off"
-              placeholder={isZernio ? "sk_…" : isMeta ? "EAAG…" : isDiscord ? "MTIz…" : "123456:ABC…"}
+              placeholder={isZernio ? "sk_…" : isMeta ? "EAAG…" : isDiscord ? "MTIz…" : isSlack ? "xoxb-…" : "123456:ABC…"}
               value={token}
               onChange={(event) => setToken(event.target.value)}
             />
           </div>
-          {isMeta ? (
+          {isMeta || isSlack ? (
             <div className="space-y-2">
-              <Label htmlFor="secret">App secret (recommended)</Label>
+              <Label htmlFor="secret">{isSlack ? "Signing secret" : "App secret (recommended)"}</Label>
               <Input
                 id="secret"
                 type="password"
                 autoComplete="off"
-                placeholder="Used to verify webhook signatures"
+                placeholder={isSlack ? "From Basic Information in the Slack app" : "Used to verify webhook signatures"}
                 value={appSecret}
                 onChange={(event) => setAppSecret(event.target.value)}
               />
             </div>
           ) : null}
-          <Button onClick={() => void connect()} disabled={busy || !token.trim() || (isMeta && !accountId.trim())}>
-            {busy ? "Connecting…" : isMeta ? "Connect account" : isZernio ? "Connect Zernio" : isDiscord ? "Connect bot" : "Connect and set webhook"}
+          <Button onClick={() => void connect()} disabled={busy || !token.trim() || (isMeta && !accountId.trim()) || (isSlack && !appSecret.trim())}>
+            {busy ? "Connecting…" : isMeta ? "Connect account" : isZernio ? "Connect Zernio" : isDiscord ? "Connect bot" : isSlack ? "Connect app" : "Connect and set webhook"}
           </Button>
         </CardContent>
       </Card>
@@ -276,6 +286,13 @@ export default function SetupPage() {
                     </p>
                   </div>
                 ) : null}
+              </div>
+            ) : bot.channel === "slack" && bot.webhookUrl ? (
+              <div className="space-y-1 rounded-lg bg-muted p-3 text-sm">
+                <p className="font-medium">Paste into the Slack app</p>
+                <p className="break-all">
+                  <span className="text-muted-foreground">Request URL (Event Subscriptions and Interactivity):</span> {bot.webhookUrl}
+                </p>
               </div>
             ) : bot.channel !== "telegram" && bot.webhookUrl ? (
               <div className="space-y-1 rounded-lg bg-muted p-3 text-sm">

@@ -65,7 +65,7 @@ export async function POST() {
         contactId,
         direction: "outbound",
         source: "flow",
-        body: "Hey — this is HI Studio. Want to leave your details so we can follow up?",
+        body: "Hey, this is HI Studio. Want to leave your details so we can follow up?",
       });
       await saveMessage({
         botId: bot.id,

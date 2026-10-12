@@ -16,6 +16,7 @@ const PUBLIC_PREFIXES = [
   "/api/health",
   "/api/telegram/webhook",
   "/api/meta/webhook",
+  "/api/slack/webhook",
   "/api/zernio/webhook",
   "/api/stripe/webhook",
   "/api/v1",

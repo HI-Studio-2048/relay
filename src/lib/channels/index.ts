@@ -2,6 +2,7 @@ import { cardsAsReplies } from "@/lib/channels/cards";
 import { decryptSecret } from "@/lib/crypto";
 import type { bots } from "@/lib/db/schema";
 import { ackDiscordInteraction, parseDiscordEvent, sendDiscordReply, sendDiscordTyping, type DiscordGatewayEvent } from "@/lib/channels/discord";
+import { fetchSlackProfile, parseSlackEvent, sendSlackReply, type SlackPayload } from "@/lib/channels/slack";
 import { fetchMetaProfile, parseMetaWebhook, sendMetaReply, sendMetaTyping, type MetaWebhookPayload } from "@/lib/channels/meta";
 import {
   channelOf,
@@ -56,6 +57,7 @@ export async function sendChannelReply(
   }
   if (account.channel === "whatsapp") return sendWhatsAppReply(account, to, reply);
   if (account.channel === "discord") return sendDiscordReply(account, to, reply);
+  if (account.channel === "slack") return sendSlackReply(account, to, reply);
   return sendMetaReply(account, to, reply);
 }
 
@@ -64,7 +66,7 @@ export async function sendChannelTyping(account: ChannelAccount, recipient: stri
   const to = target.externalUserId;
   if (account.channel === "zernio") return sendZernioTyping(account, target);
   if (account.channel === "telegram") return void (await sendChatAction(account.token, to, "typing"));
-  if (account.channel === "whatsapp") return;
+  if (account.channel === "whatsapp" || account.channel === "slack") return;
   if (account.channel === "discord") return sendDiscordTyping(account, to);
   await sendMetaTyping(account, to);
 }
@@ -83,6 +85,7 @@ export async function lookupChannelProfile(account: ChannelAccount, externalUser
   if (account.channel === "instagram" || account.channel === "messenger") {
     return fetchMetaProfile(account, externalUserId);
   }
+  if (account.channel === "slack") return fetchSlackProfile(account, externalUserId);
   return null;
 }
 
@@ -111,5 +114,6 @@ export function parseChannelUpdate(account: ChannelAccount, payload: unknown): N
   if (account.channel === "telegram") return parseTelegramUpdate(payload as TelegramUpdate);
   if (account.channel === "whatsapp") return parseWhatsAppWebhook(payload as WhatsAppWebhookPayload);
   if (account.channel === "discord") return parseDiscordEvent(payload as DiscordGatewayEvent);
+  if (account.channel === "slack") return parseSlackEvent(payload as SlackPayload);
   return parseMetaWebhook(payload as MetaWebhookPayload);
 }

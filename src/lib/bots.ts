@@ -1,5 +1,6 @@
 import { syncBotCommands } from "@/lib/bot-commands";
 import { fetchDiscordBot } from "@/lib/channels/discord";
+import { fetchSlackIdentity } from "@/lib/channels/slack";
 import { graphGet } from "@/lib/channels/meta";
 import { channelOf, type ChannelId } from "@/lib/channels/types";
 import { listZernioAccounts, registerZernioWebhook, type ZernioAccount } from "@/lib/channels/zernio";
@@ -267,12 +268,55 @@ async function connectDiscord(input: ChannelConnectInput) {
 }
 
 /**
+ * Connect a Slack app. The bot token (xoxb-) sends messages; the signing secret verifies that events
+ * really come from Slack. Slack pushes to the webhook URL, which the person pastes into the app's
+ * Event Subscriptions and Interactivity pages.
+ */
+async function connectSlack(input: ChannelConnectInput) {
+  const token = input.token.trim();
+  const signingSecret = (input.appSecret ?? "").trim();
+  if (!signingSecret) throw new Error("Slack needs the app's Signing Secret (Basic Information in the Slack app)");
+  const me = await fetchSlackIdentity(token);
+  const db = await getDb();
+  const existing = await db.select().from(bots);
+  const match = existing.find((row) => channelOf(row.channel) === "slack" && row.externalAccountId === me.user_id);
+  assertOwnable(match, input.ownerId);
+  const id = match?.id ?? crypto.randomUUID();
+  const originUrl = publicUrl(input.origin);
+  const webhookUrl = originUrl ? `${originUrl}/api/slack/webhook/${id}` : null;
+
+  const values = {
+    ownerId: input.ownerId,
+    name: `${me.user} in ${me.team} (Slack)`,
+    channel: "slack" as const,
+    telegramUsername: me.user,
+    telegramBotId: null,
+    externalAccountId: me.user_id,
+    tokenEncrypted: encryptSecret(token),
+    appSecretEncrypted: encryptSecret(signingSecret),
+    webhookSecret: match?.webhookSecret ?? randomSecret(12),
+    webhookUrl,
+    status: webhookUrl ? "connected" : "disconnected",
+    lastHealthAt: new Date(),
+    lastHealthError: webhookUrl ? null : "PUBLIC_URL not set. Slack cannot reach this server. Set it and reconnect.",
+    updatedAt: new Date(),
+  };
+  if (match) await db.update(bots).set(values).where(eq(bots.id, id));
+  else await db.insert(bots).values({ id, ...values });
+
+  await seedBotDefaults(id);
+  const [row] = await db.select().from(bots).where(eq(bots.id, id)).limit(1);
+  return publicBot(row!);
+}
+
+/**
  * Connect any channel. Telegram keeps its BotFather flow; Meta channels store the access token,
  * validate it against the Graph API, and hand back the webhook URL + verify token to paste in Meta's dashboard.
  */
 export async function connectChannelAccount(input: ChannelConnectInput) {
   if (input.channel === "telegram") return connectBot(input.token, input.ownerId, input.origin);
   if (input.channel === "discord") return connectDiscord(input);
+  if (input.channel === "slack") return connectSlack(input);
   if (input.channel === "zernio") {
     return connectZernio({
       apiKey: input.token,
@@ -355,6 +399,22 @@ export async function healthCheckBot(botId: string, origin?: string) {
     await db
       .update(bots)
       .set({ name, status: error ? "error" : bot.status === "error" ? "disconnected" : bot.status, lastHealthAt: new Date(), lastHealthError: error, updatedAt: new Date() })
+      .where(eq(bots.id, botId));
+    const [updated] = await db.select().from(bots).where(eq(bots.id, botId)).limit(1);
+    return { bot: publicBot(updated!), webhook: null, me: null };
+  }
+  if (channelOf(bot.channel) === "slack") {
+    let error: string | null = null;
+    let name = bot.name;
+    try {
+      const me = await fetchSlackIdentity(token);
+      name = `${me.user} in ${me.team} (Slack)`;
+    } catch (caught) {
+      error = caught instanceof Error ? caught.message : "Token check failed";
+    }
+    await db
+      .update(bots)
+      .set({ name, status: error ? "error" : "connected", lastHealthAt: new Date(), lastHealthError: error, updatedAt: new Date() })
       .where(eq(bots.id, botId));
     const [updated] = await db.select().from(bots).where(eq(bots.id, botId)).limit(1);
     return { bot: publicBot(updated!), webhook: null, me: null };
