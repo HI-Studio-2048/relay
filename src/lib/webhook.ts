@@ -12,6 +12,7 @@ import {
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
 import { aiConfigured, classifyIntent, readAiSettings } from "@/lib/ai";
+import { readAiProvider } from "@/lib/ai-provider";
 import { intentFlows, routeToIntent, shouldCheckIntents } from "@/lib/intents";
 import { isWithinHours, readHours } from "@/lib/starters";
 import { emitWebhookSoon, publicContact } from "@/lib/developer";
@@ -182,10 +183,10 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
 
   // AI intents: nothing more specific than the default reply matched, so ask Claude which described
   // intent (if any) this message expresses and let that flow answer it.
-  if (!paused && (kind === "message" || kind === "story_reply") && aiConfigured() && shouldCheckIntents({ flows, session, text, callbackData: inbound.callbackData })) {
+  if (!paused && (kind === "message" || kind === "story_reply") && aiConfigured(readAiProvider(bot.settings)) && shouldCheckIntents({ flows, session, text, callbackData: inbound.callbackData })) {
     try {
       const options = intentFlows(flows).map((flow) => ({ id: flow.id, description: flow.triggerValue!.trim() }));
-      const intentId = await classifyIntent({ text: text!, intents: options, brandName: bot.name });
+      const intentId = await classifyIntent({ provider: readAiProvider(bot.settings), text: text!, intents: options, brandName: bot.name });
       if (intentId) flows = routeToIntent(flows, intentId);
     } catch (error) {
       log.warn("Intent check failed", error instanceof Error ? error.message : error);

@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { readAiProvider } from "@/lib/ai-provider";
 import { AiUnavailableError, REWRITE_STYLES, readAiSettings, rewriteCopy, type RewriteStyle } from "@/lib/ai";
 import { requireBotAccess } from "@/lib/auth";
 import { getDb } from "@/lib/db";
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
     const db = await getDb();
     const [bot] = await db.select().from(bots).where(eq(bots.id, body.botId)).limit(1);
     if (!bot) return json({ error: "Account not found" }, 404);
-    const rewritten = await rewriteCopy({ text, style: body.style as RewriteStyle, settings: readAiSettings(bot.settings), brandName: bot.name });
+    const rewritten = await rewriteCopy({ provider: readAiProvider(bot.settings), text, style: body.style as RewriteStyle, settings: readAiSettings(bot.settings), brandName: bot.name });
     return json({ text: rewritten });
   } catch (error) {
     if (error instanceof AiUnavailableError) return json({ error: error.message }, 503);

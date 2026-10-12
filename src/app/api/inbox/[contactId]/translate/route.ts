@@ -1,4 +1,8 @@
+import { eq } from "drizzle-orm";
 import { AiUnavailableError, translateText } from "@/lib/ai";
+import { readAiProvider } from "@/lib/ai-provider";
+import { getDb } from "@/lib/db";
+import { bots, contacts } from "@/lib/db/schema";
 import { requireRowAccess } from "@/lib/auth/resources";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
 import { listMessages } from "@/lib/store";
@@ -11,6 +15,14 @@ export async function POST(request: Request, context: RouteParams<{ contactId: s
   try {
     const { contactId } = await context.params;
     await requireRowAccess("contact", contactId);
+    const db = await getDb();
+    const [owner] = await db
+      .select({ settings: bots.settings })
+      .from(contacts)
+      .innerJoin(bots, eq(bots.id, contacts.botId))
+      .where(eq(contacts.id, contactId))
+      .limit(1);
+    const provider = readAiProvider(owner?.settings);
     const body = await readJson<{ text?: unknown; to?: unknown; language?: unknown }>(request);
     const text = typeof body.text === "string" ? body.text.trim() : "";
     if (!text) return json({ error: "Nothing to translate" }, 400);
@@ -20,10 +32,10 @@ export async function POST(request: Request, context: RouteParams<{ contactId: s
         .filter((message) => message.direction === "inbound" && !message.body.startsWith("["))
         .map((message) => message.body);
       if (samples.length === 0) return json({ error: "They have not written anything yet, so their language is unknown" }, 400);
-      return json(await translateText({ text, target: null, customerSamples: samples }));
+      return json(await translateText({ provider, text, target: null, customerSamples: samples }));
     }
     const language = typeof body.language === "string" && body.language.trim() ? body.language.trim().slice(0, 40) : "English";
-    return json(await translateText({ text, target: language }));
+    return json(await translateText({ provider, text, target: language }));
   } catch (error) {
     if (error instanceof AiUnavailableError) return json({ error: error.message }, 503);
     return fail(error);

@@ -70,7 +70,7 @@ Local-only `POST /api/dev/seed` (disabled in production) creates a demo bot, a l
 | `TELEGRAM_SENDS_PER_SECOND` | no | Default 20, capped at 25 |
 | `PORT` | Railway | Next.js reads this automatically |
 | `MEDIA_DIR` | no | Flow image/GIF uploads. Default `.data/media` |
-| `ANTHROPIC_API_KEY` | for AI | Enables AI Steps, auto-reply, Live Chat suggestions and the flow builder (Claude) |
+| `ANTHROPIC_API_KEY` | optional | Server-wide AI (Claude) for accounts that have not saved their own key. Accounts can instead paste an OpenRouter key on the AI assistant page |
 | `ADMIN_TELEGRAM_CHAT_ID` | no | Also send team alerts to a Telegram chat (Slack / Discord / Teams alerts are set per account in Settings) |
 
 Never commit tokens or `.env*`. Tokens are never logged (outbound logs are redacted).
@@ -162,7 +162,7 @@ In production, Meta webhooks must be signed: add the app secret when connecting 
 
 ## AI
 
-Set `ANTHROPIC_API_KEY`. In **AI assistant**, write a persona and paste your business knowledge (prices, hours, links, FAQs). Claude only states facts from that knowledge and hands off to a human otherwise.
+Either set `ANTHROPIC_API_KEY` on the server, or let each account paste its own OpenRouter key and model in **AI assistant** (stored encrypted per account, so they pay for their own usage). In **AI assistant**, write a persona and paste your business knowledge (prices, hours, links, FAQs). Claude only states facts from that knowledge and hands off to a human otherwise.
 
 - **AI Step** (canvas): give it a goal and fields to collect (`email, budget`). It chats until the goal is met, saves what it learned to the contact, then continues from its right-hand handle.
 - **Auto-reply** answers messages no flow or keyword matched.

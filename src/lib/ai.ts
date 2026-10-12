@@ -1,12 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import * as z from "zod/v4";
+import { openRouterParse, OpenRouterError, type AiProvider } from "@/lib/ai-provider";
 import { log } from "@/lib/logger";
 import type { ContactRecord } from "@/lib/types";
 
 /**
- * Recatch's AI layer (Claude). One place for the client, model, structured outputs and refusal
- * handling. Every call opts into server-side refusal fallbacks ("default" routes by category).
+ * Recatch's AI layer. One place for the client, model, structured outputs and refusal handling.
+ * Claude through the server's own key by default; an account that saved an OpenRouter key (see
+ * ai-provider.ts) sends its calls there instead. Anthropic calls opt into server-side refusal
+ * fallbacks ("default" routes by category).
  */
 export const AI_MODEL = "claude-opus-5-5";
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
@@ -18,8 +21,9 @@ export class AiUnavailableError extends Error {
   }
 }
 
-export function aiConfigured() {
-  return Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+/** True when this account can use AI: it has its own provider key, or the server has an Anthropic key. */
+export function aiConfigured(provider?: AiProvider) {
+  return Boolean(provider || process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 }
 
 const globalForAi = globalThis as unknown as { relayAnthropic?: Anthropic };
@@ -99,9 +103,19 @@ type ParseInput = {
   user: string;
   effort: "low" | "medium" | "high";
   maxTokens?: number;
+  /** The account's own key. Absent means the server's Anthropic key. */
+  provider?: AiProvider;
 };
 
 async function parse<T extends z.ZodType>(schema: T, input: ParseInput): Promise<z.infer<T>> {
+  if (input.provider) {
+    try {
+      return await openRouterParse(input.provider, schema, { system: input.system, user: input.user, maxTokens: input.maxTokens ?? 16000 });
+    } catch (error) {
+      if (error instanceof OpenRouterError) throw new AiUnavailableError(error.message);
+      throw error;
+    }
+  }
   const response = await client().beta.messages.parse({
     model: AI_MODEL,
     max_tokens: input.maxTokens ?? 16000,
@@ -141,6 +155,7 @@ export type ConverseResult = {
  * (AI auto-reply for unmatched messages).
  */
 export async function converse(input: {
+  provider?: AiProvider;
   settings: BotAiSettings;
   brandName: string;
   contact: ContactRecord;
@@ -160,6 +175,7 @@ export async function converse(input: {
         .join("\n")
     : "Answer the customer's latest message. goal_complete is always false here.";
   const result = await parse(ConverseSchema, {
+    provider: input.provider,
     system: systemPrompt(input.settings, input.brandName),
     effort: "low",
     user: [`<customer>\n${contactBrief(input.contact)}\n</customer>`, `<conversation>\n${transcript(input.history)}\n</conversation>`, task].join("\n\n"),
@@ -188,12 +204,14 @@ export type InboxAssist = z.infer<typeof SuggestSchema>;
 
 /** Live Chat copilot: reply drafts plus a one-line read on the conversation. */
 export async function assistInbox(input: {
+  provider?: AiProvider;
   settings: BotAiSettings;
   brandName: string;
   contact: ContactRecord;
   history: HistoryLine[];
 }): Promise<InboxAssist> {
   const result = await parse(SuggestSchema, {
+    provider: input.provider,
     system: systemPrompt(input.settings, input.brandName),
     effort: "low",
     user: [
@@ -215,10 +233,11 @@ export type IntentOption = { id: string; description: string };
  * ManyChat AI Intents: pick which described intent (if any) a message expresses. Returns the intent id,
  * or null when nothing fits well. Keywords stay the fast path; this only runs when no keyword matched.
  */
-export async function classifyIntent(input: { text: string; intents: IntentOption[]; brandName: string }): Promise<string | null> {
+export async function classifyIntent(input: { provider?: AiProvider; text: string; intents: IntentOption[]; brandName: string }): Promise<string | null> {
   if (input.intents.length === 0 || !input.text.trim()) return null;
   const list = input.intents.map((intent) => `- ${intent.id}: ${intent.description}`).join("\n");
   const result = await parse(IntentSchema, {
+    provider: input.provider,
     system: [
       `You route incoming DMs for ${input.brandName} to the right automation.`,
       "Pick the intent the message clearly expresses. If none clearly fits, or the message is only a greeting or small talk, answer \"none\".",
@@ -241,12 +260,13 @@ export type Translation = { sourceLanguage: string; translation: string };
  * Live Chat translation. `target` is a language name, or null to use the language the customer writes
  * in (inferred from `customerSamples`). Keeps emoji, links, names and {{variables}} as they are.
  */
-export async function translateText(input: { text: string; target: string | null; customerSamples?: string[] }): Promise<Translation> {
+export async function translateText(input: { provider?: AiProvider; text: string; target: string | null; customerSamples?: string[] }): Promise<Translation> {
   const target = input.target
     ? input.target
     : `the language the customer writes in (see their messages below)`;
   const samples = (input.customerSamples ?? []).filter(Boolean).slice(-5);
   const result = await parse(TranslateSchema, {
+    provider: input.provider,
     system: [
       "You translate direct messages between a business and its customers.",
       "Translate naturally, keep the tone and length. Keep emoji, URLs, @handles, product names and {{variables}} exactly as they are.",
@@ -269,8 +289,9 @@ const KnowledgeSchema = z.object({
 });
 
 /** "Import from website": distill a page into facts the assistant may quote (prices, hours, policies, FAQs). */
-export async function extractKnowledge(input: { pageText: string; url: string; brandName: string }) {
+export async function extractKnowledge(input: { provider?: AiProvider; pageText: string; url: string; brandName: string }) {
   const result = await parse(KnowledgeSchema, {
+    provider: input.provider,
     system: [
       `You prepare the knowledge base a DM assistant for ${input.brandName} will answer from.`,
       "From the page, keep only concrete facts a customer might ask about: products and prices, plans, hours, locations, shipping, returns and refunds, booking links, contact details, FAQs.",
@@ -288,6 +309,7 @@ const CommentReplySchema = z.object({ reply: z.string().describe("The public rep
 
 /** A short public reply under someone's comment, pointing them to their DMs. */
 export async function writeCommentReply(input: {
+  provider?: AiProvider;
   comment: string;
   postCaption?: string | null;
   examples: string[];
@@ -295,6 +317,7 @@ export async function writeCommentReply(input: {
   brandName: string;
 }) {
   const result = await parse(CommentReplySchema, {
+    provider: input.provider,
     system: [
       `You reply publicly to comments on ${input.brandName}'s social posts. A DM with details was just sent to the commenter.`,
       input.settings.persona?.trim() ? `Brand voice:\n${input.settings.persona.trim()}` : "",
@@ -337,8 +360,9 @@ const DigestSchema = z.object({
 export type WeeklyDigest = z.infer<typeof DigestSchema>;
 
 /** Overview "Weekly digest": Claude reads the account's numbers and says what happened and what to do. */
-export async function writeWeeklyDigest(input: { brandName: string; facts: Record<string, unknown> }): Promise<WeeklyDigest> {
+export async function writeWeeklyDigest(input: { provider?: AiProvider; brandName: string; facts: Record<string, unknown> }): Promise<WeeklyDigest> {
   return parse(DigestSchema, {
+    provider: input.provider,
     system: [
       `You are the growth analyst for ${input.brandName}'s social DM automation (comment-to-DM, flows, broadcasts, live chat).`,
       "Use only the numbers given. Be specific and brief; no fluff, no invented metrics. Next steps must be things the user can do in the app (a flow, a broadcast, a keyword, replying to waiting chats, AI knowledge).",
@@ -355,8 +379,9 @@ const BroadcastDraftSchema = z.object({
 });
 
 /** Compose broadcast "✨ Write it": two DM-sized versions in the brand voice. */
-export async function draftBroadcast(input: { goal: string; settings: BotAiSettings; brandName: string }) {
+export async function draftBroadcast(input: { provider?: AiProvider; goal: string; settings: BotAiSettings; brandName: string }) {
   const result = await parse(BroadcastDraftSchema, {
+    provider: input.provider,
     system: [
       `You write broadcast DMs that ${input.brandName} sends to subscribers on Instagram, Messenger, WhatsApp and other chat apps.`,
       input.settings.persona?.trim() ? `Brand voice:\n${input.settings.persona.trim()}` : "",
@@ -385,8 +410,9 @@ export type RewriteStyle = keyof typeof REWRITE_STYLES;
 const RewriteSchema = z.object({ text: z.string() });
 
 /** Flow editor "✨ Rewrite": the same message in the brand voice, one style at a time. */
-export async function rewriteCopy(input: { text: string; style: RewriteStyle; settings: BotAiSettings; brandName: string }) {
+export async function rewriteCopy(input: { provider?: AiProvider; text: string; style: RewriteStyle; settings: BotAiSettings; brandName: string }) {
   const result = await parse(RewriteSchema, {
+    provider: input.provider,
     system: [
       `You edit chat messages that ${input.brandName} sends in DMs.`,
       input.settings.persona?.trim() ? `Brand voice:\n${input.settings.persona.trim()}` : "",
@@ -429,8 +455,9 @@ const GeneratedFlowSchema = z.object({
 export type GeneratedFlow = z.infer<typeof GeneratedFlowSchema>;
 
 /** Describe an automation in plain words; get a flow skeleton you can edit on the canvas. */
-export async function generateFlowDraft(prompt: string, settings: BotAiSettings, brandName: string): Promise<GeneratedFlow> {
+export async function generateFlowDraft(prompt: string, settings: BotAiSettings, brandName: string, provider?: AiProvider): Promise<GeneratedFlow> {
   return parse(GeneratedFlowSchema, {
+    provider,
     system: [
       `You design chat automations (like ManyChat flows) for ${brandName}.`,
       settings.knowledge?.trim() ? `Business knowledge:\n${settings.knowledge.trim()}` : "",
@@ -470,12 +497,13 @@ const InsightsSchema = z.object({
 export type ConversationInsights = z.infer<typeof InsightsSchema>;
 
 /** Read recent inbound messages and say what people ask, what is not covered, and what to automate next. */
-export async function analyzeConversations(input: { settings: BotAiSettings; brandName: string; messages: { contact: string; text: string }[] }) {
+export async function analyzeConversations(input: { provider?: AiProvider; settings: BotAiSettings; brandName: string; messages: { contact: string; text: string }[] }) {
   const sample = input.messages
     .slice(-400)
     .map((message) => `- (${message.contact}) ${message.text.replace(/\s+/g, " ").slice(0, 300)}`)
     .join("\n");
   return parse(InsightsSchema, {
+    provider: input.provider,
     system: systemPrompt(input.settings, input.brandName),
     effort: "medium",
     user: [
@@ -491,10 +519,11 @@ const AutoTagSchema = z.object({
 });
 
 /** Ask Claude which described tags fit this message; returns the matching tag names. */
-export async function classifyAutoTags(text: string, rules: { tag: string; description: string }[], brandName: string): Promise<string[]> {
+export async function classifyAutoTags(text: string, rules: { tag: string; description: string }[], brandName: string, provider?: AiProvider): Promise<string[]> {
   if (rules.length === 0) return [];
   const list = rules.map((rule) => `- ${rule.tag}: ${rule.description}`).join("\n");
   const result = await parse(AutoTagSchema, {
+    provider,
     system: [
       `You label incoming DMs for ${brandName}'s CRM.`,
       "Return the tags whose description the message clearly fits. Be conservative: no tag for greetings, small talk or vague messages.",

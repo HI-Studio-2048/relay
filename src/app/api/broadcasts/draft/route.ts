@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { readAiProvider } from "@/lib/ai-provider";
 import { AiUnavailableError, draftBroadcast, readAiSettings } from "@/lib/ai";
 import { requireBotAccess } from "@/lib/auth";
 import { getDb } from "@/lib/db";
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
     const db = await getDb();
     const [bot] = await db.select().from(bots).where(eq(bots.id, body.botId)).limit(1);
     if (!bot) return json({ error: "Account not found" }, 404);
-    return json(await draftBroadcast({ goal: body.goal.trim(), settings: readAiSettings(bot.settings), brandName: bot.name }));
+    return json(await draftBroadcast({ provider: readAiProvider(bot.settings), goal: body.goal.trim(), settings: readAiSettings(bot.settings), brandName: bot.name }));
   } catch (error) {
     if (error instanceof AiUnavailableError) return json({ error: error.message }, 503);
     return fail(error);

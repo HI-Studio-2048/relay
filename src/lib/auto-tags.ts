@@ -1,4 +1,5 @@
 import { aiConfigured, classifyAutoTags } from "@/lib/ai";
+import { readAiProvider } from "@/lib/ai-provider";
 import { log } from "@/lib/logger";
 import { addContactTag } from "@/lib/store";
 
@@ -47,10 +48,11 @@ export function allowAutoTagCheck(botId: string, contactId: string, now = Date.n
 /** Background: tag the contact from their message. Never throws; tags fire rules, sequences and webhooks. */
 export async function applyAutoTags(input: { botId: string; brandName: string; settings: Record<string, unknown> | null; contactId: string; contactTags: string[]; text: string | null | undefined }) {
   try {
-    if (!aiConfigured()) return;
+    const provider = readAiProvider(input.settings);
+    if (!aiConfigured(provider)) return;
     const candidates = autoTagCandidates(readAutoTags(input.settings), input.contactTags, input.text);
     if (candidates.length === 0 || !allowAutoTagCheck(input.botId, input.contactId)) return;
-    const matched = await classifyAutoTags(input.text!.trim(), candidates, input.brandName);
+    const matched = await classifyAutoTags(input.text!.trim(), candidates, input.brandName, provider);
     for (const tag of matched) await addContactTag(input.botId, input.contactId, tag);
   } catch (error) {
     log.warn("Auto-tagging failed", error instanceof Error ? error.message : error);

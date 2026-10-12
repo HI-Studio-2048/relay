@@ -1,5 +1,6 @@
 import { requireBotAccess } from "@/lib/auth";
 import { eq } from "drizzle-orm";
+import { readAiProvider } from "@/lib/ai-provider";
 import { AiUnavailableError, writeWeeklyDigest } from "@/lib/ai";
 import { loadDashboard, loadTeamReport } from "@/lib/dashboard";
 import { getDb } from "@/lib/db";
@@ -42,7 +43,7 @@ export async function POST(_request: Request, context: RouteParams<{ id: string 
         ratings: team.ratings,
       },
     };
-    const digest = await writeWeeklyDigest({ brandName: bot.name, facts });
+    const digest = await writeWeeklyDigest({ provider: readAiProvider(bot.settings), brandName: bot.name, facts });
     return json({ digest });
   } catch (error) {
     if (error instanceof AiUnavailableError) return json({ error: error.message }, 503);

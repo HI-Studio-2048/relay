@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { readAiProvider } from "@/lib/ai-provider";
 import { AiUnavailableError, generateFlowDraft, readAiSettings } from "@/lib/ai";
 import { generatedToDefinition } from "@/lib/ai-flow";
 import { requireBotAccess } from "@/lib/auth";
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
     const db = await getDb();
     const [bot] = await db.select().from(bots).where(eq(bots.id, body.botId)).limit(1);
     if (!bot) return json({ error: "Account not found" }, 404);
-    const draft = await generateFlowDraft(prompt.slice(0, 4000), readAiSettings(bot.settings), bot.name);
+    const draft = await generateFlowDraft(prompt.slice(0, 4000), readAiSettings(bot.settings), bot.name, readAiProvider(bot.settings));
     const built = generatedToDefinition(draft);
     const [flow] = await db
       .insert(flows)

@@ -1,5 +1,6 @@
 import { requireBotAccess } from "@/lib/auth";
 import { eq } from "drizzle-orm";
+import { readAiProvider } from "@/lib/ai-provider";
 import { AiUnavailableError, extractKnowledge } from "@/lib/ai";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
@@ -18,7 +19,7 @@ export async function POST(request: Request, context: RouteParams<{ id: string }
     if (!bot) return json({ error: "Account not found" }, 404);
     const url = checkImportUrl(body.url);
     const pageText = await fetchPageText(url);
-    const knowledge = await extractKnowledge({ pageText, url: url.toString(), brandName: bot.name });
+    const knowledge = await extractKnowledge({ provider: readAiProvider(bot.settings), pageText, url: url.toString(), brandName: bot.name });
     return json({ knowledge, source: url.toString() });
   } catch (error) {
     if (error instanceof WebImportError) return json({ error: error.message }, 400);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Bot, Globe, Lightbulb, MessageSquareDashed, Wand2 } from "lucide-react";
+import { BookOpen, Bot, Globe, KeyRound, Lightbulb, MessageSquareDashed, Wand2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Panel } from "@/components/chrome/panel";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/lib/client";
 import { AiPlayground } from "@/components/ai-playground";
 import type { BotAiSettings, ConversationInsights } from "@/lib/ai";
+import { OpenRouterCard, type OpenRouterStatus } from "@/components/openrouter-card";
 
 const EXAMPLES = [
   "When someone comments GUIDE on a post, DM them the free guide after they give their email, and tag them lead",
@@ -22,10 +23,12 @@ export function AiSettingsForm({
   botId,
   configured,
   initial,
+  openRouter,
 }: {
   botId: string;
   configured: boolean;
   initial: BotAiSettings;
+  openRouter: OpenRouterStatus;
 }) {
   const router = useRouter();
   const [settings, setSettings] = useState(initial);
@@ -115,10 +118,11 @@ export function AiSettingsForm({
     <div className="space-y-5">
       {!configured ? (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
-          AI is off on this server. Set <code className="font-mono">ANTHROPIC_API_KEY</code> in the environment and
-          restart. Your settings below still save.
+          AI is off for this account. Add your OpenRouter key below to turn it on. Your settings still save.
         </div>
       ) : null}
+
+      <OpenRouterCard botId={botId} initial={openRouter} />
 
       <Panel tone="action" icon={Wand2} label="Build a flow" title="Describe it, get a draft on the canvas">
         <div className="space-y-2">

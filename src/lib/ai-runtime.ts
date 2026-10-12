@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { readAiProvider } from "@/lib/ai-provider";
 import { aiConfigured, converse, readAiSettings, type HistoryLine } from "@/lib/ai";
 import type { ChannelAccount } from "@/lib/channels";
 import { getDb } from "@/lib/db";
@@ -65,12 +66,13 @@ async function handOff(botId: string, account: ChannelAccount, contact: ContactR
 
 /** AI Step: one Claude turn for a contact parked on an `ai` step. Continues the flow when the goal is met. */
 export async function runAiTurn(input: { botId: string; account: ChannelAccount; contactId: string; flowId: string; stepId: string }) {
-  if (!aiConfigured()) {
-    log.warn("AI step reached but ANTHROPIC_API_KEY is not set; pausing for a human");
+  const { bot, contact, history, settings } = await loadContext(input.botId, input.contactId);
+  const provider = readAiProvider(bot?.settings);
+  if (!aiConfigured(provider)) {
+    log.warn("AI step reached but no AI key is set for this account; pausing for a human");
     await pauseContactAutomation(input.contactId);
     return;
   }
-  const { bot, contact, history, settings } = await loadContext(input.botId, input.contactId);
   if (!bot || !contact) return;
   const flows = await loadActiveFlows(input.botId);
   const flow = flows.find((item) => item.id === input.flowId);
@@ -78,6 +80,7 @@ export async function runAiTurn(input: { botId: string; account: ChannelAccount;
   if (!flow || step?.type !== "ai") return;
 
   const result = await converse({
+    provider,
     settings,
     brandName: bot.name,
     contact,
@@ -113,10 +116,11 @@ export async function runAiTurn(input: { botId: string; account: ChannelAccount;
 
 /** AI auto-reply: answer a message no flow or keyword matched, using the account's knowledge. */
 export async function runAiAutoReply(input: { botId: string; account: ChannelAccount; contactId: string }) {
-  if (!aiConfigured()) return false;
   const { bot, contact, history, settings } = await loadContext(input.botId, input.contactId);
+  const provider = readAiProvider(bot?.settings);
+  if (!aiConfigured(provider)) return false;
   if (!bot || !contact || !settings.autoReply) return false;
-  const result = await converse({ settings, brandName: bot.name, contact, history });
+  const result = await converse({ provider, settings, brandName: bot.name, contact, history });
   if (result.handoff) {
     await handOff(input.botId, input.account, contact, result.reply, settings.handoffMessage ?? "");
     return true;

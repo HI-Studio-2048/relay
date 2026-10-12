@@ -1,5 +1,6 @@
 import { requireBotAccess } from "@/lib/auth";
 import { eq } from "drizzle-orm";
+import { readAiProvider } from "@/lib/ai-provider";
 import { AiUnavailableError, converse, readAiSettings, type HistoryLine } from "@/lib/ai";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
@@ -24,6 +25,7 @@ export async function POST(request: Request, context: RouteParams<{ id: string }
     if (history.at(-1)?.direction !== "inbound") return json({ error: "Write a message first" }, 400);
     const settings = readAiSettings({ ai: body.settings ?? bot.settings?.ai });
     const result = await converse({
+      provider: readAiProvider(bot.settings),
       settings,
       brandName: bot.name,
       contact: { id: "playground", telegramUserId: "playground", username: "test_customer", firstName: "Alex", lastName: null, email: null, phone: null, customFields: {}, tags: [] },

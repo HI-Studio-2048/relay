@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { readAiProvider } from "@/lib/ai-provider";
 import { AiUnavailableError, assistInbox, readAiSettings } from "@/lib/ai";
 import { requireRowAccess } from "@/lib/auth/resources";
 import { getDb } from "@/lib/db";
@@ -18,6 +19,7 @@ export async function POST(_request: Request, context: RouteParams<{ contactId: 
     const contact = await loadContactRecord(contactId);
     const messages = await listMessages(contactId);
     const assist = await assistInbox({
+      provider: readAiProvider(bot?.settings),
       settings: readAiSettings(bot?.settings),
       brandName: bot?.name ?? "the business",
       contact: contact!,

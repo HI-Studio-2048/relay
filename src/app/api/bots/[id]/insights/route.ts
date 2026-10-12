@@ -1,5 +1,6 @@
 import { requireBotAccess } from "@/lib/auth";
 import { and, desc, eq, gte, notLike } from "drizzle-orm";
+import { readAiProvider } from "@/lib/ai-provider";
 import { AiUnavailableError, analyzeConversations, readAiSettings } from "@/lib/ai";
 import { getDb } from "@/lib/db";
 import { bots, contacts, messages } from "@/lib/db/schema";
@@ -33,6 +34,7 @@ export async function POST(request: Request, context: RouteParams<{ id: string }
     const usable = rows.filter((row) => row.body.replace(/^\[[^\]]+\]\s*/, "").trim().length > 2);
     if (usable.length < 3) return json({ error: "Not enough conversations yet — come back after a few more messages." }, 400);
     const insights = await analyzeConversations({
+      provider: readAiProvider(bot.settings),
       settings: readAiSettings(bot.settings),
       brandName: bot.name,
       messages: usable.reverse().map((row) => ({ contact: row.firstName || row.username || "someone", text: row.body })),
