@@ -16,7 +16,22 @@ class BlueskyError extends ChannelApiError {
   }
 }
 
-type Session = { accessJwt: string; refreshJwt: string; did: string; handle: string };
+type Session = {
+  accessJwt: string;
+  refreshJwt: string;
+  did: string;
+  handle: string;
+  didDoc?: { service?: { id?: string; serviceEndpoint?: string }[] };
+};
+
+/**
+ * bsky.social is only the sign-in entryway. Chat requests must go to the account's own server, which the
+ * sign-in response names in its DID document; the entryway answers them with "Method Not Implemented".
+ */
+export function pdsOf(session: Session): string {
+  const endpoint = session.didDoc?.service?.find((service) => service.id === "#atproto_pds")?.serviceEndpoint;
+  return endpoint && /^https:\/\//.test(endpoint) ? endpoint.replace(/\/$/, "") : PDS;
+}
 type XrpcError = { error?: string; message?: string };
 
 /**
@@ -61,7 +76,7 @@ export async function blueskySession(account: Pick<ChannelAccount, "id" | "token
   if (cached && jwtExpiry(cached.accessJwt) - now > 60_000) return cached;
   if (cached && jwtExpiry(cached.refreshJwt) - now > 60_000) {
     try {
-      const refreshed = await xrpc<Session>("POST", "com.atproto.server.refreshSession", { jwt: cached.refreshJwt });
+      const refreshed = await xrpc<Session>("POST", "com.atproto.server.refreshSession", { jwt: cached.refreshJwt, base: pdsOf(cached) });
       sessions.set(account.id, refreshed);
       return refreshed;
     } catch {
@@ -81,7 +96,7 @@ export function forgetBlueskySession(accountId: string) {
 async function chat<T>(account: ChannelAccount, method: "GET" | "POST", nsid: string, data: { query?: Record<string, string>; body?: unknown } = {}, retried = false): Promise<T> {
   const session = await blueskySession(account);
   try {
-    return await xrpc<T>(method, nsid, { jwt: session.accessJwt, chat: true, ...data });
+    return await xrpc<T>(method, nsid, { jwt: session.accessJwt, chat: true, base: pdsOf(session), ...data });
   } catch (error) {
     if (!retried && error instanceof BlueskyError && (error.status === 401 || error.code === "ExpiredToken" || error.code === "InvalidToken")) {
       forgetBlueskySession(account.id);
@@ -104,7 +119,7 @@ export function explainBlueskyError(error: unknown): string {
 export async function checkBlueskyAccount(identifier: string, password: string) {
   const session = await createBlueskySession(identifier, password);
   try {
-    await xrpc("GET", "chat.bsky.convo.listConvos", { jwt: session.accessJwt, chat: true, query: { limit: "1" } });
+    await xrpc("GET", "chat.bsky.convo.listConvos", { jwt: session.accessJwt, chat: true, base: pdsOf(session), query: { limit: "1" } });
   } catch (error) {
     throw new ChannelApiError(explainBlueskyError(error));
   }

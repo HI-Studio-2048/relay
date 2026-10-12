@@ -29,7 +29,7 @@ const incoming = (rev: string, id: string, text: string, did = "did:plc:ada") =>
 function fakeBluesky() {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
-    if (!["bsky.social", "public.api.bsky.app"].includes(url.host)) return realFetch(input, init);
+    if (!["bsky.social", "pds.example.test", "public.api.bsky.app"].includes(url.host)) return realFetch(input, init);
     const headers = new Headers(init?.headers);
     const nsid = url.pathname.replace("/xrpc/", "");
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
@@ -39,10 +39,12 @@ function fakeBluesky() {
     if (nsid === "com.atproto.server.createSession") {
       if (body.password !== PASSWORD) return reply({ error: "AuthenticationRequired", message: "Invalid identifier or password" }, 401);
       world.sessions++;
-      return reply({ accessJwt: jwt(Math.floor(Date.now() / 1000) + 7200), refreshJwt: jwt(Math.floor(Date.now() / 1000) + 86400), did: ME, handle: "recatch.bsky.social" });
+      return reply({ accessJwt: jwt(Math.floor(Date.now() / 1000) + 7200), refreshJwt: jwt(Math.floor(Date.now() / 1000) + 86400), did: ME, handle: "recatch.bsky.social", didDoc: { service: [{ id: "#atproto_pds", serviceEndpoint: "https://pds.example.test" }] } });
     }
     if (nsid === "app.bsky.actor.getProfile") return reply({ handle: "ada.bsky.social", displayName: "Ada Lovelace" });
     if (!nsid.startsWith("chat.bsky.")) return reply({ error: "MethodNotImplemented" }, 501);
+    // The sign-in entryway does not forward chat; only the account's own server does.
+    if (url.host !== "pds.example.test") return reply({ error: "MethodNotImplemented", message: "Method Not Implemented" }, 501);
 
     if (world.expireNextChatCall) {
       world.expireNextChatCall = false;
@@ -116,6 +118,7 @@ describe("Bluesky through the whole app", () => {
 
     const log = calls.find((call) => call.nsid === "chat.bsky.convo.getLog")!;
     expect(log.proxy).toBe("did:web:api.bsky.chat#bsky_chat");
+    expect(log.host).toBe("pds.example.test");
     expect(log.auth).toMatch(/^Bearer /);
     expect((await currentRow()).settings?.blueskyCursor).toBe("r1");
 
