@@ -81,7 +81,6 @@ export default function PrivacyPage() {
         <p>Only the services needed to run Recatch, and only what each one needs:</p>
         <ul>
           <li>The messaging platforms themselves (Telegram, Meta, and the others), to send and receive messages.</li>
-          <li>Zernio, when a business connects its social accounts through it.</li>
           <li>Anthropic, for the AI features described above.</li>
           <li>Our hosting provider, which runs the servers and database.</li>
           <li>Stripe, Slack, Discord or Microsoft Teams, only if the business connects them.</li>

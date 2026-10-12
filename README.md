@@ -2,14 +2,14 @@
 
 Social DM automation for HI Studio — a ManyChat-style platform for every network. Comment-to-DM, story replies, flows on a canvas, a shared Live Chat inbox, CRM, segmented broadcasts, analytics, and Claude-powered AI.
 
-Connect every social account at once through **[Zernio](https://zernio.com)** (Instagram, Facebook, WhatsApp, TikTok, X, LinkedIn, YouTube, Threads, Bluesky, Reddit, SMS…), or connect Telegram, Slack, Discord, Bluesky, Instagram, Messenger and WhatsApp directly. Slack, Discord and Bluesky connect with one click through an app the company owns. No scraping. Sends are rate-limited.
+Connect Telegram, Slack, Discord, Bluesky, Instagram, Messenger and WhatsApp. Slack, Discord and Bluesky connect with one click through an app the company owns. The Channels page also lists what is coming next (Threads, X, TikTok, Reddit, YouTube, LinkedIn, Pinterest, iMessage) greyed out. No scraping. Sends are rate-limited.
 
 Origin is the source of truth for this project.
 
 ## What it does
 
-1. **Channels** — paste a Zernio API key (Recatch registers its own signed webhook and routes every linked account), or Add to Slack, Add to Discord, Sign in with Bluesky, a BotFather token or a Meta token. Credentials are encrypted at rest (`ENCRYPTION_KEY`).
-2. **Comment → DM** — keyword + post filters, random public replies or **AI-written public replies** to each comment, a private-reply opening DM, once per person per post, optional hide-after-reply. Story reply and story mention triggers. Account-wide **comment moderation** hides comments with blocked words or links before any automation runs.
+1. **Channels** — Add to Slack, Add to Discord, Sign in with Bluesky, a BotFather token or a Meta token. Credentials are encrypted at rest (`ENCRYPTION_KEY`).
+2. **Comment → DM** (paused: no connected channel delivers comments right now, it returns with Meta's direct comment webhooks) — keyword + post filters, random public replies or **AI-written public replies** to each comment, a private-reply opening DM, once per person per post, optional hide-after-reply. Story reply and story mention triggers. Account-wide **comment moderation** hides comments with blocked words or links before any automation runs.
 3. **Flows** — a drag-and-drop canvas: Send Message (text, media, buttons, quick replies, typing), **Gallery** (swipeable product cards; native carousel on Instagram/Messenger, one message per card elsewhere), User input (with number, date and link reply types), Lead form, Tag, Set field, Subscribe, Condition, Smart Delay, A/B split, Start flow, HTTP request, Notify admin, **AI Step**, **Goal** (conversions + revenue), Stop, sticky **notes** for your team, plus undo/redo (⌘Z / ⇧⌘Z) and copy/paste of steps. Triggers: welcome, keywords, commands, growth links, comments, stories, **AI intent** (Claude matches what someone means, in any wording or language), default reply (every time or once per 24h). Fifteen starter **templates** (follow-to-unlock, product gallery, lead-scoring quiz, AI support router, appointment booking, Stripe checkout, AI qualifier…), an **in-browser simulator**, **version history** with one-click restore, JSON **export / import** to move flows between accounts, and per-node sent/click/conversion stats. `{{bot.key}}` bot fields hold shared values (prices, links) for every flow.
 4. **AI (Claude)** — AI Step (chats toward a goal, collects fields, continues the flow or hands off), AI auto-reply from your knowledge base (paste it, or **import it from your website**) with a **playground** to chat with it before going live, Live Chat reply suggestions + summaries, "describe a flow, get a draft", one-tap **AI rewrite** of any message (shorter, friendlier, more persuasive, emoji, grammar) in the brand voice, and **AI auto-tags** (describe a tag in plain words; Claude applies it when a message fits, which can start sequences, rules and webhooks).
 5. **Live Chat** — three-pane inbox across every network: filters (open / needs reply / mine / unassigned / closed), team assignment with round-robin AI hand-offs, bulk select (mark done, assign), saved replies (`/`, with {{first_name}}-style variables), a **CSAT survey** when a chat is marked Done, **scheduled replies** (send later), **snooze** (until a time or their next message), collision alerts when a teammate is viewing or typing, tags, notes, automation pause/resume, AI copilot, two-way **AI translation**, the 24-hour messaging window, desktop notifications, an unread count in the tab title, and `j`/`k` keyboard navigation. A human reply or AI hand-off pauses the bot for that person.
@@ -71,18 +71,15 @@ Local-only `POST /api/dev/seed` (disabled in production) creates a demo bot, a l
 | `PORT` | Railway | Next.js reads this automatically |
 | `MEDIA_DIR` | no | Flow image/GIF uploads. Default `.data/media` |
 | `ANTHROPIC_API_KEY` | for AI | Enables AI Steps, auto-reply, Live Chat suggestions and the flow builder (Claude) |
-| `ZERNIO_API_BASE` | no | Override the Zernio API origin (default `https://zernio.com/api`) |
 | `ADMIN_TELEGRAM_CHAT_ID` | no | Also send team alerts to a Telegram chat (Slack / Discord / Teams alerts are set per account in Settings) |
 
 Never commit tokens or `.env*`. Tokens are never logged (outbound logs are redacted).
 
-## Connect every social account (Zernio)
+## Getting started
 
-1. Create a [Zernio](https://zernio.com) workspace and, in Zernio → Settings → API keys, an API key. Set `PUBLIC_URL` first so Zernio can reach Recatch.
-2. In Recatch → **Channels**, paste the key once. Recatch registers its own signed webhook (DMs, comments, referrals).
-3. Still in **Channels**, click **Connect** on Instagram, Facebook, WhatsApp, X, TikTok, Threads, LinkedIn, YouTube, Reddit or Bluesky. You sign in on the network's own screen (Zernio runs it and the Page / account / number picker) and come back to Recatch with the account live. Accounts that lose access show **Needs reconnecting** with a one-click **Reconnect**; **Disconnect** stops new DMs from that account and keeps history. Each step is in the activity log.
-4. Optional, also in Settings: **Payments** (Stripe webhook for revenue attribution), **Team alerts** (Slack / Discord / Teams), **Fields**, **Tags** and **Team**.
-5. Start from a template under **Flows**, test it with **Test**, then switch it on.
+1. In Recatch go to **Channels** and connect an account: Telegram, Slack, Discord, Bluesky, or Instagram, Messenger and WhatsApp with your own Meta app. Set `PUBLIC_URL` first so webhooks can reach Recatch.
+2. Optional, in Settings: **Payments** (Stripe webhook for revenue attribution), **Team alerts** (Slack / Discord / Teams), **Fields**, **Tags** and **Team**.
+3. Start from a template under **Flows**, test it with **Test**, then switch it on.
 
 ## Connect Slack, Discord or Bluesky
 
@@ -159,14 +156,7 @@ On a **Message**, **Image / GIF**, or **Buttons** node, upload or drop a JPEG/PN
 - Local uploads are sent as multipart (`sendPhoto` / `sendAnimation`) so Telegram does not need a public media URL.
 - Broadcasts stay text-only; the confirm gate is unchanged.
 
-## Zernio (every social network)
-
-1. Connect accounts in Zernio and create an API key.
-2. In Recatch → **Settings**, choose **All socials (Zernio)** and paste the key. Optionally limit Recatch to some Zernio account ids.
-3. With `PUBLIC_URL` set, Recatch registers `POST /api/zernio/webhook/<id>` for `message.received`, `comment.received` and `referral.received`, signed with its own secret (`X-Zernio-Signature`, HMAC-SHA256). Retries are deduped by `X-Zernio-Event-Id`.
-4. Contacts remember their network, Zernio account and conversation, so flows, broadcasts, sequences and Live Chat reply in the right thread. Buttons render natively where the network supports them and as numbered text elsewhere.
-
-Instagram and Facebook allow one private reply to a comment until the person answers, so a comment flow's first message should carry a button (Recatch adds a **Continue** button when it has none); the rest of the flow continues from the tap.
+## Meta (Instagram, Messenger, WhatsApp)
 
 In production, Meta webhooks must be signed: add the app secret when connecting Instagram, Messenger or WhatsApp directly. Meta channels only deliver free-form messages inside the 24-hour window — use the **Last message within 24 hours** broadcast condition.
 

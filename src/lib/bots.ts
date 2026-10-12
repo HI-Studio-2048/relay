@@ -7,7 +7,6 @@ import { checkBlueskyOauthAccount, revokeBlueskySession } from "@/lib/channels/b
 import { fetchSlackIdentity } from "@/lib/channels/slack";
 import { graphGet } from "@/lib/channels/meta";
 import { channelOf, type ChannelId } from "@/lib/channels/types";
-import { listZernioAccounts, registerZernioWebhook, type ZernioAccount } from "@/lib/channels/zernio";
 import { and, eq } from "drizzle-orm";
 import { decryptSecret, encryptSecret, randomSecret } from "@/lib/crypto";
 import { getDb } from "@/lib/db";
@@ -31,8 +30,6 @@ export function publicBot(row: typeof bots.$inferSelect) {
     discordShared: row.settings?.discordShared === true,
     verifyToken: channelOf(row.channel) === "telegram" ? null : row.webhookSecret,
     webhookUrl: row.webhookUrl,
-    /** Zernio: the social accounts this key routes, for badges and the account picker. */
-    linkedAccounts: (row.settings?.zernioAccounts as LinkedAccount[] | undefined) ?? [],
     status: row.status,
     lastHealthAt: row.lastHealthAt ? row.lastHealthAt.toISOString() : null,
     lastHealthError: row.lastHealthError,
@@ -40,114 +37,11 @@ export function publicBot(row: typeof bots.$inferSelect) {
   };
 }
 
-export type LinkedAccount = {
-  id: string;
-  platform: string;
-  username: string | null;
-  picture: string | null;
-  /** Zernio lost access (token expired or permissions revoked): the person must reconnect. */
-  needsReconnection?: boolean;
-};
-
-function linkedAccounts(accounts: ZernioAccount[], filter: string | null): LinkedAccount[] {
-  const allowed = (filter ?? "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  return accounts
-    .filter((account) => allowed.length === 0 || allowed.includes(account._id))
-    .map((account) => ({
-      id: account._id,
-      platform: account.platform,
-      username: account.username ?? account.displayName ?? null,
-      picture: account.profilePicture ?? null,
-      needsReconnection: Boolean(account.needsReconnection) || account.isActive === false,
-    }));
-}
-
-function zernioName(accounts: LinkedAccount[]) {
-  if (accounts.length === 1) return `${accounts[0]!.username ? `@${accounts[0]!.username}` : accounts[0]!.platform} (Zernio)`;
-  return `Zernio · ${accounts.length} social account${accounts.length === 1 ? "" : "s"}`;
-}
-
-/**
- * Connect a Zernio workspace. The API key reaches every social account in it; externalAccountId
- * optionally narrows Recatch to a comma-separated list of Zernio account ids. Recatch registers its own
- * webhook (message.received, comment.received, referral.received) signed with a fresh secret.
- */
 /** One channel account can only live in one workspace; refuse to take it over from another user. */
 function assertOwnable(match: typeof bots.$inferSelect | undefined, ownerId: string) {
   if (match?.ownerId && match.ownerId !== ownerId) {
     throw new Error("This account is already connected to another Recatch workspace");
   }
-}
-
-export async function connectZernio(input: {
-  apiKey: string;
-  ownerId: string;
-  accountFilter?: string | null;
-  origin?: string;
-}) {
-  const apiKey = input.apiKey.trim();
-  const filter = (input.accountFilter ?? "").trim() || null;
-  const accounts = linkedAccounts(await listZernioAccounts(apiKey), filter);
-
-  const db = await getDb();
-  const existing = await db.select().from(bots);
-  const match = existing.find((row) => {
-    if (channelOf(row.channel) !== "zernio") return false;
-    try {
-      return decryptSecret(row.tokenEncrypted) === apiKey && (row.externalAccountId ?? null) === filter;
-    } catch {
-      return false;
-    }
-  });
-  // A typo on first connect is an error; an existing account whose last account was disconnected is fine.
-  if (filter && accounts.length === 0 && !match) throw new Error("None of those Zernio account ids belong to this API key");
-  assertOwnable(match, input.ownerId);
-  const id = match?.id ?? crypto.randomUUID();
-  const webhookSecret = match?.webhookSecret ?? randomSecret();
-  const originUrl = publicUrl(input.origin);
-  const webhookUrl = originUrl ? `${originUrl}/api/zernio/webhook/${id}` : null;
-  const settings = { ...(match?.settings ?? {}), zernioAccounts: accounts } as Record<string, unknown>;
-
-  let error: string | null = webhookUrl ? null : "PUBLIC_URL not set — Zernio cannot reach this server. Set it and reconnect.";
-  if (webhookUrl) {
-    try {
-      settings.zernioWebhookId = await registerZernioWebhook(apiKey, {
-        url: webhookUrl,
-        secret: webhookSecret,
-        existingId: (match?.settings?.zernioWebhookId as string | undefined) ?? null,
-        accountIds: filter ? accounts.map((account) => account.id) : undefined,
-      });
-    } catch (caught) {
-      error = `Webhook not registered (${caught instanceof Error ? caught.message : "error"}). Add it in Zernio → Webhooks with the URL and signing secret below.`;
-    }
-  }
-
-  const values = {
-    ownerId: input.ownerId,
-    name: zernioName(accounts),
-    channel: "zernio",
-    telegramUsername: accounts.length === 1 ? accounts[0]!.username : null,
-    telegramBotId: null,
-    externalAccountId: filter,
-    tokenEncrypted: encryptSecret(apiKey),
-    appSecretEncrypted: null,
-    webhookSecret,
-    webhookUrl,
-    settings,
-    status: error ? "error" : "connected",
-    lastHealthAt: new Date(),
-    lastHealthError: error,
-    updatedAt: new Date(),
-  };
-  if (match) await db.update(bots).set(values).where(eq(bots.id, id));
-  else await db.insert(bots).values({ id, ...values });
-
-  await seedBotDefaults(id);
-  const [row] = await db.select().from(bots).where(eq(bots.id, id)).limit(1);
-  return publicBot(row!);
 }
 
 export async function connectBot(token: string, ownerId: string, origin?: string) {
@@ -486,14 +380,6 @@ export async function connectChannelAccount(input: ChannelConnectInput) {
   if (input.channel === "discord") return connectDiscord(input);
   if (input.channel === "slack") return connectSlack(input);
   if (input.channel === "bluesky") return connectBluesky(input);
-  if (input.channel === "zernio") {
-    return connectZernio({
-      apiKey: input.token,
-      ownerId: input.ownerId,
-      accountFilter: input.externalAccountId,
-      origin: input.origin,
-    });
-  }
   const token = input.token.trim();
   const accountId = (input.externalAccountId ?? "").trim();
   if (!accountId) {
@@ -543,16 +429,6 @@ export async function healthCheckBot(botId: string, origin?: string) {
   const [bot] = await db.select().from(bots).where(eq(bots.id, botId)).limit(1);
   if (!bot) throw new Error("Bot not found");
   const token = decryptSecret(bot.tokenEncrypted);
-  if (channelOf(bot.channel) === "zernio") {
-    if (!bot.ownerId) throw new Error("This account has no owner yet; sign in as the workspace owner first");
-    const refreshed = await connectZernio({
-      apiKey: token,
-      ownerId: bot.ownerId,
-      accountFilter: bot.externalAccountId,
-      origin,
-    });
-    return { bot: refreshed, webhook: null, me: null };
-  }
   if (channelOf(bot.channel) === "discord" && bot.settings?.discordShared === true) {
     let error: string | null = null;
     try {

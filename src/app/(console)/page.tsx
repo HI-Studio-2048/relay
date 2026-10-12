@@ -209,7 +209,7 @@ export default async function OverviewPage() {
           {data.platforms.length === 0 ? (
             <p className="text-[13px] text-[#6b7280]">No contacts yet.</p>
           ) : (
-            <PlatformBars rows={data.platforms} fallbackLabel={bot.channel === "zernio" ? "Imported / other" : CHANNELS[bot.channel].label} />
+            <PlatformBars rows={data.platforms} fallbackLabel={CHANNELS[bot.channel].label} />
           )}
         </CanvasCard>
       </div>

@@ -2,34 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { CheckCircle2, Plus, RefreshCw, TriangleAlert, Unplug } from "lucide-react";
-import { toast } from "sonner";
-import { zernioPlatformColor, zernioPlatformLabel } from "@/components/chrome/platform-badge";
+import { CheckCircle2, TriangleAlert } from "lucide-react";
+import { useBot } from "@/components/bot-provider";
 import { CanvasCard } from "@/components/chrome/tone";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { api } from "@/lib/client";
+import { CHANNEL_CATALOG, type CatalogEntry } from "@/lib/channels/catalog";
+import { CHANNELS } from "@/lib/channels/types";
 import { cn } from "@/lib/utils";
 
-type Linked = { id: string; platform: string; username: string | null; picture: string | null; needsReconnection?: boolean };
 type Notice = { tone: "ok" | "error"; text: string } | null;
 
-/** What each network brings into Recatch, in the order people usually connect them. */
-const NETWORKS: { platform: string; mark: string; what: string }[] = [
-  { platform: "instagram", mark: "IG", what: "DMs, comments, story replies and mentions" },
-  { platform: "facebook", mark: "f", what: "Messenger DMs and Page comments" },
-  { platform: "whatsapp", mark: "WA", what: "WhatsApp Business conversations" },
-  { platform: "twitter", mark: "X", what: "DMs and replies on X" },
-  { platform: "tiktok", mark: "TT", what: "DMs and video comments" },
-  { platform: "threads", mark: "@", what: "Replies to your threads" },
-  { platform: "linkedin", mark: "in", what: "Comments on your company posts" },
-  { platform: "youtube", mark: "YT", what: "Comments on your videos" },
-  { platform: "reddit", mark: "r/", what: "Chats and comment replies" },
-  { platform: "bluesky", mark: "bsky", what: "DMs and replies" },
-];
-
-function Mark({ platform, mark, size = "md" }: { platform: string; mark: string; size?: "md" | "sm" }) {
+function Mark({ entry, size = "md" }: { entry: Pick<CatalogEntry, "mark" | "color">; size?: "md" | "sm" }) {
   return (
     <span
       aria-hidden
@@ -37,18 +20,11 @@ function Mark({ platform, mark, size = "md" }: { platform: string; mark: string;
         "inline-flex shrink-0 items-center justify-center rounded-xl font-semibold text-white",
         size === "md" ? "size-10 text-[13px]" : "size-8 text-[11px]",
       )}
-      style={{ background: zernioPlatformColor(platform) }}
+      style={{ background: entry.color }}
     >
-      {mark}
+      {entry.mark}
     </span>
   );
-}
-
-/** "@name" for social handles; phone numbers (WhatsApp, SMS) as they are. */
-function handle(account: Linked) {
-  if (!account.username) return zernioPlatformLabel(account.platform);
-  const name = account.username.replace(/^@/, "");
-  return /^\+?[\d\s()-]+$/.test(name) ? name : `@${name}`;
 }
 
 function NoticeBar({ notice }: { notice: Notice }) {
@@ -67,116 +43,59 @@ function NoticeBar({ notice }: { notice: Notice }) {
   );
 }
 
-export function ChannelsManager({ botId, accounts, health, notice }: { botId: string; accounts: Linked[]; health: string | null; notice: Notice }) {
+function statusChip(status: string) {
+  if (status === "connected") return { text: "Live", className: "bg-[#ecfdf3] text-[#067647]" };
+  if (status === "error") return { text: "Needs attention", className: "bg-[#fef3f2] text-[#b42318]" };
+  return { text: "Not connected", className: "bg-[#fffaeb] text-[#b54708]" };
+}
+
+/** Every channel Recatch has or is building. Connectable ones open Setup, the rest are greyed out. */
+export function ChannelsManager({ notice }: { notice: Notice }) {
   const router = useRouter();
-  const [busy, setBusy] = useState<string | null>(null);
-
-  const connect = async (platform: string, reconnectAccountId?: string) => {
-    setBusy(reconnectAccountId ?? platform);
-    try {
-      const data = await api<{ authUrl: string }>(`/api/bots/${botId}/channels/connect`, {
-        method: "POST",
-        body: JSON.stringify({ platform, reconnectAccountId: reconnectAccountId ?? null }),
-      });
-      // The platform's own consent screen; Zernio brings them back to this page when done.
-      window.location.assign(data.authUrl);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not start the connection");
-      setBusy(null);
-    }
-  };
-
-  const disconnect = async (account: Linked) => {
-    const name = `${zernioPlatformLabel(account.platform)}${account.username ? ` ${handle(account)}` : ""}`;
-    if (!window.confirm(`Disconnect ${name}? New DMs and comments from it stop arriving. Contacts and history stay.`)) return;
-    setBusy(account.id);
-    try {
-      await api(`/api/bots/${botId}/channels/${encodeURIComponent(account.id)}`, { method: "DELETE", body: JSON.stringify({ confirm: true }) });
-      toast.success(`${name} disconnected`);
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not disconnect");
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const refresh = async () => {
-    setBusy("refresh");
-    try {
-      await api(`/api/bots/${botId}/health`, { method: "POST" });
-      router.refresh();
-      toast.success("Synced with Zernio");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not sync");
-    } finally {
-      setBusy(null);
-    }
-  };
+  const { bots, bot, setBotId } = useBot();
 
   const counts = new Map<string, number>();
-  for (const account of accounts) counts.set(account.platform, (counts.get(account.platform) ?? 0) + 1);
-  const attention = accounts.filter((account) => account.needsReconnection).length;
+  for (const item of bots) counts.set(item.channel, (counts.get(item.channel) ?? 0) + 1);
+  const ready = CHANNEL_CATALOG.filter((entry) => entry.state !== "soon");
+  const soon = CHANNEL_CATALOG.filter((entry) => entry.state === "soon");
+
+  const manage = (id: string) => {
+    setBotId(id);
+    router.push("/setup");
+  };
 
   return (
     <div className="space-y-5">
       <NoticeBar notice={notice} />
-      {health ? <NoticeBar notice={{ tone: "error", text: health }} /> : null}
 
       <CanvasCard className="space-y-3 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="font-heading text-[15px] text-[#1b1f24]">Connected accounts</p>
-            <p className="text-[12px] text-[#6b7280]">
-              {accounts.length === 0
-                ? "Nothing connected yet. Pick a network below."
-                : `${accounts.length} account${accounts.length === 1 ? "" : "s"}${attention ? ` · ${attention} need${attention === 1 ? "s" : ""} reconnecting` : " · all healthy"}`}
-            </p>
-          </div>
-          <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => void refresh()}>
-            <RefreshCw className={cn("size-3.5", busy === "refresh" && "animate-spin")} />
-            Refresh
-          </Button>
+        <div>
+          <p className="font-heading text-[15px] text-[#1b1f24]">Connected accounts</p>
+          <p className="text-[12px] text-[#6b7280]">
+            {bots.length === 0
+              ? "Nothing connected yet. Pick a channel below."
+              : `${bots.length} account${bots.length === 1 ? "" : "s"}. Each one has its own inbox, contacts and flows.`}
+          </p>
         </div>
-        {accounts.length ? (
+        {bots.length ? (
           <ul className="divide-y divide-[#f0f2f4]">
-            {accounts.map((account) => {
-              const network = NETWORKS.find((item) => item.platform === account.platform);
+            {bots.map((item) => {
+              const chip = statusChip(item.status);
+              const meta = CHANNELS[item.channel];
               return (
-                <li key={account.id} className="flex flex-wrap items-center gap-3 py-3">
-                  {account.picture ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={account.picture} alt="" className="size-8 shrink-0 rounded-xl object-cover" />
-                  ) : (
-                    <Mark platform={account.platform} mark={network?.mark ?? account.platform.slice(0, 2).toUpperCase()} size="sm" />
-                  )}
+                <li key={item.id} className="flex flex-wrap items-center gap-3 py-3">
+                  <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ background: meta.color }} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[14px] font-medium text-[#1b1f24]">{handle(account)}</p>
-                    <p className="text-[12px] text-[#6b7280]">{zernioPlatformLabel(account.platform)}</p>
+                    <p className="truncate text-[14px] font-medium text-[#1b1f24]">{item.name}</p>
+                    <p className="text-[12px] text-[#6b7280]">
+                      {meta.label}
+                      {item.id === bot?.id ? " · working in this one" : ""}
+                    </p>
                   </div>
-                  {account.needsReconnection ? (
-                    <span className="rounded-full bg-[#fffaeb] px-2 py-0.5 text-[11px] font-medium text-[#b54708]">Needs reconnecting</span>
-                  ) : (
-                    <span className="rounded-full bg-[#ecfdf3] px-2 py-0.5 text-[11px] font-medium text-[#067647]">Live</span>
-                  )}
-                  <div className="flex gap-1.5">
-                    {account.needsReconnection && network ? (
-                      <Button size="sm" disabled={busy !== null} onClick={() => void connect(account.platform, account.id)}>
-                        {busy === account.id ? "Opening…" : "Reconnect"}
-                      </Button>
-                    ) : null}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-[#6b7280]"
-                      aria-label={`Disconnect ${zernioPlatformLabel(account.platform)} ${handle(account)}`}
-                      disabled={busy !== null}
-                      onClick={() => void disconnect(account)}
-                    >
-                      <Unplug className="size-3.5" />
-                      <span className="hidden sm:inline">Disconnect</span>
-                    </Button>
-                  </div>
+                  <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", chip.className)}>{chip.text}</span>
+                  <Button size="sm" variant="outline" onClick={() => manage(item.id)}>
+                    Manage
+                  </Button>
                 </li>
               );
             })}
@@ -185,109 +104,52 @@ export function ChannelsManager({ botId, accounts, health, notice }: { botId: st
       </CanvasCard>
 
       <div className="space-y-2">
-        <p className="font-heading text-[15px] text-[#1b1f24]">Add a channel</p>
-        <p className="text-[13px] text-[#6b7280]">
-          You&apos;ll sign in on the network&apos;s own screen and pick the Page, profile or number to use. Nothing is posted for you.
-        </p>
+        <p className="font-heading text-[15px] text-[#1b1f24]">Connect a channel</p>
+        <p className="text-[13px] text-[#6b7280]">You sign in on the platform&apos;s own screen, or paste a token where the platform has no sign-in for apps. Nothing is posted for you.</p>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {NETWORKS.map((network) => {
-            const connected = counts.get(network.platform) ?? 0;
+          {ready.map((entry) => {
+            const connected = entry.channel ? (counts.get(entry.channel) ?? 0) : 0;
             return (
-              <CanvasCard key={network.platform} className="flex items-center gap-3 p-3">
-                <Mark platform={network.platform} mark={network.mark} />
+              <CanvasCard key={entry.id} className="flex items-center gap-3 p-3">
+                <Mark entry={entry} />
                 <div className="min-w-0 flex-1">
                   <p className="text-[14px] font-medium text-[#1b1f24]">
-                    {zernioPlatformLabel(network.platform)}
+                    {entry.label}
                     {connected ? <span className="ml-1.5 text-[11px] font-normal text-[#067647]">{connected} connected</span> : null}
                   </p>
-                  <p className="text-[12px] leading-snug text-[#6b7280]">{network.what}</p>
+                  <p className="text-[12px] leading-snug text-[#6b7280]">{entry.what}</p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-[#8b95a1]">{entry.how}</p>
                 </div>
                 <Button
                   size="sm"
                   variant={connected ? "outline" : "default"}
-                  aria-label={connected ? `Add another ${zernioPlatformLabel(network.platform)} account` : `Connect ${zernioPlatformLabel(network.platform)}`}
-                  disabled={busy !== null}
-                  onClick={() => void connect(network.platform)}
+                  nativeButton={false}
+                  render={<Link href={`/setup?channel=${entry.channel}`} />}
                 >
-                  {busy === network.platform ? "Opening…" : connected ? <Plus className="size-3.5" /> : "Connect"}
+                  {connected ? "Add another" : "Connect"}
                 </Button>
               </CanvasCard>
             );
           })}
-          <CanvasCard className="flex items-center gap-3 p-3">
-            <Mark platform="telegram" mark="TG" />
-            <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-medium text-[#1b1f24]">Telegram</p>
-              <p className="text-[12px] leading-snug text-[#6b7280]">Bots connect directly with a BotFather token, as their own account</p>
-            </div>
-            <Button size="sm" variant="outline" nativeButton={false} render={<Link href="/setup" />}>
-              Set up
-            </Button>
-          </CanvasCard>
         </div>
       </div>
-    </div>
-  );
-}
 
-/** First step when this account isn't on Zernio yet: paste the workspace API key once. */
-export function ZernioSetup({ currentName, currentChannel, notice }: { currentName: string | null; currentChannel: string | null; notice: Notice }) {
-  const router = useRouter();
-  const [key, setKey] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const save = async () => {
-    setBusy(true);
-    try {
-      const data = await api<{ bot: { id: string } }>("/api/bots", { method: "POST", body: JSON.stringify({ channel: "zernio", token: key.trim() }) });
-      await api("/api/bots/select", { method: "POST", body: JSON.stringify({ botId: data.bot.id }) });
-      toast.success("Zernio connected. Now add your social accounts.");
-      router.refresh();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not connect Zernio");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <NoticeBar notice={notice} />
-      <CanvasCard className="space-y-3 p-4">
-        <p className="font-heading text-[15px] text-[#1b1f24]">Step 1: connect your Zernio workspace</p>
-        <p className="text-[13px] text-[#6b7280]">
-          Recatch reaches Instagram, Facebook, WhatsApp, X, TikTok and the rest through{" "}
-          <a href="https://zernio.com" target="_blank" rel="noreferrer" className="text-[#0084ff] hover:underline">
-            Zernio
-          </a>
-          . Create an API key in Zernio → Settings → API keys and paste it here. You only do this once; then you connect each network with a click.
-          {currentName && currentChannel !== "zernio" ? ` (The account you're on, ${currentName}, connects directly and stays as it is.)` : ""}
-        </p>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Input
-            type="password"
-            value={key}
-            onChange={(event) => setKey(event.target.value)}
-            placeholder="sk_…"
-            aria-label="Zernio API key"
-            className="flex-1"
-            autoComplete="off"
-          />
-          <Button disabled={busy || !key.trim()} onClick={() => void save()}>
-            {busy ? "Connecting…" : "Connect Zernio"}
-          </Button>
+      <div className="space-y-2">
+        <p className="font-heading text-[15px] text-[#1b1f24]">On the way</p>
+        <p className="text-[13px] text-[#6b7280]">Not built yet, or waiting on the platform. They turn on here as each one lands.</p>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {soon.map((entry) => (
+            <CanvasCard key={entry.id} className="flex items-center gap-3 p-3 opacity-55 grayscale" aria-disabled>
+              <Mark entry={entry} />
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] font-medium text-[#1b1f24]">{entry.label}</p>
+                <p className="text-[12px] leading-snug text-[#6b7280]">{entry.what}</p>
+                <p className="mt-0.5 text-[11px] leading-snug text-[#8b95a1]">{entry.how}</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-[#f0f2f4] px-2 py-0.5 text-[11px] font-medium text-[#6b7280]">Soon</span>
+            </CanvasCard>
+          ))}
         </div>
-      </CanvasCard>
-      <div className="grid gap-3 opacity-60 sm:grid-cols-2 xl:grid-cols-3" aria-hidden>
-        {NETWORKS.slice(0, 6).map((network) => (
-          <CanvasCard key={network.platform} className="flex items-center gap-3 p-3">
-            <Mark platform={network.platform} mark={network.mark} />
-            <div className="min-w-0">
-              <p className="text-[14px] font-medium text-[#1b1f24]">{zernioPlatformLabel(network.platform)}</p>
-              <p className="text-[12px] text-[#6b7280]">{network.what}</p>
-            </div>
-          </CanvasCard>
-        ))}
       </div>
     </div>
   );

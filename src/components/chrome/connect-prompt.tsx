@@ -6,7 +6,7 @@ import { MANYCHAT } from "@/components/chrome/tone";
 
 export function ConnectPrompt({
   title = "Connect your social accounts",
-  description = "Paste a Zernio API key to bring in Instagram, Facebook, WhatsApp, TikTok and more at once — or connect Telegram, Instagram, Messenger or WhatsApp directly. Keys are encrypted at rest.",
+  description = "Connect Telegram, Slack, Discord, Bluesky, Instagram, Messenger or WhatsApp. Keys are encrypted at rest.",
 }: {
   title?: string;
   description?: string;

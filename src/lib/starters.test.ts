@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { processInboundEvent, type FlowRecord } from "@/lib/flow-engine";
-import { parseZernioWebhook } from "@/lib/channels/zernio";
 import { flowPayload, iceBreakerPayload, isWithinHours, persistentMenuPayload, readHours, readStarters } from "@/lib/starters";
 
 const hours = readHours({
@@ -68,15 +67,5 @@ describe("conversation starters", () => {
     });
     expect(result.replies[0]?.text).toBe("Plans start at $49");
     expect(result.startedFlowId).toBe("pricing");
-  });
-
-  it("maps a Zernio ice breaker tap to a flow payload", () => {
-    const [event] = parseZernioWebhook({
-      event: "message.received",
-      message: { conversationId: "c", direction: "incoming", text: "Prices?", sender: { id: "u" }, attachments: [] },
-      account: { id: "acc", accountId: "acc", platform: "instagram", username: "x" },
-      metadata: { postbackPayload: "flow:pricing", postbackTitle: "Prices?" },
-    });
-    expect(event).toMatchObject({ callbackData: "flow:pricing", callbackTitle: "Prices?", text: null });
   });
 });

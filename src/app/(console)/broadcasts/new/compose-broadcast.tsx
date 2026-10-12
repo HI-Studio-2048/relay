@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 
 type Tag = { id: string; name: string };
 
-const META_WINDOW_CHANNELS: ChannelId[] = ["zernio", "instagram", "messenger", "whatsapp"];
+const META_WINDOW_CHANNELS: ChannelId[] = ["instagram", "messenger", "whatsapp"];
 
 export function ComposeBroadcast({
   botId,

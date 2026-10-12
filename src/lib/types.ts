@@ -293,7 +293,7 @@ export type ContactRecord = {
   welcomed?: boolean;
   notes?: string;
   inboxStatus?: "open" | "closed";
-  /** Hub routing (Zernio). See contacts.platform / channel_account_id / thread_id. */
+  /** Routing. See contacts.platform / channel_account_id / thread_id. */
   platform?: string | null;
   channelAccountId?: string | null;
   threadId?: string | null;

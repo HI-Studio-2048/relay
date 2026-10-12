@@ -14,7 +14,7 @@ export function isSocialTrigger(type: string): type is SocialTriggerType {
 
 /** Stored on FlowDefinition.trigger for comment / story flows. */
 export type SocialTriggerConfig = {
-  /** Only these posts (Zernio or platform post ids, or permalinks). Empty = every post. */
+  /** Only these posts (post ids or permalinks). Empty = every post. */
   postIds?: string[];
   /** Public replies under the comment; one is picked at random so replies do not look botted. */
   publicReplies?: string[];

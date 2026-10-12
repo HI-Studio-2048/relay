@@ -1,4 +1,4 @@
-import { zernioPlatformColor } from "@/components/chrome/platform-badge";
+import { platformColor } from "@/components/chrome/platform-badge";
 import { cn } from "@/lib/utils";
 
 const PALETTE = ["#0084FF", "#7B61FF", "#00C2CB", "#E64980", "#12B886", "#F76707", "#4C6EF5"];
@@ -42,7 +42,7 @@ export function ContactAvatar({
       {platform ? (
         <span
           className="absolute -right-0.5 -bottom-0.5 size-3 rounded-full ring-2 ring-white"
-          style={{ background: zernioPlatformColor(platform) }}
+          style={{ background: platformColor(platform) }}
         />
       ) : null}
     </span>

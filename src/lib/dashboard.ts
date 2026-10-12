@@ -135,7 +135,7 @@ export async function loadChecklist(botId: string): Promise<ChecklistItem[]> {
   ]);
   const ai = readAiSettings(bot?.settings);
   return [
-    { id: "connect", label: "Connect your accounts", done: bot?.status === "connected", href: "/setup", hint: "Zernio brings every network in at once." },
+    { id: "connect", label: "Connect your accounts", done: bot?.status === "connected", href: "/setup", hint: "Telegram, Slack, Discord, Bluesky and Meta connect here." },
     { id: "ai", label: "Teach the AI your business", done: Boolean(ai.knowledge?.trim()), href: "/ai", hint: "Paste prices, links and FAQs." },
     {
       id: "comment",

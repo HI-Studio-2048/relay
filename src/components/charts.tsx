@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PlatformDot, zernioPlatformLabel } from "@/components/chrome/platform-badge";
+import { PlatformDot, platformLabel } from "@/components/chrome/platform-badge";
 
 /** Series color for single-series charts (reference palette slot 1). Values and labels stay in ink. */
 const SERIES = "#2a78d6";
@@ -111,7 +111,7 @@ export function PlatformBars({ rows, fallbackLabel }: { rows: { platform: string
         >
           <span className="flex min-w-0 items-center gap-1.5 truncate" style={{ color: INK }}>
             {row.platform ? <PlatformDot platform={row.platform} /> : null}
-            {row.platform ? zernioPlatformLabel(row.platform) : fallbackLabel}
+            {row.platform ? platformLabel(row.platform) : fallbackLabel}
           </span>
           <span className="h-2.5 rounded-full bg-[#f1f3f5]">
             <span

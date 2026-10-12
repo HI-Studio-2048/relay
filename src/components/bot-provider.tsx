@@ -19,7 +19,6 @@ export type PublicBot = {
   lastHealthAt: string | null;
   lastHealthError: string | null;
   createdAt?: string;
-  linkedAccounts?: { id: string; platform: string; username: string | null; picture: string | null }[];
 };
 
 type BotContextValue = {

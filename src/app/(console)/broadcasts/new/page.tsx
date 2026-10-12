@@ -19,14 +19,13 @@ export default async function NewBroadcastPage() {
     segmentOptions(bot.id),
     broadcastAudience(bot.id, null),
   ]);
-  const platforms = [...new Set([...options.platforms, ...(bot.linkedAccounts ?? []).map((account) => account.platform)])];
   return (
     <ComposeBroadcast
       botId={bot.id}
       channel={bot.channel}
       tags={tagRows.map((tag) => ({ id: tag.id, name: tag.name }))}
       flows={flowRows}
-      options={{ ...options, platforms }}
+      options={options}
       initialEveryone={everyone.length}
     />
   );

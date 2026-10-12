@@ -1,11 +1,10 @@
 /**
  * Channel catalog. ManyChat runs Instagram, Messenger, WhatsApp, and Telegram from one console;
  * every send and every inbound webhook in Recatch goes through the adapter for the account's channel.
- * `zernio` is a hub: one API key brings every social account in a Zernio workspace.
  */
-export type ChannelId = "zernio" | "telegram" | "instagram" | "messenger" | "whatsapp" | "discord" | "slack" | "bluesky";
+export type ChannelId = "telegram" | "instagram" | "messenger" | "whatsapp" | "discord" | "slack" | "bluesky";
 
-export const CHANNEL_IDS: ChannelId[] = ["zernio", "telegram", "instagram", "messenger", "whatsapp", "discord", "slack", "bluesky"];
+export const CHANNEL_IDS: ChannelId[] = ["telegram", "instagram", "messenger", "whatsapp", "discord", "slack", "bluesky"];
 
 export type ChannelMeta = {
   id: ChannelId;
@@ -28,19 +27,6 @@ export type ChannelMeta = {
 };
 
 export const CHANNELS: Record<ChannelId, ChannelMeta> = {
-  zernio: {
-    id: "zernio",
-    label: "All socials (Zernio)",
-    color: "#7C3AED",
-    maxButtons: 3,
-    maxQuickReplies: 13,
-    supportsUrlButtons: true,
-    supportsTyping: true,
-    supportsCommands: false,
-    supportsPhoneShare: false,
-    formatting: "plain",
-    linkStyle: "ref",
-  },
   telegram: {
     id: "telegram",
     label: "Telegram",
@@ -138,10 +124,6 @@ export function channelOf(value: string | null | undefined): ChannelId {
   return value && value in CHANNELS ? (value as ChannelId) : "telegram";
 }
 
-export function isZernioChannel(channel: ChannelId): boolean {
-  return channel === "zernio";
-}
-
 export function isMetaChannel(channel: ChannelId): boolean {
   return channel === "instagram" || channel === "messenger" || channel === "whatsapp";
 }
@@ -183,11 +165,11 @@ export type NormalizedInbound = {
   referral?: string | null;
   /** What happened: a DM (default), a public comment, or an Instagram story reply / mention. */
   kind?: "message" | "comment" | "story_reply" | "story_mention";
-  /** Underlying network when the account is a hub (Zernio): instagram, facebook, tiktok… */
+  /** Underlying network, when the event names one (instagram, facebook…). */
   platform?: string | null;
-  /** Hub account the event arrived on (Zernio accountId). */
+  /** The account the event arrived on, when the platform names it. */
   channelAccountId?: string | null;
-  /** Conversation id to reply into (Zernio conversationId). */
+  /** Conversation id to reply into, when the platform has one. */
   threadId?: string | null;
   avatarUrl?: string | null;
   storyUrl?: string | null;
@@ -198,7 +180,7 @@ export type NormalizedInbound = {
 
 export type InboundComment = {
   id: string;
-  /** Id the comment-reply endpoints take (Zernio post id, else the platform post id). */
+  /** Id the comment-reply endpoints take. */
   postId: string;
   platformPostId: string;
   isReply: boolean;
@@ -206,7 +188,7 @@ export type InboundComment = {
   permalink?: string | null;
 };
 
-/** Who to send to. Telegram and Meta only need the user id; hub channels also need the thread. */
+/** Who to send to. Telegram and Meta only need the user id; some channels also need the thread. */
 export type ChannelTarget = {
   externalUserId: string;
   threadId?: string | null;

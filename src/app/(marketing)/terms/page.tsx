@@ -54,7 +54,7 @@ export default function TermsPage() {
 
       <LegalSection heading="Connected platforms">
         <p>
-          Recatch depends on Telegram, Meta, Zernio and other services that we don&apos;t control. If one of them changes
+          Recatch depends on Telegram, Meta and other services that we don&apos;t control. If one of them changes
           its API, limits your account or goes down, parts of Recatch may stop working until it&apos;s fixed. We
           aren&apos;t responsible for their decisions.
         </p>

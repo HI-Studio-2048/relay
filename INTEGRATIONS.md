@@ -1,8 +1,8 @@
 # Integrations log
 
-Where each platform stands in Recatch. Last updated on 2026-10-12. Four channels are confirmed with real accounts (Telegram, Slack, Discord, Bluesky) and three of them connect with one click through a company-owned app. `main` is the only branch that matters.
+Where each platform stands in Recatch. Last updated on 2026-10-12. Zernio has been removed from the project, so every channel is direct. Four channels are confirmed with real accounts (Telegram, Slack, Discord, Bluesky) and three of them connect with one click through a company-owned app. `main` is the only branch that matters.
 
-"Direct" means Recatch talks to the platform's own API with our credentials. "Zernio" means it comes in through the Zernio hub (one API key, Zernio holds the platform approvals).
+"Direct" means Recatch talks to the platform's own API with our credentials. There is no hub in between any more. The Channels page lists every channel in `src/lib/channels/catalog.ts` (live ones connect from Setup, the rest are greyed out as "On the way"), so update that file when a channel changes state.
 
 ## Snapshot
 
@@ -49,11 +49,10 @@ What a customer does to connect each channel. "One click" means a company-owned 
 | Slack | Direct | **Add to Slack**, one click. Their own Slack app (token and signing secret) is the fallback. | Both confirmed with real installs |
 | Discord | Direct | **Add to Discord**, one click, then members type `/chat` in the server. Their own bot token is the fallback. | Both confirmed with a real server and bot |
 | Bluesky | Direct | **Sign in with Bluesky** (OAuth), one click. Handle plus app password is the fallback. | Both confirmed with a real account |
-| Instagram, Messenger, WhatsApp | Direct + Zernio | Direct adapters are built and need Meta App Review. Through Zernio they work now. | Direct not tested live |
-| X, TikTok, Reddit, SMS, RCS, iMessage | Zernio | DMs and comments through Zernio only. | Zernio |
-| Threads, YouTube, LinkedIn | Zernio | Comments only. These platforms don't give DM access. | Zernio |
+| Instagram, Messenger, WhatsApp | Direct | Adapters are built. Customers paste their own Meta app token for now, one click comes after Meta App Review. | Not tested live |
+| Threads, X, TikTok, Reddit, YouTube, LinkedIn, Pinterest, iMessage | None yet | Greyed out on the Channels page. See Not done, and why. | Not built |
 
-Slack and Bluesky also still work through Zernio. The direct route is the one Recatch owns.
+Comment to DM, comment moderation and public comment replies only ever ran through Zernio, so they are switched off until Meta's direct comment webhooks are built. The flow editor still offers comment triggers, they just never fire.
 
 ### Company apps: how each one is switched on
 
@@ -85,7 +84,7 @@ Public `/privacy`, `/terms` and `/data-deletion` pages are live, linked from the
 | X direct | DMs need a paid API tier. |
 | TikTok direct | Sandbox sign-in works. Production review still to do. DM access is limited to TikTok's business messaging partners, so this app is for login and posting only. |
 | LinkedIn direct | Messaging is partner-program only, and they're selective. |
-| iMessage direct | Apple only allows it through approved messaging providers. Zernio is the route. |
+| iMessage direct | Apple only allows it through approved messaging providers. Nothing built. |
 | Snapchat | No public DM API. |
 | Google | Google shut down Business Messages in 2024. What's left handles reviews and posts, not chat. |
 | WordPress, Shopify | Not messaging platforms. They'd be separate integrations (publishing, order lookups), not inbox channels. Not scoped yet. |

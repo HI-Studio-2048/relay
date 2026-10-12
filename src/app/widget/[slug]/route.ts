@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
 import { publicUrl } from "@/lib/env";
-import { channelStartUrl, zernioEntryLinks } from "@/lib/growth";
+import { channelStartUrl } from "@/lib/growth";
 import { findGrowthLinkBySlug } from "@/lib/growth-links";
 
 export const dynamic = "force-dynamic";
@@ -31,14 +31,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
 
   const origin = publicUrl(request.url)!;
   const go = (via?: string) => `${origin}/go/${encodeURIComponent(link.slug)}${via ? `?via=${encodeURIComponent(via)}` : ""}`;
-  const options =
-    bot.channel === "zernio"
-      ? zernioEntryLinks((bot.settings?.zernioAccounts as { platform: string; username: string | null }[] | undefined) ?? [], link.slug).map(
-          (entry) => ({ label: LABELS[entry.platform] ?? entry.platform, color: COLORS[entry.platform] ?? "#1b1f24", url: go(entry.platform) }),
-        )
-      : channelStartUrl({ channel: bot.channel, handle: bot.telegramUsername, externalAccountId: bot.externalAccountId }, link.slug)
-        ? [{ label: LABELS[bot.channel] ?? bot.channel, color: COLORS[bot.channel] ?? "#1b1f24", url: go() }]
-        : [];
+  const options = channelStartUrl({ channel: bot.channel, handle: bot.telegramUsername, externalAccountId: bot.externalAccountId }, link.slug)
+    ? [{ label: LABELS[bot.channel] ?? bot.channel, color: COLORS[bot.channel] ?? "#1b1f24", url: go() }]
+    : [];
 
   const url = new URL(request.url);
   const color = /^#[0-9a-f]{3,8}$/i.test(url.searchParams.get("color") ?? "") ? url.searchParams.get("color")! : "#0084FF";

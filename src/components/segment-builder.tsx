@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { useBot } from "@/components/bot-provider";
-import { zernioPlatformLabel } from "@/components/chrome/platform-badge";
+import { platformLabel } from "@/components/chrome/platform-badge";
 import { api } from "@/lib/client";
 import { cn } from "@/lib/utils";
 import type { SavedSegment, Segment, SegmentCondition } from "@/lib/segments";
@@ -113,7 +113,7 @@ function ConditionRow({
           <select aria-label="Platform" className={selectClass} value={condition.value} onChange={(event) => onChange({ ...condition, value: event.target.value })}>
             {[...new Set([...options.platforms, condition.value])].map((platform) => (
               <option key={platform} value={platform}>
-                {zernioPlatformLabel(platform)}
+                {platformLabel(platform)}
               </option>
             ))}
           </select>

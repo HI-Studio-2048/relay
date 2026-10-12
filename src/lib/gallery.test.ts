@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cardsAsReplies } from "@/lib/channels/cards";
 import { buildMetaMessages } from "@/lib/channels/meta";
-import { buildZernioMessages } from "@/lib/channels/zernio";
+import { buildBlueskyMessage } from "@/lib/channels/bluesky";
 import { canvasToDefinition, createCanvasNode, definitionToCanvas, engineDefinition } from "@/lib/flow-canvas";
 import { processInboundEvent, typedButton, type FlowRecord } from "@/lib/flow-engine";
 import type { ContactRecord, FlowDefinition } from "@/lib/types";
@@ -64,8 +64,8 @@ describe("gallery step", () => {
     const reply = processInboundEvent({ contact, session: null, flows, event: { telegramUserId: "u1", text: "plans" } }).replies[0]!;
     const parts = cardsAsReplies(reply);
     expect(parts.map((part) => part.buttonNumberOffset)).toEqual([undefined, 0, 1]);
-    const pro = buildZernioMessages(parts[2]!, "twitter")[0]!;
-    expect(pro.message).toContain("2. Choose Pro");
+    const pro = buildBlueskyMessage(parts[2]!);
+    expect(pro.text).toContain("2. Choose Pro");
   });
 
   it("round-trips through the canvas", () => {

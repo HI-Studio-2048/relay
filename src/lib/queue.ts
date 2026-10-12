@@ -5,7 +5,7 @@ export type WebhookJob = {
   kind: "webhook";
   botId: string;
   update: unknown;
-  /** Provider delivery id (X-Zernio-Event-Id). Retries carry the same id and are dropped. */
+  /** Provider delivery id. Retries carry the same id and are dropped. */
   eventId?: string | null;
 };
 

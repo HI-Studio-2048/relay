@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlarmClock, Bell, BellOff, Search } from "lucide-react";
 import { useBot } from "@/components/bot-provider";
 import { ContactAvatar } from "@/components/chrome/avatar";
-import { PlatformBadge, zernioPlatformLabel } from "@/components/chrome/platform-badge";
+import { PlatformBadge, platformLabel } from "@/components/chrome/platform-badge";
 import { useTeam } from "@/components/use-team";
 import { api } from "@/lib/client";
 import { cn } from "@/lib/utils";
@@ -314,7 +314,7 @@ export function ConversationList() {
                 <option value="">All networks</option>
                 {allPlatforms.map((platform) => (
                   <option key={platform} value={platform}>
-                    {zernioPlatformLabel(platform)}
+                    {platformLabel(platform)}
                   </option>
                 ))}
               </select>

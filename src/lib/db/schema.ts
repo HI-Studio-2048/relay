@@ -76,7 +76,7 @@ export const contacts = pgTable(
     inboxStatus: text("inbox_status").notNull().default("open"),
     /** Live Chat snooze: hidden from Open until this time or their next message. */
     snoozedUntil: timestamp("snoozed_until", { withTimezone: true }),
-    /** Hub channels (Zernio): the network, the hub account, and the conversation to reply into. */
+    /** The network, the hub account, and the conversation to reply into. */
     platform: text("platform"),
     channelAccountId: text("channel_account_id"),
     threadId: text("thread_id"),

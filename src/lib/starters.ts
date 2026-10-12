@@ -39,7 +39,7 @@ export function readStarters(settings: Record<string, unknown> | null | undefine
   return { iceBreakers: cleanItems(raw.iceBreakers, 4, false), menu: cleanItems(raw.menu, 3, true) };
 }
 
-/** Graph / Zernio shapes. */
+/** Graph API shapes. */
 export function iceBreakerPayload(items: StarterItem[]) {
   return items.filter((item) => item.flowId).map((item) => ({ question: item.title, payload: flowPayload(item.flowId!) }));
 }

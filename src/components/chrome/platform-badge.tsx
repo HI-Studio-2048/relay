@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 
-/** Browser-safe copy of the Zernio platform palette (the adapter imports node:crypto). */
+/** Network names and brand colors. */
 const PLATFORMS: Record<string, { label: string; color: string }> = {
   instagram: { label: "Instagram", color: "#E1306C" },
   facebook: { label: "Messenger", color: "#0084FF" },
@@ -22,11 +22,11 @@ const PLATFORMS: Record<string, { label: string; color: string }> = {
   googlebusiness: { label: "Google Business", color: "#4285F4" },
 };
 
-export function zernioPlatformLabel(platform: string | null | undefined) {
+export function platformLabel(platform: string | null | undefined) {
   return (platform && PLATFORMS[platform]?.label) || platform || "Social";
 }
 
-export function zernioPlatformColor(platform: string | null | undefined) {
+export function platformColor(platform: string | null | undefined) {
   return (platform && PLATFORMS[platform]?.color) || "#6B7280";
 }
 
@@ -34,7 +34,7 @@ export function PlatformDot({ platform, className }: { platform: string | null |
   return (
     <span
       className={cn("inline-block size-2 shrink-0 rounded-full", className)}
-      style={{ background: zernioPlatformColor(platform) }}
+      style={{ background: platformColor(platform) }}
     />
   );
 }
@@ -45,10 +45,10 @@ export function PlatformBadge({ platform, className }: { platform: string | null
   return (
     <span
       className={cn("inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium", className)}
-      style={{ background: `${zernioPlatformColor(platform)}1a`, color: zernioPlatformColor(platform) }}
+      style={{ background: `${platformColor(platform)}1a`, color: platformColor(platform) }}
     >
       <PlatformDot platform={platform} className="size-1.5" />
-      {zernioPlatformLabel(platform)}
+      {platformLabel(platform)}
     </span>
   );
 }
