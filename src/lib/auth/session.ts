@@ -24,6 +24,11 @@ function sign(payload: string): string {
   return createHmac("sha256", sessionSecret()).update(`relay-session-v1:${payload}`).digest("base64url");
 }
 
+/** HMAC under the session secret, domain-separated by `purpose` so a token minted for one use never verifies for another. */
+export function signFor(purpose: string, payload: string): string {
+  return createHmac("sha256", sessionSecret()).update(`relay-${purpose}-v1:${payload}`).digest("base64url");
+}
+
 export function createSessionToken(userId: string, now = Date.now()): string {
   const payload = `${userId}.${now + SESSION_MAX_AGE_S * 1000}`;
   return `${payload}.${sign(payload)}`;

@@ -71,6 +71,7 @@ Local-only `POST /api/dev/seed` (disabled in production) creates a demo bot, a l
 | `PORT` | Railway | Next.js reads this automatically |
 | `MEDIA_DIR` | no | Flow image/GIF uploads. Default `.data/media` |
 | `ANTHROPIC_API_KEY` | optional | Server-wide AI (Claude) for accounts that have not saved their own key. Accounts can instead paste an OpenRouter key on the AI assistant page |
+| `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`, `AWS_SES_REGION`, `EMAIL_FROM` | for email | Amazon SES for password reset, welcome and hand-off emails. All four or email stays off. `EMAIL_FROM` must be verified in SES. Optional: `EMAIL_REPLY_TO`, `AWS_SES_SESSION_TOKEN` |
 | `ADMIN_TELEGRAM_CHAT_ID` | no | Also send team alerts to a Telegram chat (Slack / Discord / Teams alerts are set per account in Settings) |
 
 Never commit tokens or `.env*`. Tokens are never logged (outbound logs are redacted).

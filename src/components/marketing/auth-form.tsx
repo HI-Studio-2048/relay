@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/client";
 
-type Mode = "login" | "signup";
+type Mode = "login" | "signup" | "forgot" | "reset";
 
 /** Only follow same-origin paths after login, never `//evil.com` or absolute URLs. */
 function safeNext(value: string | null): string {
@@ -37,6 +37,7 @@ function Form({ mode }: { mode: Mode }) {
   const params = useSearchParams();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -44,7 +45,14 @@ function Form({ mode }: { mode: Mode }) {
     setBusy(true);
     setError(null);
     try {
-      await api(`/api/auth/${mode}`, { method: "POST", body: JSON.stringify(data) });
+      if (mode === "forgot") {
+        const result = await api<{ message: string }>("/api/auth/forgot", { method: "POST", body: JSON.stringify(data) });
+        setSent(result.message);
+        setBusy(false);
+        return;
+      }
+      const body = mode === "reset" ? { token: params.get("token") ?? "", password: data.password } : data;
+      await api(`/api/auth/${mode}`, { method: "POST", body: JSON.stringify(body) });
       router.replace(mode === "signup" ? "/setup" : safeNext(params.get("next")));
       router.refresh();
     } catch (err) {
@@ -53,26 +61,43 @@ function Form({ mode }: { mode: Mode }) {
     }
   };
 
+  if (sent) {
+    return (
+      <p role="status" className="rounded-lg bg-[#ecfdf3] px-3 py-3 text-[13px] text-[#05603a]">
+        {sent}
+      </p>
+    );
+  }
+
   return (
     <form onSubmit={(event) => void submit(event)} className="space-y-4">
       {mode === "signup" ? <Field id="name" label="Your name" autoComplete="name" placeholder="Alex Rivera" /> : null}
-      <Field id="email" label="Email" type="email" autoComplete="email" required placeholder="you@company.com" />
-      <Field
-        id="password"
-        label="Password"
-        type="password"
-        required
-        minLength={mode === "signup" ? 8 : undefined}
-        autoComplete={mode === "signup" ? "new-password" : "current-password"}
-        hint={mode === "signup" ? "At least 8 characters." : undefined}
-      />
+      {mode !== "reset" ? <Field id="email" label="Email" type="email" autoComplete="email" required placeholder="you@company.com" /> : null}
+      {mode !== "forgot" ? (
+        <Field
+          id="password"
+          label={mode === "reset" ? "New password" : "Password"}
+          type="password"
+          required
+          minLength={mode === "signup" || mode === "reset" ? 8 : undefined}
+          autoComplete={mode === "login" ? "current-password" : "new-password"}
+          hint={mode === "signup" || mode === "reset" ? "At least 8 characters." : undefined}
+        />
+      ) : null}
+      {mode === "login" ? (
+        <p className="text-right text-[12px]">
+          <Link href="/forgot-password" className="text-[#6b7280] hover:text-[#0084ff] hover:underline">
+            Forgot password?
+          </Link>
+        </p>
+      ) : null}
       {error ? (
         <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-[13px] text-destructive">
           {error}
         </p>
       ) : null}
       <Button type="submit" className="h-10 w-full text-[14px]" disabled={busy}>
-        {busy ? "One moment…" : mode === "signup" ? "Create account" : "Log in"}
+        {busy ? "One moment…" : { signup: "Create account", login: "Log in", forgot: "Send reset link", reset: "Save password" }[mode]}
       </Button>
     </form>
   );
@@ -96,6 +121,24 @@ export function AuthScreen({ mode }: { mode: Mode }) {
             Create an account
           </Link>
         </>
+      ),
+    },
+    forgot: {
+      title: "Forgot your password?",
+      subtitle: "Enter your email and we will send you a link to choose a new one.",
+      switchText: (
+        <Link href="/login" className="font-medium text-[#0084ff] hover:underline">
+          Back to log in
+        </Link>
+      ),
+    },
+    reset: {
+      title: "Choose a new password",
+      subtitle: "Pick one you have not used here before.",
+      switchText: (
+        <Link href="/login" className="font-medium text-[#0084ff] hover:underline">
+          Back to log in
+        </Link>
       ),
     },
     signup: {

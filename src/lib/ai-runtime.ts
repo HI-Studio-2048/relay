@@ -10,6 +10,7 @@ import { executeFrom } from "@/lib/flow-engine";
 import { assignFieldValue, parseCaptureField } from "@/lib/lead-capture";
 import { emitWebhookSoon, publicContact } from "@/lib/developer";
 import { log } from "@/lib/logger";
+import { emailOwnerOfHandoff } from "@/lib/owner-email";
 import { assignContact, pickAssignee } from "@/lib/team";
 import {
   listMessages,
@@ -58,6 +59,13 @@ async function handOff(botId: string, account: ChannelAccount, contact: ContactR
   if (assignee) await assignContact(contact.id, assignee.id);
   await persistContact(botId, { ...contact, inboxStatus: "open" }, { skipRules: true });
   emitWebhookSoon(botId, "conversation.handoff", { contact: publicContact(contact), reply: text });
+  const lastInbound = (await listMessages(contact.id)).filter((row) => row.direction === "inbound").at(-1);
+  void emailOwnerOfHandoff({
+    botId,
+    contactId: contact.id,
+    who: [contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.username || "A contact",
+    lastMessage: lastInbound?.body,
+  });
   await notifyAdmin(`AI handed off ${[contact.firstName, contact.lastName].filter(Boolean).join(" ") || contact.username || "a contact"} to a human.`, {
     botId,
     contactId: contact.id,

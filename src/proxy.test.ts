@@ -13,6 +13,10 @@ describe("what a signed-out visitor can reach", () => {
     ["a Slack app's own webhook", "/api/slack/webhook/abc123", "POST"],
     ["a Meta webhook", "/api/meta/webhook/abc123", "POST"],
     ["the health check", "/api/health", "GET"],
+    ["the forgot password page", "/forgot-password", "GET"],
+    ["the reset password page", "/reset-password", "GET"],
+    ["asking for a reset link", "/api/auth/forgot", "POST"],
+    ["setting a new password from a reset link", "/api/auth/reset", "POST"],
   ])("lets through %s", (_what, pathname, method) => {
     expect(isPassedThrough(signedOut(pathname, method))).toBe(true);
   });
