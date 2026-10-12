@@ -91,7 +91,7 @@ const GUIDES: Record<ChannelId, { title: string; steps: string[]; tokenLabel: st
     steps: [
       "At api.slack.com/apps create an app. Under OAuth & Permissions add the bot scopes chat:write, im:history, im:read, im:write and users:read, then install it to your workspace and copy the Bot User OAuth Token (xoxb-).",
       "Copy the Signing Secret from Basic Information and paste it below. Recatch uses it to check that events really come from Slack.",
-      "After connecting, paste the webhook URL below into Event Subscriptions (subscribe to the bot event message.im) and into Interactivity & Shortcuts. Under App Home, turn on the Messages tab so people can write to the app.",
+      "After connecting, paste the webhook URL below into Event Subscriptions (subscribe to the bot event message.im) and into Interactivity & Shortcuts. Under App Home, turn on the Messages tab so people can write to the app. Leave Socket Mode off, or Slack sends events over a websocket and never calls the URL.",
     ],
   },
 };

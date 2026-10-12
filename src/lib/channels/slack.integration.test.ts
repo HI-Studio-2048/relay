@@ -16,11 +16,15 @@ function fakeSlack(token: string) {
     if (url.host !== "slack.com") return realFetch(input, init);
     const method = url.pathname.replace("/api/", "");
     const headers = new Headers(init?.headers);
-    const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
+    const type = headers.get("content-type") ?? "";
+    const text = init?.body ? String(init.body) : "";
+    const body = (type.includes("json") ? (text ? JSON.parse(text) : {}) : Object.fromEntries(new URLSearchParams(text))) as Record<string, unknown>;
     calls.push({ method, body, auth: headers.get("authorization") });
     const reply = (data: unknown) => new Response(JSON.stringify(data), { status: 200, headers: { "content-type": "application/json" } });
     if (headers.get("authorization") !== `Bearer ${token}`) return reply({ ok: false, error: "invalid_auth" });
     if (method === "auth.test") return reply({ ok: true, team: "Acme", team_id: "T1", user: "recatch", user_id: "UBOT" });
+    // Like the real API: read methods refuse a JSON body.
+    if (method === "users.info" && type.includes("json")) return reply({ ok: false, error: "invalid_arguments" });
     if (method === "users.info") return reply({ ok: true, user: { name: "ada", real_name: "Ada Lovelace" } });
     if (method === "chat.postMessage") return reply({ ok: true, ts: `1700.${calls.length}` });
     return reply({ ok: false, error: "unknown_method" });

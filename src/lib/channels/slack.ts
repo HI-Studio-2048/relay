@@ -16,10 +16,13 @@ type SlackResponse = { ok: boolean; error?: string };
  * Retry-After header for rate limits, which is waited out once.
  */
 export async function slackRequest<T extends SlackResponse>(token: string, method: string, body: Record<string, unknown> = {}, attempt = 0): Promise<T> {
+  // Slack only accepts a JSON body on write methods like chat.postMessage. Read methods such as
+  // users.info want form-encoded parameters and answer a JSON body with an error.
+  const asJson = method.startsWith("chat.");
   const response = await fetch(`${API}/${method}`, {
     method: "POST",
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json; charset=utf-8" },
-    body: JSON.stringify(body),
+    headers: { authorization: `Bearer ${token}`, "content-type": asJson ? "application/json; charset=utf-8" : "application/x-www-form-urlencoded" },
+    body: asJson ? JSON.stringify(body) : new URLSearchParams(Object.entries(body).map(([key, value]) => [key, String(value)])).toString(),
   });
   if (response.status === 429 && attempt < 2) {
     const wait = Number(response.headers.get("retry-after") ?? "1");
