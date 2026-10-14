@@ -28,7 +28,6 @@ Small chores nobody has done yet:
 
 | What | Why |
 | --- | --- |
-| Disconnect the old "Relay (Discord)" account | It holds the same bot as the shared Recatch bot, so Recatch pauses it (it would answer every message twice). Add to Discord does its job now. |
 | Delete the personal Slack test app | Add to Slack replaced it. |
 | Keep "Public Bot" on in the Discord Bot page | Add to Discord needs it, so other servers can add the bot. |
 
@@ -126,12 +125,12 @@ In the order that unlocks the most:
 0. **Confirm SES delivers.** Sign up at recatch.app/signup with an address verified in SES and look for the welcome email, then use Forgot password and finish a reset. If nothing arrives, `railway logs --service recatch` and search for "SES": the usual causes are an unverified sender or recipient while SES is still in sandbox, or the wrong region. Also ask AWS for production access so it can send to anyone.
 0b. **Meta through Zernio.** The key and both Railway variables are done. Connect a real Instagram account from recatch.app/channels and check that a DM and a comment arrive. Test a WhatsApp number separately. Read Zernio's terms on reselling.
 1. **Meta, direct.** Finish the identity check on the Facebook developer account. Then create the Meta app under the company's Business Manager. In dev mode the direct Instagram, Messenger and WhatsApp adapters already work with our own accounts as testers (WhatsApp gives a free test number). Record the screencast App Review wants, then do Business Verification with the company documents and App Review for `instagram_manage_messages`, `pages_messaging` and the WhatsApp permissions. Meta is the biggest win: it covers four networks.
-2. **Run a health check on the Telegram bot** (Setup page) so its webhook moves to `recatch.app`.
+2. **Telegram webhook.** Done on 2026-10-14: a health check moved `@relay_hi_bot` to `https://recatch.app/api/telegram/webhook/...`.
 3. **YouTube.** Submitted for verification on 2026-10-14. Wait for Google's email to admin@hiiiiiiiiiii.com and answer anything it asks. Ask for a quota increase after it passes, if needed.
 4. **TikTok.** Submitted for production review on 2026-10-14, and business verification is done. When approved, set the production `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET` in Railway (a person does this with a piped command), then sign in once with a non-sandbox account to confirm. Do not swap the keys before approval, because the sandbox keys are the ones that work today.
 5. **Pinterest.** When Trial access arrives, build the Pinterest connection (sign-in, publish, read boards) so there is something to show, then request Standard access.
 6. **LinkedIn.** Create the company Page, then apply to the Community Management API.
-7. **Slack, Discord, Bluesky.** Done and confirmed with real accounts, all three one click. Clean-up left: disconnect the old "Relay (Discord)" account, delete the personal Slack test app, make a company Bluesky account instead of the test one, and re-check that a brand new Slack contact shows a name (the form-encoding fix is deployed).
+7. **Slack, Discord, Bluesky.** Done and confirmed with real accounts, all three one click. Clean-up left (the old "Relay (Discord)" account was disconnected on 2026-10-14): delete the personal Slack test app, make a company Bluesky account instead of the test one, and re-check that a brand new Slack contact shows a name (the form-encoding fix is deployed).
 8. **Meta, one click.** When Meta is unblocked, aim for the same shape as Slack: one Recatch Meta app with Facebook Login so customers click instead of pasting a Page token. The Setup page's token form stays as the fallback.
 9. **Security.** Next.js went to 16.4.0 and `npm audit fix` cleared the rest on 2026-10-14. The one advisory left in production deps is `braces`, pulled in by the shadcn CLI. Nothing upstream fixes it yet, and the app only uses shadcn for a CSS import at build time, so no request ever reaches it. Check again when shadcn ships a new release.
 10. **Bluesky comments.** Only DMs are handled today.
