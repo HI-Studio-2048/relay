@@ -385,6 +385,8 @@ export async function listInbox(botId: string) {
 
 export type InboxThread = {
   contactId: string;
+  /** The connected account this conversation came in on. */
+  botId: string;
   name: string;
   username: string | null;
   avatarUrl: string | null;
@@ -456,6 +458,7 @@ export async function listInboxThreads(botId: string): Promise<InboxThread[]> {
       const name = [row.firstName, row.lastName].filter(Boolean).join(" ").trim() || (row.username ? `@${row.username}` : row.telegramUserId);
       return {
         contactId: row.id,
+        botId,
         name,
         username: row.username,
         avatarUrl: row.avatarUrl ?? null,

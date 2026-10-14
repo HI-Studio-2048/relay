@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 type Thread = {
   contactId: string;
+  botId: string;
   name: string;
   username: string | null;
   avatarUrl: string | null;
@@ -41,6 +42,16 @@ const FILTERS: { value: Filter; label: string; team?: boolean }[] = [
 ];
 
 const NOTIFY_KEY = "relay.inbox.notify";
+/** Which accounts the inbox shows: "all", or one account's id. Remembered per browser. */
+const SCOPE_KEY = "relay.inbox.scope";
+
+function readScopePref() {
+  try {
+    return localStorage.getItem(SCOPE_KEY) || "all";
+  } catch {
+    return "all";
+  }
+}
 
 function readNotifyPref() {
   try {
@@ -74,7 +85,24 @@ function relativeTime(iso: string | null) {
 }
 
 export function ConversationList() {
-  const { botId } = useBot();
+  const { botId, bots } = useBot();
+  const [scopePref, setScopePref] = useState("all");
+  useEffect(() => {
+    const timer = setTimeout(() => setScopePref(readScopePref()), 0);
+    return () => clearTimeout(timer);
+  }, []);
+  const multiAccount = bots.length > 1;
+  // One account connected: nothing to choose. A remembered account that was since removed falls back to all.
+  const scope = !multiAccount ? botId : scopePref !== "all" && bots.some((bot) => bot.id === scopePref) ? scopePref : "all";
+  const botName = useMemo(() => new Map(bots.map((bot) => [bot.id, bot.name])), [bots]);
+  const chooseScope = (next: string) => {
+    setScopePref(next);
+    setThreads(null);
+    seen.current = null;
+    try {
+      localStorage.setItem(SCOPE_KEY, next);
+    } catch {}
+  };
   const pathname = usePathname();
   const activeId = pathname.startsWith("/inbox/") ? pathname.split("/")[2] : null;
   const [threads, setThreads] = useState<Thread[] | null>(null);
@@ -159,10 +187,10 @@ export function ConversationList() {
   }
 
   useEffect(() => {
-    if (!botId) return;
+    if (!scope) return;
     let cancelled = false;
     const load = () =>
-      api<{ threads: Thread[] }>(`/api/inbox?botId=${botId}`)
+      api<{ threads: Thread[] }>(`/api/inbox?botId=${encodeURIComponent(scope)}`)
         .then((data) => {
           if (cancelled) return;
           const previous = seen.current;
@@ -190,7 +218,7 @@ export function ConversationList() {
       clearTimeout(first);
       clearInterval(timer);
     };
-  }, [botId, router]);
+  }, [scope, router]);
 
   const counts = useMemo(() => {
     const list = threads ?? [];
@@ -265,6 +293,24 @@ export function ConversationList() {
       )}
     >
       <div className="space-y-2.5 border-b border-[#e5e7eb] p-3">
+        {multiAccount ? (
+          <label className="flex items-center gap-2 text-[12px] text-[#6b7280]">
+            Show
+            <select
+              aria-label="Show conversations from"
+              value={scope ?? "all"}
+              onChange={(event) => chooseScope(event.target.value)}
+              className="flex-1 rounded-lg border border-[#e5e7eb] bg-white px-2 py-1 text-[12px] font-medium text-[#1b1f24]"
+            >
+              <option value="all">All accounts ({bots.length})</option>
+              {bots.map((bot) => (
+                <option key={bot.id} value={bot.id}>
+                  {bot.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         {team.length > 0 ? (
           <label className="flex items-center gap-2 text-[12px] text-[#6b7280]">
             You are
@@ -427,6 +473,14 @@ export function ConversationList() {
                 </div>
                 <div className="mt-1 flex items-center gap-1.5">
                   {thread.platform ? <PlatformBadge platform={thread.platform} /> : null}
+                  {scope === "all" && multiAccount && botName.get(thread.botId) ? (
+                    <span
+                      className="max-w-28 truncate rounded-full bg-[#f4f6f8] px-1.5 py-0.5 text-[10px] font-medium text-[#4b5563]"
+                      title={`Came in on ${botName.get(thread.botId)}`}
+                    >
+                      {botName.get(thread.botId)}
+                    </span>
+                  ) : null}
                   {(thread.tags ?? []).slice(0, 2).map((tag) => (
                     <span key={tag} className="max-w-20 truncate rounded-full bg-[#f5f3ff] px-1.5 py-0.5 text-[10px] text-[#6d28d9]">
                       #{tag}
