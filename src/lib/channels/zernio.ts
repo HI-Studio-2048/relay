@@ -111,6 +111,12 @@ export function isZernioConnectable(value: unknown): value is ZernioConnectable 
 
 type ZernioProfile = { _id?: string; name?: string; externalId?: string | null };
 
+/** The Recatch user a Zernio profile belongs to (its externalId), or null. */
+export async function zernioProfileOwner(apiKey: string, profileId: string): Promise<string | null> {
+  const data = await zernioRequest<{ profiles?: ZernioProfile[] }>("GET", "/v1/profiles", apiKey);
+  return (data.profiles ?? []).find((profile) => profile._id === profileId)?.externalId ?? null;
+}
+
 /**
  * The Zernio profile for one Recatch user, found by externalId and created on first use, so a retried
  * signup or a lost id never makes a second one.

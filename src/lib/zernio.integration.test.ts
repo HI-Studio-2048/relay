@@ -176,6 +176,41 @@ describe("Meta accounts through the company Zernio key", () => {
     expect(queued).toHaveLength(1);
   });
 
+  it("saves an account Zernio connected even when the callback carries none of the expected parameters", async () => {
+    // What happened live: Zernio linked an Instagram account but the callback lacked connected/accountId.
+    signedIn = "owner-2";
+    const { getDb } = await import("@/lib/db");
+    const { bots } = await import("@/lib/db/schema");
+    const db = await getDb();
+    const owner2 = () => db.select().from(bots).where(and(eq(bots.ownerId, "owner-2"), eq(bots.channel, "zernio")));
+    expect(await owner2()).toHaveLength(0);
+
+    const { GET } = await import("@/app/api/zernio/callback/route");
+    const response = await GET(new Request("https://recatch.test/api/zernio/callback?status=success"));
+    expect(response.headers.get("location")).toContain("connected=");
+    const [row] = await owner2();
+    expect((row?.settings?.zernioAccounts as { id: string }[]).map((account) => account.id)).toEqual(["a-2"]);
+  });
+
+  it("finds the owner of an account event from the account's profile when the event has no profiles list", async () => {
+    const { getDb } = await import("@/lib/db");
+    const { bots } = await import("@/lib/db/schema");
+    const db = await getDb();
+    await db.delete(bots).where(eq(bots.ownerId, "owner-2"));
+    const { POST } = await import("@/app/api/zernio/webhook/route");
+    const send = (body: unknown) => {
+      const raw = JSON.stringify(body);
+      return POST(new Request("https://recatch.test/api/zernio/webhook", { method: "POST", headers: { "x-zernio-signature": sign(raw) }, body: raw }));
+    };
+
+    expect((await send({ event: "account.connected", account: { _id: "a-2", platform: "instagram", profileId: "p-2" } })).status).toBe(200);
+    expect(await db.select().from(bots).where(eq(bots.ownerId, "owner-2"))).toHaveLength(1);
+
+    await db.delete(bots).where(eq(bots.ownerId, "owner-2"));
+    expect((await send({ event: "account.connected", account: { _id: "a-2", profileId: { _id: "p-2", externalId: "owner-2" } } })).status).toBe(200);
+    expect(await db.select().from(bots).where(eq(bots.ownerId, "owner-2"))).toHaveLength(1);
+  });
+
   it("answers 503 when the webhook secret is not set", async () => {
     vi.stubEnv("ZERNIO_WEBHOOK_SECRET", "");
     const { POST } = await import("@/app/api/zernio/webhook/route");

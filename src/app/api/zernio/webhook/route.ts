@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { syncZernioBot } from "@/lib/bots";
-import { verifyZernioSignature, zernioWebhookSecret } from "@/lib/channels/zernio";
+import { verifyZernioSignature, zernioCompanyKey, zernioProfileOwner, zernioWebhookSecret } from "@/lib/channels/zernio";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
 import { json } from "@/lib/http";
@@ -8,7 +8,29 @@ import { log } from "@/lib/logger";
 import { enqueueWebhook, shouldRunWorker } from "@/lib/queue";
 import { drainJobs } from "@/lib/worker";
 
-type Delivery = { event?: string; profiles?: { id?: string; externalId?: string | null }[] } & Record<string, unknown>;
+type ProfileRef = string | { _id?: string; id?: string; externalId?: string | null } | null | undefined;
+type Delivery = {
+  event?: string;
+  profiles?: { id?: string; externalId?: string | null }[];
+  profile?: ProfileRef;
+  account?: { profileId?: ProfileRef } & Record<string, unknown>;
+} & Record<string, unknown>;
+
+/**
+ * The Recatch user an event belongs to: the externalId of the Zernio profile it names. Zernio has put the
+ * profile in `profiles`, in `profile`, or on the account (as an object or a bare id), so look in each.
+ */
+async function ownerOf(payload: Delivery): Promise<string | null> {
+  const refs: ProfileRef[] = [...(payload.profiles ?? []), payload.profile, payload.account?.profileId];
+  for (const ref of refs) if (ref && typeof ref === "object" && ref.externalId) return ref.externalId;
+  const ids = refs.map((ref) => (typeof ref === "string" ? ref : ref?._id ?? ref?.id)).filter((id): id is string => Boolean(id));
+  const apiKey = zernioCompanyKey();
+  for (const id of ids) {
+    const owner = apiKey ? await zernioProfileOwner(apiKey, id).catch(() => null) : null;
+    if (owner) return owner;
+  }
+  return null;
+}
 
 const INBOUND = ["message.received", "comment.received", "referral.received"];
 const ACCOUNT = ["account.connected", "account.disconnected"];
@@ -35,9 +57,13 @@ export async function POST(request: Request) {
     return json({ error: "Invalid JSON" }, 400);
   }
   // Test pings and every event Recatch does not act on are acknowledged so Zernio stops retrying.
-  const ownerId = payload.profiles?.find((profile) => profile.externalId)?.externalId ?? null;
   const event = payload.event ?? "";
-  if (!ownerId || (!INBOUND.includes(event) && !ACCOUNT.includes(event))) return json({ ok: true });
+  if (!INBOUND.includes(event) && !ACCOUNT.includes(event)) return json({ ok: true });
+  const ownerId = await ownerOf(payload);
+  if (!ownerId) {
+    log.warn(`Zernio ${event} names no Recatch user; payload keys:`, Object.keys(payload).join(","));
+    return json({ ok: true });
+  }
 
   if (ACCOUNT.includes(event)) {
     await syncZernioBot(ownerId).catch((error) => log.warn("Zernio account sync failed", error instanceof Error ? error.message : error));

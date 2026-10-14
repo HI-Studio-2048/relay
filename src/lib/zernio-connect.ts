@@ -1,6 +1,7 @@
 import { requireZernioKey, syncZernioBot, zernioProfileFor } from "@/lib/bots";
 import { listZernioAccounts, zernioConnectUrl, zernioPlatformMeta, type ZernioConnectable } from "@/lib/channels/zernio";
 import { publicUrl } from "@/lib/env";
+import { log } from "@/lib/logger";
 
 export class ChannelConnectError extends Error {}
 
@@ -41,8 +42,11 @@ export async function finishZernioConnect(input: { ownerId: string; params: URLS
     const reason = params.get("error_message") || params.get("error")!.replace(/_/g, " ");
     return { ok: false as const, platform, message: `${label} wasn't connected: ${reason}` };
   }
-  if (!params.get("connected") || !params.get("accountId")) return { ok: false as const, platform, message: `${label} wasn't connected. Try again.` };
-  await syncZernioBot(input.ownerId, input.origin);
+  // Zernio's success parameters have not matched what we expected (an Instagram account connected in Zernio
+  // and never reached Recatch), so read the truth from Zernio unless it reported an error.
+  if (!params.get("connected") || !params.get("accountId")) log.info("Zernio callback without connected/accountId; params:", [...params.keys()].join(","));
+  const bot = await syncZernioBot(input.ownerId, input.origin);
+  if (!bot) return { ok: false as const, platform, message: `${label} wasn't connected. Try again.` };
   const username = params.get("username");
   return { ok: true as const, platform, message: `${label}${username ? ` @${username.replace(/^@/, "")}` : ""} is connected. New DMs and comments will show up in Live Chat.` };
 }
