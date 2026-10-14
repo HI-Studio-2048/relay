@@ -23,13 +23,14 @@ const PUBLIC_PREFIXES = [
   // Bluesky fetches these two files by their full names, and a path only matches whole segments.
   "/api/bluesky/client-metadata.json",
   "/api/bluesky/jwks.json",
+  "/api/zernio/webhook",
   "/api/stripe/webhook",
   "/api/v1",
   "/go",
   "/widget",
 ];
 
-/** Uploaded flow media must be fetchable by Meta to deliver it; uploads themselves stay private. */
+/** Uploaded flow media must be fetchable by Meta / Zernio to deliver it; uploads themselves stay private. */
 const PUBLIC_GET_PREFIXES = ["/api/media/"];
 
 /** Signed-in visitors skip these and land in their dashboard. */

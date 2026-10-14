@@ -44,7 +44,21 @@ export function GrowthLinkShareActions({
         </p>
       ) : null}
       <p className="mt-1 break-all text-[12px] text-[#1b1f24]">{link.shortUrl}</p>
-      {link.telegramUrl ? (
+      {link.entries?.length ? (
+        <ul className="mt-1 space-y-0.5">
+          {link.entries.map((entry) => (
+            <li key={entry.url} className="flex items-center gap-1.5 text-[12px] text-[#6b7280]">
+              <PlatformDot platform={entry.platform} />
+              <button type="button" className="truncate text-left hover:text-[#1b1f24]" onClick={() => void copyGrowthText(entry.url, `${entry.label} link`)}>
+                {entry.url}
+              </button>
+            </li>
+          ))}
+          {link.entries.length > 1 ? (
+            <li className="text-[11px] text-[#8b95a1]">The short URL lets people pick; add ?via=instagram to skip the choice.</li>
+          ) : null}
+        </ul>
+      ) : link.telegramUrl ? (
         <p className="mt-0.5 break-all text-[12px] text-[#6b7280]">{link.telegramUrl}</p>
       ) : (
         <p className="mt-0.5 text-[12px] text-[#6b7280]">Connect an account with a public handle to get a deep link.</p>
@@ -58,7 +72,7 @@ export function GrowthLinkShareActions({
         >
           Copy short URL
         </Button>
-        {link.telegramUrl ? (
+        {link.telegramUrl && !link.entries?.length ? (
           <Button
             size="sm"
             variant="ghost"

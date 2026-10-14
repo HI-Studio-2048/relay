@@ -2,6 +2,7 @@ import { RadioTower } from "lucide-react";
 import { PageHeader } from "@/components/chrome/page-header";
 import { ConnectedApps, type ConnectedApp } from "@/components/connected-apps";
 import { currentUserId } from "@/lib/auth";
+import { zernioConfigured } from "@/lib/channels/zernio";
 import { listConnections } from "@/lib/oauth/connections";
 import { PROVIDER_IDS, PROVIDERS, providerConfigured } from "@/lib/oauth/providers";
 import { ChannelsManager } from "./channels-manager";
@@ -34,7 +35,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
         tone="start"
         description="Connect the accounts this brand talks through. DMs from all of them land in one Live Chat and can trigger the same flows."
       />
-      <ChannelsManager notice={notice} />
+      <ChannelsManager notice={notice} metaReady={zernioConfigured()} />
       <ConnectedApps apps={apps} />
     </div>
   );

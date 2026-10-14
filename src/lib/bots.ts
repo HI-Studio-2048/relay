@@ -7,6 +7,7 @@ import { checkBlueskyOauthAccount, revokeBlueskySession } from "@/lib/channels/b
 import { fetchSlackIdentity } from "@/lib/channels/slack";
 import { graphGet } from "@/lib/channels/meta";
 import { channelOf, type ChannelId } from "@/lib/channels/types";
+import { deleteZernioProfile, disconnectZernioAccount, ensureZernioProfile, listZernioAccounts, zernioCompanyKey, type ZernioAccount } from "@/lib/channels/zernio";
 import { and, eq } from "drizzle-orm";
 import { decryptSecret, encryptSecret, randomSecret } from "@/lib/crypto";
 import { getDb } from "@/lib/db";
@@ -30,6 +31,8 @@ export function publicBot(row: typeof bots.$inferSelect) {
     discordShared: row.settings?.discordShared === true,
     verifyToken: channelOf(row.channel) === "telegram" ? null : row.webhookSecret,
     webhookUrl: row.webhookUrl,
+    /** Zernio: the social accounts this key routes, for badges and the account picker. */
+    linkedAccounts: (row.settings?.zernioAccounts as LinkedAccount[] | undefined) ?? [],
     status: row.status,
     lastHealthAt: row.lastHealthAt ? row.lastHealthAt.toISOString() : null,
     lastHealthError: row.lastHealthError,
@@ -37,11 +40,122 @@ export function publicBot(row: typeof bots.$inferSelect) {
   };
 }
 
+export type LinkedAccount = {
+  id: string;
+  platform: string;
+  username: string | null;
+  picture: string | null;
+  /** Zernio lost access (token expired or permissions revoked): the person must reconnect. */
+  needsReconnection?: boolean;
+};
+
+function linkedAccounts(accounts: ZernioAccount[]): LinkedAccount[] {
+  return accounts.map((account) => ({
+    id: account._id,
+    platform: account.platform,
+    username: account.username ?? account.displayName ?? null,
+    picture: account.profilePicture ?? null,
+    needsReconnection: Boolean(account.needsReconnection) || account.isActive === false,
+  }));
+}
+
+function zernioName(accounts: LinkedAccount[]) {
+  if (accounts.length === 1) return `${accounts[0]!.username ? `@${accounts[0]!.username}` : accounts[0]!.platform} (Meta)`;
+  return accounts.length ? `Meta · ${accounts.length} accounts` : "Meta (Instagram, Messenger, WhatsApp)";
+}
+
 /** One channel account can only live in one workspace; refuse to take it over from another user. */
 function assertOwnable(match: typeof bots.$inferSelect | undefined, ownerId: string) {
   if (match?.ownerId && match.ownerId !== ownerId) {
     throw new Error("This account is already connected to another Recatch workspace");
   }
+}
+
+/** Recatch's one Zernio key, or an error that says what is missing. */
+export function requireZernioKey() {
+  const key = zernioCompanyKey();
+  if (!key) throw new Error("Instagram, Messenger and WhatsApp are not switched on yet (ZERNIO_API_KEY is not set)");
+  return key;
+}
+
+/** The profile id Zernio holds for one Recatch user. The profile's externalId is the user id, so it is never made twice. */
+export async function zernioProfileFor(ownerId: string) {
+  return ensureZernioProfile(requireZernioKey(), ownerId, `Recatch ${ownerId.slice(0, 8)}`);
+}
+
+/** The Meta account (one per Recatch user) that Instagram, Messenger and WhatsApp connect into. */
+export async function findZernioBot(ownerId: string) {
+  const db = await getDb();
+  const rows = await db.select().from(bots).where(and(eq(bots.ownerId, ownerId), eq(bots.channel, "zernio")));
+  return rows.find((row) => row.settings?.zernioManaged === true);
+}
+
+/**
+ * Bring the user's Meta account in line with what Zernio holds for their profile: create the account the first
+ * time something is connected, refresh the account list, and keep its status honest. Only accounts inside
+ * this user's profile are ever read.
+ */
+export async function syncZernioBot(ownerId: string, origin?: string) {
+  const apiKey = requireZernioKey();
+  const profileId = await zernioProfileFor(ownerId);
+  const accounts = linkedAccounts(await listZernioAccounts(apiKey, profileId));
+  const db = await getDb();
+  const match = await findZernioBot(ownerId);
+  if (!match && accounts.length === 0) return null;
+  const id = match?.id ?? crypto.randomUUID();
+  const originUrl = publicUrl(origin);
+  const lost = accounts.filter((account) => account.needsReconnection).length;
+  const error = !originUrl
+    ? "PUBLIC_URL not set, so Zernio cannot reach this server"
+    : accounts.length === 0
+      ? "No accounts connected. Connect Instagram, Messenger or WhatsApp."
+      : lost
+        ? `${lost} account${lost === 1 ? " needs" : "s need"} reconnecting`
+        : null;
+  const values = {
+    ownerId,
+    name: zernioName(accounts),
+    channel: "zernio",
+    telegramUsername: accounts.length === 1 ? accounts[0]!.username : null,
+    telegramBotId: null,
+    externalAccountId: null,
+    // The key is read from the environment when a message goes out, so this only fills the column.
+    tokenEncrypted: encryptSecret("managed"),
+    appSecretEncrypted: null,
+    webhookSecret: match?.webhookSecret ?? randomSecret(),
+    webhookUrl: originUrl ? `${originUrl}/api/zernio/webhook` : null,
+    settings: { ...(match?.settings ?? {}), zernioManaged: true, zernioProfileId: profileId, zernioAccounts: accounts } as Record<string, unknown>,
+    status: accounts.length && !lost ? "connected" : "error",
+    lastHealthAt: new Date(),
+    lastHealthError: error,
+    updatedAt: new Date(),
+  };
+  if (match) await db.update(bots).set(values).where(eq(bots.id, id));
+  else await db.insert(bots).values({ id, ...values });
+  if (!match) await seedBotDefaults(id);
+  const [row] = await db.select().from(bots).where(eq(bots.id, id)).limit(1);
+  return publicBot(row!);
+}
+
+/** Disconnect one account from the user's profile. Refuses ids that are not in it. */
+export async function disconnectZernioFor(ownerId: string, accountId: string, origin?: string) {
+  const apiKey = requireZernioKey();
+  const profileId = await zernioProfileFor(ownerId);
+  const owned = (await listZernioAccounts(apiKey, profileId)).find((account) => account._id === accountId);
+  if (!owned) throw new Error("That account isn't connected here");
+  await disconnectZernioAccount(apiKey, accountId);
+  await syncZernioBot(ownerId, origin);
+  return { platform: owned.platform, username: owned.username ?? null };
+}
+
+/** A user's Meta account is being deleted: stop billing for it by disconnecting its accounts and dropping the profile. */
+export async function releaseZernioBot(row: typeof bots.$inferSelect) {
+  if (row.settings?.zernioManaged !== true || !row.ownerId) return;
+  const apiKey = zernioCompanyKey();
+  const profileId = row.settings?.zernioProfileId as string | undefined;
+  if (!apiKey || !profileId) return;
+  for (const account of await listZernioAccounts(apiKey, profileId)) await disconnectZernioAccount(apiKey, account._id);
+  await deleteZernioProfile(apiKey, profileId);
 }
 
 export async function connectBot(token: string, ownerId: string, origin?: string) {
@@ -380,6 +494,7 @@ export async function connectChannelAccount(input: ChannelConnectInput) {
   if (input.channel === "discord") return connectDiscord(input);
   if (input.channel === "slack") return connectSlack(input);
   if (input.channel === "bluesky") return connectBluesky(input);
+  if (input.channel === "zernio") throw new Error("Connect Instagram, Messenger or WhatsApp from the Channels page");
   const token = input.token.trim();
   const accountId = (input.externalAccountId ?? "").trim();
   if (!accountId) {
@@ -428,6 +543,11 @@ export async function healthCheckBot(botId: string, origin?: string) {
   const db = await getDb();
   const [bot] = await db.select().from(bots).where(eq(bots.id, botId)).limit(1);
   if (!bot) throw new Error("Bot not found");
+  if (channelOf(bot.channel) === "zernio") {
+    if (!bot.ownerId) throw new Error("This account has no owner yet; sign in as the workspace owner first");
+    const refreshed = await syncZernioBot(bot.ownerId, origin);
+    return { bot: refreshed ?? publicBot(bot), webhook: null, me: null };
+  }
   const token = decryptSecret(bot.tokenEncrypted);
   if (channelOf(bot.channel) === "discord" && bot.settings?.discordShared === true) {
     let error: string | null = null;

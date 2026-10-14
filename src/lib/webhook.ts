@@ -11,7 +11,7 @@ import {
 } from "@/lib/channels";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
-import { aiConfigured, classifyIntent, readAiSettings } from "@/lib/ai";
+import { aiConfigured, classifyIntent, readAiSettings, writeCommentReply } from "@/lib/ai";
 import { readAiProvider } from "@/lib/ai-provider";
 import { intentFlows, routeToIntent, shouldCheckIntents } from "@/lib/intents";
 import { isWithinHours, readHours } from "@/lib/starters";
@@ -19,7 +19,11 @@ import { emitWebhookSoon, publicContact } from "@/lib/developer";
 import { buttonSourceStep, recordFlowEvents } from "@/lib/analytics";
 import { runAiAutoReply } from "@/lib/ai-runtime";
 import { applyAutoTags } from "@/lib/auto-tags";
-import { deliverReplies } from "@/lib/flow-dispatch";
+import { hideZernioComment, replyToZernioComment, sendZernioPrivateReply } from "@/lib/channels/zernio";
+import { moderationReason, readModeration } from "@/lib/social-triggers";
+import { deliverReplies, loadBotFieldValues } from "@/lib/flow-dispatch";
+import { interpolateTemplate } from "@/lib/flow-effects";
+import { outboundPreview } from "@/lib/media";
 import { applyFlowEffects } from "@/lib/flow-effects";
 import { processInboundEvent, type EngineResult } from "@/lib/flow-engine";
 import { SLUG_PATTERN } from "@/lib/growth";
@@ -46,7 +50,7 @@ import {
   hasOpenCsatRequest,
 } from "@/lib/store";
 import type { TelegramUpdate } from "@/lib/telegram";
-import { stepButtons, type FlowStep } from "@/lib/types";
+import { stepButtons, type ContactRecord, type FlowSessionState, type FlowStep, type OutboundReply } from "@/lib/types";
 
 type BotRow = typeof bots.$inferSelect;
 
@@ -177,6 +181,39 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
   };
   const kind = inbound.kind ?? "message";
 
+  // Comment moderation runs before any automation: a hidden comment gets no reply at all.
+  const commentRef =
+    kind === "comment" && inbound.comment && account.channel === "zernio" && inbound.channelAccountId
+      ? { accountId: inbound.channelAccountId, postId: inbound.comment.postId, commentId: inbound.comment.id, platform: inbound.platform ?? null }
+      : null;
+  const hideReason = commentRef ? moderationReason(readModeration(bot.settings), text ?? "") : null;
+  if (commentRef && hideReason) {
+    try {
+      await hideZernioComment(account.token, commentRef);
+    } catch (error) {
+      log.warn("Hiding a comment failed", error instanceof Error ? error.message : error);
+    }
+    const base = existing ?? prepared;
+    const record = base ?? {
+      id: crypto.randomUUID(),
+      telegramUserId: externalUserId,
+      username: profile.username,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      email: null,
+      phone: null,
+      customFields: {},
+      tags: [],
+      platform: inbound.platform ?? null,
+      channelAccountId: inbound.channelAccountId ?? null,
+      avatarUrl: inbound.avatarUrl ?? null,
+    };
+    await persistContact(botId, record);
+    await saveMessage({ botId, contactId: record.id, direction: "inbound", source: "user", body: `[comment] ${text ?? ""}`.trim() });
+    await saveMessage({ botId, contactId: record.id, direction: "outbound", source: "flow", body: `[public reply] Hidden automatically (${hideReason})` });
+    return;
+  }
+
   // Live Chat takeover: a teammate (or an AI hand-off) is handling this person. Log the message or
   // comment and leave it for them — no flow, keyword, comment automation or AI reply.
   const paused = Boolean(existing?.botPausedUntil && isBotPaused({ botPausedUntil: existing.botPausedUntil }));
@@ -213,7 +250,7 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
   let contact = result.contact;
   if (growth) contact = applyGrowthAttribution(contact, growth);
   if (inbound.profileFields) contact = { ...contact, customFields: { ...contact.customFields, ...inbound.profileFields } };
-  // Remember where this person lives so later sends (flows, broadcasts, live chat) can reach them.
+  // Hub channels: remember where this person lives so later sends (flows, broadcasts, live chat) can reach them.
   contact = {
     ...contact,
     platform: inbound.platform ?? contact.platform ?? null,
@@ -279,7 +316,38 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
     ...(result.completedFlowIds ?? []).map((flowId) => ({ botId, flowId, contactId: contact.id, kind: "complete" as const })),
   ]);
 
-  await deliverReplies({ botId, account, contact, replies: result.replies });
+  let replies = result.replies;
+  if (kind === "comment" && inbound.comment && account.channel === "zernio" && inbound.channelAccountId) {
+    let publicReply = result.publicReply ?? null;
+    const commentFlow = result.matchedFlowId ? flows.find((flow) => flow.id === result.matchedFlowId) : null;
+    const commentConfig = commentFlow?.definition.trigger;
+    if (commentConfig?.aiPublicReply && aiConfigured(readAiProvider(bot.settings))) {
+      try {
+        publicReply = await writeCommentReply({
+          provider: readAiProvider(bot.settings),
+          comment: text ?? "",
+          postCaption: inbound.comment.postCaption ?? null,
+          examples: commentConfig.publicReplies ?? [],
+          settings: readAiSettings(bot.settings),
+          brandName: bot.name,
+        });
+      } catch (error) {
+        log.warn("AI comment reply failed; using a preset", error instanceof Error ? error.message : error);
+      }
+    }
+    const answered = await answerComment(botId, account, contact, inbound, publicReply, replies);
+    replies = [];
+    if (answered.session !== undefined) await persistSession(contact.id, answered.session);
+    const matched = result.matchedFlowId ? flows.find((flow) => flow.id === result.matchedFlowId) : null;
+    if (matched?.definition.trigger?.hideAfterReply && commentRef) {
+      try {
+        await hideZernioComment(account.token, commentRef);
+      } catch (error) {
+        log.warn("Hiding a comment failed", error instanceof Error ? error.message : error);
+      }
+    }
+  }
+  await deliverReplies({ botId, account, contact, replies });
 
   // Effects run after the replies: a typing indicator belongs after the text it follows,
   // and webhooks/notifications should describe a message that has already gone out.
@@ -287,7 +355,7 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
 
   // AI auto-reply: nothing matched, nobody is mid-flow, and the account turned AI answers on.
   const unanswered =
-    result.replies.length === 0 &&
+    replies.length === 0 &&
     result.effects.length === 0 &&
     !inbound.callbackData &&
     (kind === "message" || kind === "story_reply") &&
@@ -331,6 +399,81 @@ function inboundLabel(kind: string, text: string | null) {
   if (kind === "story_reply") return `[story reply] ${text ?? ""}`.trim();
   if (kind === "story_mention") return "[mentioned you in their story]";
   return null;
+}
+
+/**
+ * Comment → DM. The public reply goes under the comment; the first flow message goes out as a
+ * private reply (the only DM Instagram/Facebook allow before the person writes back). Anything after
+ * it waits for a tap: the flow's own button, or a Continue button Recatch adds when there is none.
+ * Platforms without private replies (TikTok, YouTube, LinkedIn…) only get the public reply.
+ * Returns the session to store (undefined keeps the engine's).
+ */
+async function answerComment(
+  botId: string,
+  account: ChannelAccount,
+  contact: ContactRecord,
+  inbound: NormalizedInbound,
+  publicReply: string | null,
+  replies: OutboundReply[],
+): Promise<{ session: FlowSessionState | null | undefined }> {
+  const ref = {
+    accountId: inbound.channelAccountId!,
+    postId: inbound.comment!.postId,
+    commentId: inbound.comment!.id,
+    platform: inbound.platform ?? null,
+  };
+  if (publicReply) {
+    try {
+      const textReply = interpolateTemplate(publicReply, contact, await loadBotFieldValues(botId));
+      await replyToZernioComment(account.token, ref, textReply);
+      await saveMessage({ botId, contactId: contact.id, direction: "outbound", source: "flow", body: `[public reply] ${textReply}` });
+    } catch (error) {
+      log.warn("Public comment reply failed", error instanceof Error ? error.message : error);
+    }
+  }
+  const [first, ...rest] = replies;
+  if (!first) return { session: undefined };
+  // A private reply cannot carry a carousel: open with a button that shows the gallery as a normal DM.
+  const galleryStep = first.cards?.length && first.stepId && first.flowId ? first.stepId : null;
+  const opening: OutboundReply = galleryStep
+    ? { ...first, cards: undefined, text: first.text.trim() || "Here you go 👇", buttons: [{ text: "Show me", data: `n:${galleryStep}` }] }
+    : first;
+  const supportsPrivate = ref.platform === "instagram" || ref.platform === "facebook";
+  // TikTok, YouTube, LinkedIn…: only the public reply is possible, so do not leave a flow running.
+  if (!supportsPrivate) return { session: null };
+  // One private reply is allowed until the person answers. If the opening message has no button,
+  // add a Continue button that resumes the flow at the next message instead of dropping it.
+  const hasCallback = (opening.buttons ?? []).some((button) => button.data?.startsWith("n:"));
+  const held = rest.find((reply) => reply.stepId);
+  const withContinue =
+    !hasCallback && held?.stepId
+      ? { ...opening, buttons: [...(opening.buttons ?? []), { text: "Continue", data: `n:${held.stepId}` }] }
+      : opening;
+  let session: FlowSessionState | null | undefined;
+  if (galleryStep) {
+    session = { id: crypto.randomUUID(), contactId: contact.id, flowId: opening.flowId!, stepId: galleryStep, awaitingInput: false, status: "active" };
+  } else if (!hasCallback && held?.stepId && opening.flowId) {
+    session = { id: crypto.randomUUID(), contactId: contact.id, flowId: opening.flowId, stepId: held.stepId, awaitingInput: false, status: "active" };
+  }
+  try {
+    const personalized = { ...withContinue, text: interpolateTemplate(withContinue.text, contact, await loadBotFieldValues(botId)) };
+    const sent = await sendZernioPrivateReply(account.token, ref, personalized);
+    await saveMessage({
+      botId,
+      contactId: contact.id,
+      direction: "outbound",
+      source: "flow",
+      body: outboundPreview(personalized.text, opening.media),
+      telegramMessageId: sent.message_id || null,
+    });
+    if (opening.flowId) {
+      await recordFlowEvents([{ botId, flowId: opening.flowId, stepId: opening.stepId, contactId: contact.id, kind: "sent" }]);
+    }
+  } catch (error) {
+    log.warn("Private reply failed", error instanceof Error ? error.message : error);
+    return { session: null };
+  }
+  return { session };
 }
 
 /** Telegram does not echo the button text, so read it back from the flow that drew the button. */

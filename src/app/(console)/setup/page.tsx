@@ -18,6 +18,8 @@ import { TagsCard } from "@/components/tags-card";
 import { ActivityCard } from "@/components/activity-card";
 
 const GUIDES: Record<ChannelId, { title: string; steps: string[]; tokenLabel: string; accountLabel?: string }> = {
+  // Never offered in the picker: Meta accounts are added from the Channels page.
+  zernio: { title: "Instagram, Messenger and WhatsApp", tokenLabel: "", steps: ["Connect these from the Channels page."] },
   telegram: {
     title: "Telegram bot",
     tokenLabel: "Bot token",
@@ -214,7 +216,7 @@ export default function SetupPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            {CHANNEL_IDS.map((id) => (
+            {CHANNEL_IDS.filter((id) => id !== "zernio").map((id) => (
               <button
                 key={id}
                 type="button"

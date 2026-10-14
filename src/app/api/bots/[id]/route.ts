@@ -1,7 +1,7 @@
 import { requireBotAccess } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 import { assertConfirm } from "@/lib/broadcast";
-import { getBot } from "@/lib/bots";
+import { getBot, releaseZernioBot } from "@/lib/bots";
 import { decryptSecret } from "@/lib/crypto";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
@@ -43,6 +43,15 @@ export async function DELETE(request: Request, context: RouteParams<{ id: string
     if (row.channel === "slack" && row.settings?.slackInstalled === true) await revokeSlackToken(decryptSecret(row.tokenEncrypted));
     // A Bluesky account that signed in with OAuth signs out at Bluesky too.
     if (row.channel === "bluesky" && row.settings?.blueskyOauth === true) await revokeBlueskySession(String(row.externalAccountId));
+    // A Meta account stops billing at Zernio when it goes: its accounts are disconnected and its profile dropped.
+    let zernioWarning: string | null = null;
+    if (row.channel === "zernio") {
+      try {
+        await releaseZernioBot(row);
+      } catch (error) {
+        zernioWarning = `The account was removed, but Zernio did not release its connected accounts (${error instanceof Error ? error.message : "error"}). Disconnect them in the Zernio dashboard so they stop being billed.`;
+      }
+    }
     const left = row.channel === "discord" && row.settings?.discordShared === true ? await leaveDiscordGuild(String(row.settings.discordGuildId)) : null;
     await db.delete(bots).where(eq(bots.id, id));
     if (row.channel === "discord") {
@@ -50,7 +59,7 @@ export async function DELETE(request: Request, context: RouteParams<{ id: string
       await syncDiscordGateways();
     }
     // The account is gone either way; if the bot could not leave the server, say so and why.
-    return json({ ok: true, ...(left && !left.left ? { warning: `The account was removed, but the bot could not leave the Discord server (${left.reason}). Remove the Recatch bot from the server in Discord.` } : {}) });
+    return json({ ok: true, ...(zernioWarning ? { warning: zernioWarning } : {}), ...(left && !left.left ? { warning: `The account was removed, but the bot could not leave the Discord server (${left.reason}). Remove the Recatch bot from the server in Discord.` } : {}) });
   } catch (error) {
     return fail(error);
   }

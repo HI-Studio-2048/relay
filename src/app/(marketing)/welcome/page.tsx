@@ -193,7 +193,7 @@ export default function WelcomePage() {
         <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-6 px-4 py-10 md:flex-row md:justify-between md:px-8">
           <p className="text-[14px] font-medium text-[#6b7280]">One workspace for every channel</p>
           <ul className="flex flex-wrap justify-center gap-3">
-            {CHANNEL_IDS.map((id) => (
+            {CHANNEL_IDS.filter((id) => id !== "zernio").map((id) => (
               <li
                 key={id}
                 className="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-[14px] font-medium text-[#1b1f24] ring-1 ring-[#e5e7eb]"

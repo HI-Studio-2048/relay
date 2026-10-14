@@ -7,7 +7,7 @@ const hoursAgo = (hours: number) => new Date(now - hours * 3_600_000).toISOStrin
 
 describe("messaging window", () => {
   it("is open for 24 hours after the last inbound message", () => {
-    expect(messagingWindow("instagram", null, hoursAgo(5), now)).toEqual({ kind: "open", hoursLeft: 19 });
+    expect(messagingWindow("instagram", "zernio", hoursAgo(5), now)).toEqual({ kind: "open", hoursLeft: 19 });
   });
 
   it("allows human agent replies on Instagram / Messenger for 7 days", () => {
@@ -16,12 +16,12 @@ describe("messaging window", () => {
   });
 
   it("closes WhatsApp after 24 hours", () => {
-    expect(messagingWindow("whatsapp", null, hoursAgo(25), now)).toEqual({ kind: "closed", whatsapp: true });
+    expect(messagingWindow("whatsapp", "zernio", hoursAgo(25), now)).toEqual({ kind: "closed", whatsapp: true });
   });
 
   it("does not apply to Telegram or networks without a window", () => {
     expect(messagingWindow(null, "telegram", hoursAgo(1000), now)).toEqual({ kind: "none" });
-    expect(messagingWindow("tiktok", null, hoursAgo(1000), now)).toEqual({ kind: "none" });
+    expect(messagingWindow("tiktok", "zernio", hoursAgo(1000), now)).toEqual({ kind: "none" });
   });
 
   it("keeps the Meta message body unchanged for human agent replies", () => {

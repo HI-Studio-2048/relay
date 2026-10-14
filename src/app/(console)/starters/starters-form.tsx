@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Clock, Menu, MessageCircleQuestion, Plus, X, Smile } from "lucide-react";
+import { Clock, Menu, MessageCircleQuestion, Plus, ShieldCheck, X, Smile } from "lucide-react";
 import { toast } from "sonner";
 import { Panel } from "@/components/chrome/panel";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import type { CsatSettings } from "@/lib/csat";
 import { api } from "@/lib/client";
 import type { ChannelId } from "@/lib/channels/types";
 import { WEEKDAYS, type BusinessHours, type StarterItem, type StartersSettings } from "@/lib/starters";
+import type { ModerationSettings } from "@/lib/social-triggers";
 
 const DAY_LABEL: Record<(typeof WEEKDAYS)[number], string> = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
 
@@ -82,6 +83,7 @@ export function StartersForm({
   flows,
   initialStarters,
   initialHours,
+  initialModeration,
   initialCsat,
 }: {
   botId: string;
@@ -89,13 +91,16 @@ export function StartersForm({
   flows: { id: string; name: string }[];
   initialStarters: StartersSettings;
   initialHours: BusinessHours;
+  initialModeration: ModerationSettings;
   initialCsat: CsatSettings;
 }) {
   const [csat, setCsat] = useState(initialCsat);
   const [starters, setStarters] = useState(initialStarters);
   const [hours, setHours] = useState(initialHours);
   const [saving, setSaving] = useState(false);
-  const metaCapable = channel === "instagram" || channel === "messenger";
+  const [moderation, setModeration] = useState(initialModeration);
+  const [wordsText, setWordsText] = useState(initialModeration.words.join(", "));
+  const metaCapable = channel === "zernio" || channel === "instagram" || channel === "messenger";
 
   const save = async () => {
     setSaving(true);
@@ -106,6 +111,7 @@ export function StartersForm({
           starters,
           hours,
           csat,
+          moderation: { ...moderation, words: wordsText.split(/[,\n]+/).map((word) => word.trim()).filter(Boolean) },
         }),
       });
       const failed = data.sync.filter((item) => !item.ok);
@@ -209,6 +215,20 @@ export function StartersForm({
         </div>
         <Textarea rows={2} value={hours.awayMessage} onChange={(event) => setHours({ ...hours, awayMessage: event.target.value })} />
       </Panel>
+
+      {channel === "zernio" ? (
+        <Panel tone="stop" icon={ShieldCheck} label="Comment moderation" title="Hide spam and abuse before anyone sees it">
+          <label className="flex items-center gap-2 text-[13px]">
+            <input type="checkbox" checked={moderation.enabled} onChange={(event) => setModeration({ ...moderation, enabled: event.target.checked })} />
+            Hide comments that match — they get no reply and are logged in Live Chat
+          </label>
+          <Textarea rows={2} value={wordsText} onChange={(event) => setWordsText(event.target.value)} placeholder="scam, crypto, dm me, free followers" />
+          <label className="flex items-center gap-2 text-[13px]">
+            <input type="checkbox" checked={moderation.hideLinks} onChange={(event) => setModeration({ ...moderation, hideLinks: event.target.checked })} />
+            Also hide comments with links
+          </label>
+        </Panel>
+      ) : null}
 
       <Panel tone="input" icon={Smile} label="Satisfaction survey" title="Ask how it went when a chat is done">
         <label className="flex items-center gap-2 text-[13px]">

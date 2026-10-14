@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { CheckCircle2, TriangleAlert } from "lucide-react";
 import { useBot } from "@/components/bot-provider";
 import { CanvasCard } from "@/components/chrome/tone";
 import { Button } from "@/components/ui/button";
+import { api } from "@/lib/client";
+import { PlatformDot, platformLabel } from "@/components/chrome/platform-badge";
 import { CHANNEL_CATALOG, type CatalogEntry } from "@/lib/channels/catalog";
 import { CHANNELS } from "@/lib/channels/types";
 import { cn } from "@/lib/utils";
@@ -50,9 +53,40 @@ function statusChip(status: string) {
 }
 
 /** Every channel Recatch has or is building. Connectable ones open Setup, the rest are greyed out. */
-export function ChannelsManager({ notice }: { notice: Notice }) {
+export function ChannelsManager({ notice, metaReady }: { notice: Notice; metaReady: boolean }) {
   const router = useRouter();
-  const { bots, bot, setBotId } = useBot();
+  const { bots, bot, setBotId, refresh } = useBot();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const metaBot = bots.find((item) => item.channel === "zernio");
+  const metaAccounts = metaBot?.linkedAccounts ?? [];
+
+  /** Sends the browser to the Meta consent screen; it comes back to /api/zernio/callback. */
+  const connectMeta = async (platform: string, reconnectAccountId?: string) => {
+    setBusy(reconnectAccountId ?? platform);
+    setProblem(null);
+    try {
+      const data = await api<{ authUrl: string }>("/api/zernio/connect", { method: "POST", body: JSON.stringify({ platform, reconnectAccountId: reconnectAccountId ?? null }) });
+      window.location.href = data.authUrl;
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : "Could not start the connection");
+      setBusy(null);
+    }
+  };
+
+  const disconnectMeta = async (accountId: string) => {
+    if (!window.confirm("Disconnect this account? DMs and comments from it stop arriving in Recatch.")) return;
+    setBusy(accountId);
+    setProblem(null);
+    try {
+      await api(`/api/zernio/accounts/${encodeURIComponent(accountId)}`, { method: "DELETE", body: JSON.stringify({ confirm: true }) });
+      await refresh();
+    } catch (error) {
+      setProblem(error instanceof Error ? error.message : "Could not disconnect");
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const counts = new Map<string, number>();
   for (const item of bots) counts.set(item.channel, (counts.get(item.channel) ?? 0) + 1);
@@ -67,6 +101,7 @@ export function ChannelsManager({ notice }: { notice: Notice }) {
   return (
     <div className="space-y-5">
       <NoticeBar notice={notice} />
+      <NoticeBar notice={problem ? { tone: "error", text: problem } : null} />
 
       <CanvasCard className="space-y-3 p-4">
         <div>
@@ -103,12 +138,41 @@ export function ChannelsManager({ notice }: { notice: Notice }) {
         ) : null}
       </CanvasCard>
 
+      {metaAccounts.length ? (
+        <CanvasCard className="space-y-3 p-4">
+          <div>
+            <p className="font-heading text-[15px] text-[#1b1f24]">Instagram, Messenger and WhatsApp</p>
+            <p className="text-[12px] text-[#6b7280]">DMs and comments from these accounts share one inbox and one set of flows.</p>
+          </div>
+          <ul className="divide-y divide-[#f0f2f4]">
+            {metaAccounts.map((account) => (
+              <li key={account.id} className="flex flex-wrap items-center gap-3 py-2.5">
+                <PlatformDot platform={account.platform} />
+                <p className="min-w-0 flex-1 truncate text-[14px] text-[#1b1f24]">
+                  {platformLabel(account.platform)}
+                  {account.username ? <span className="ml-1.5 text-[#6b7280]">@{account.username.replace(/^@/, "")}</span> : null}
+                </p>
+                {account.needsReconnection ? (
+                  <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => void connectMeta(account.platform, account.id)}>
+                    Reconnect
+                  </Button>
+                ) : null}
+                <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => void disconnectMeta(account.id)}>
+                  Disconnect
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </CanvasCard>
+      ) : null}
+
       <div className="space-y-2">
         <p className="font-heading text-[15px] text-[#1b1f24]">Connect a channel</p>
         <p className="text-[13px] text-[#6b7280]">You sign in on the platform&apos;s own screen, or paste a token where the platform has no sign-in for apps. Nothing is posted for you.</p>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {ready.map((entry) => {
-            const connected = entry.channel ? (counts.get(entry.channel) ?? 0) : 0;
+            const viaMeta = metaReady && entry.meta;
+            const connected = viaMeta ? metaAccounts.filter((account) => account.platform === entry.meta).length : entry.channel ? (counts.get(entry.channel) ?? 0) : 0;
             return (
               <CanvasCard key={entry.id} className="flex items-center gap-3 p-3">
                 <Mark entry={entry} />
@@ -118,16 +182,22 @@ export function ChannelsManager({ notice }: { notice: Notice }) {
                     {connected ? <span className="ml-1.5 text-[11px] font-normal text-[#067647]">{connected} connected</span> : null}
                   </p>
                   <p className="text-[12px] leading-snug text-[#6b7280]">{entry.what}</p>
-                  <p className="mt-0.5 text-[11px] leading-snug text-[#8b95a1]">{entry.how}</p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-[#8b95a1]">{viaMeta ? "Sign in with Facebook, one click" : entry.how}</p>
                 </div>
-                <Button
-                  size="sm"
-                  variant={connected ? "outline" : "default"}
-                  nativeButton={false}
-                  render={<Link href={`/setup?channel=${entry.channel}`} />}
-                >
-                  {connected ? "Add another" : "Connect"}
-                </Button>
+                {viaMeta ? (
+                  <Button size="sm" variant={connected ? "outline" : "default"} disabled={busy !== null} onClick={() => void connectMeta(entry.meta!)}>
+                    {busy === entry.meta ? "Opening..." : connected ? "Add another" : "Connect"}
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant={connected ? "outline" : "default"}
+                    nativeButton={false}
+                    render={<Link href={`/setup?channel=${entry.channel}`} />}
+                  >
+                    {connected ? "Add another" : "Connect"}
+                  </Button>
+                )}
               </CanvasCard>
             );
           })}

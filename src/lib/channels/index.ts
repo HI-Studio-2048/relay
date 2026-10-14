@@ -12,6 +12,7 @@ import {
   type NormalizedInbound,
   type SentMessage,
 } from "@/lib/channels/types";
+import { parseZernioWebhook, sendZernioReply, sendZernioTyping, type ZernioWebhookPayload } from "@/lib/channels/zernio";
 import { parseWhatsAppWebhook, sendWhatsAppReply, type WhatsAppWebhookPayload } from "@/lib/channels/whatsapp";
 import { answerCallbackQuery, sendChatAction, sendFlowReply, type TelegramUpdate } from "@/lib/telegram";
 import type { OutboundReply } from "@/lib/types";
@@ -25,8 +26,13 @@ export function accountFromRow(row: BotRow): ChannelAccount {
   return {
     id: row.id,
     channel: channelOf(row.channel),
-    // Servers added through Add to Discord use the one shared bot, so there is no token of their own to decrypt.
-    token: row.channel === "discord" && row.settings?.discordShared === true ? (process.env.DISCORD_BOT_TOKEN?.trim() ?? "") : decryptSecret(row.tokenEncrypted),
+    // Servers added through Add to Discord use the one shared bot, and Meta accounts use the company Zernio key, so neither has a token of its own to decrypt.
+    token:
+      row.channel === "discord" && row.settings?.discordShared === true
+        ? (process.env.DISCORD_BOT_TOKEN?.trim() ?? "")
+        : row.channel === "zernio" && row.settings?.zernioManaged === true
+          ? (process.env.ZERNIO_API_KEY?.trim() ?? "")
+          : decryptSecret(row.tokenEncrypted),
     externalAccountId: row.externalAccountId ?? null,
     handle: row.telegramUsername ?? null,
     appSecret: row.appSecretEncrypted ? decryptSecret(row.appSecretEncrypted) : null,
@@ -52,6 +58,7 @@ export async function sendChannelReply(
     for (const part of cardsAsReplies(reply)) last = await sendChannelReply(account, target, part);
     return last;
   }
+  if (account.channel === "zernio") return sendZernioReply(account, target, reply);
   if (account.channel === "telegram") {
     const sent = await sendFlowReply(account.token, to, reply);
     return { message_id: String(sent.message_id) };
@@ -66,6 +73,7 @@ export async function sendChannelReply(
 export async function sendChannelTyping(account: ChannelAccount, recipient: string | ChannelTarget) {
   const target = toTarget(recipient);
   const to = target.externalUserId;
+  if (account.channel === "zernio") return sendZernioTyping(account, target);
   if (account.channel === "telegram") return void (await sendChatAction(account.token, to, "typing"));
   if (account.channel === "whatsapp" || account.channel === "slack" || account.channel === "bluesky") return;
   if (account.channel === "discord") return sendDiscordTyping(account, to);
@@ -112,6 +120,7 @@ export function parseTelegramUpdate(update: TelegramUpdate): NormalizedInbound[]
 
 /** Normalize any channel's webhook body into engine events. */
 export function parseChannelUpdate(account: ChannelAccount, payload: unknown): NormalizedInbound[] {
+  if (account.channel === "zernio") return parseZernioWebhook(payload as ZernioWebhookPayload, account.externalAccountId);
   if (account.channel === "telegram") return parseTelegramUpdate(payload as TelegramUpdate);
   if (account.channel === "whatsapp") return parseWhatsAppWebhook(payload as WhatsAppWebhookPayload);
   if (account.channel === "discord") return parseDiscordEvent(payload as DiscordGatewayEvent);

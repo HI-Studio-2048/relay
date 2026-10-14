@@ -15,6 +15,8 @@ export type CatalogEntry = {
   color: string;
   what: string;
   state: CatalogState;
+  /** The network name the Meta sign-in uses, when this channel can connect that way. */
+  meta?: "instagram" | "facebook" | "whatsapp";
   /** The channel id Setup opens for, when it is connectable. */
   channel?: ChannelId;
   /** One line on how it connects, or why it is not ready. */
@@ -26,9 +28,9 @@ export const CHANNEL_CATALOG: CatalogEntry[] = [
   { id: "slack", label: "Slack", mark: "SL", color: "#4A154B", what: "Direct messages to the Recatch app", state: "live", channel: "slack", how: "Add to Slack, one click" },
   { id: "discord", label: "Discord", mark: "DC", color: "#5865F2", what: "Private chats started with /chat in your server", state: "live", channel: "discord", how: "Add to Discord, one click" },
   { id: "bluesky", label: "Bluesky", mark: "bsky", color: "#1185FE", what: "Direct messages", state: "live", channel: "bluesky", how: "Sign in with Bluesky, one click" },
-  { id: "instagram", label: "Instagram", mark: "IG", color: "#E1306C", what: "DMs and story replies", state: "meta", channel: "instagram", how: "Your own Meta app and Page token for now" },
-  { id: "messenger", label: "Messenger", mark: "f", color: "#0084FF", what: "Facebook Page DMs", state: "meta", channel: "messenger", how: "Your own Meta app and Page token for now" },
-  { id: "whatsapp", label: "WhatsApp", mark: "WA", color: "#25D366", what: "WhatsApp Business conversations", state: "meta", channel: "whatsapp", how: "Your own Meta app and phone number ID for now" },
+  { id: "instagram", label: "Instagram", mark: "IG", color: "#E1306C", what: "DMs and story replies", state: "meta", channel: "instagram", meta: "instagram", how: "Your own Meta app and Page token for now" },
+  { id: "messenger", label: "Messenger", mark: "f", color: "#0084FF", what: "Facebook Page DMs", state: "meta", channel: "messenger", meta: "facebook", how: "Your own Meta app and Page token for now" },
+  { id: "whatsapp", label: "WhatsApp", mark: "WA", color: "#25D366", what: "WhatsApp Business conversations", state: "meta", channel: "whatsapp", meta: "whatsapp", how: "Your own Meta app and phone number ID for now" },
   { id: "threads", label: "Threads", mark: "@", color: "#000000", what: "Replies to your threads", state: "soon", how: "Comes with the Meta app" },
   { id: "x", label: "X", mark: "X", color: "#111111", what: "DMs and replies", state: "soon", how: "X charges for DM access" },
   { id: "tiktok", label: "TikTok", mark: "TT", color: "#FE2C55", what: "Video comments and DMs", state: "soon", how: "Sign-in works under Connected apps. Messaging needs TikTok's approval" },

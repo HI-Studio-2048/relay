@@ -13,6 +13,8 @@ export type PublicBot = {
   externalAccountId?: string | null;
   hasAppSecret?: boolean;
   discordShared?: boolean;
+  /** Meta accounts (Instagram, Messenger, WhatsApp) connected through the Meta sign-in. */
+  linkedAccounts?: { id: string; platform: string; username: string | null; needsReconnection?: boolean }[];
   verifyToken?: string | null;
   status: string;
   webhookUrl: string | null;
