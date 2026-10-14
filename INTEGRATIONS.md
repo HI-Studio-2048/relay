@@ -6,7 +6,7 @@ Where each platform stands in Recatch. Last updated on 2026-10-14. Zernio is use
 
 ## Snapshot
 
-Live on `recatch.app`: the app, the privacy, terms and data deletion pages, Connected apps (YouTube and TikTok sign-in, both tested for real), and four direct channels, each tested end to end with a real account: Telegram, Slack, Discord and Bluesky. Slack (Add to Slack), Discord (Add to Discord) and Bluesky (Sign in with Bluesky) are one click for the customer, through an app the company owns. Telegram can't be, because it has no company-wide API.
+Live on `recatch.app`: the app, the privacy, terms and data deletion pages, Connected apps (YouTube and TikTok sign-in, both tested for real), email through Amazon SES (a reset email reached a Gmail inbox on 2026-10-14), and four direct channels, each tested end to end with a real account: Telegram, Slack, Discord and Bluesky. Slack (Add to Slack), Discord (Add to Discord) and Bluesky (Sign in with Bluesky) are one click for the customer, through an app the company owns. Telegram can't be, because it has no company-wide API.
 
 Waiting on someone else (nothing for us to do until they answer):
 
