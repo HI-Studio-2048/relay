@@ -185,14 +185,18 @@ function dayLabel(iso: string) {
 
 export function ThreadView({
   contactId,
+  botId,
   initialContact,
   initialMessages,
 }: {
   contactId: string;
+  /** The account this conversation belongs to, which may differ from the sidebar's selected one. */
+  botId: string;
   initialContact: ContactRecord;
   initialMessages: Message[];
 }) {
-  const { botId, bot } = useBot();
+  const { bots } = useBot();
+  const bot = bots.find((item) => item.id === botId) ?? null;
   const [contact, setContact] = useState(initialContact);
   const [messages, setMessages] = useState(initialMessages);
   const [text, setText] = useState("");

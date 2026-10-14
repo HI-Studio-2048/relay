@@ -22,7 +22,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
   if (bot) {
     const db = await getDb();
     const [threads, awaiting] = await Promise.all([
-      listInbox(bot.id),
+      Promise.all(bots.map((item) => listInbox(item.id))).then((lists) => lists.flat()),
       db.select().from(broadcasts).where(eq(broadcasts.botId, bot.id)),
     ]);
     inboxCount = threads.length;

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { ownsRow } from "@/lib/auth/resources";
+import { ownsBot, resourceBotId } from "@/lib/auth/resources";
 import { listMessages, loadContactRecord } from "@/lib/store";
 import { ThreadView } from "./thread-view";
 
@@ -11,13 +11,15 @@ export default async function ThreadPage({
   params: Promise<{ contactId: string }>;
 }) {
   const { contactId } = await params;
-  if (!(await ownsRow("contact", contactId))) notFound();
+  const botId = await resourceBotId("contact", contactId);
+  if (!botId || !(await ownsBot(botId))) notFound();
   const contact = await loadContactRecord(contactId);
   if (!contact) notFound();
   const messages = await listMessages(contactId);
   return (
     <ThreadView
       contactId={contactId}
+      botId={botId}
       initialContact={contact}
       initialMessages={messages.map((message) => ({
         id: message.id,
