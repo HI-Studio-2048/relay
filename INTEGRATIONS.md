@@ -24,11 +24,10 @@ Waiting on a person (we can't do these from the browser):
 | LinkedIn company Page | Needs a person to create it before any application |
 | Company documents for Meta Business Verification | Business registration, proof of address and so on. TikTok already accepted the same documents. The business registration certificate on file expires 2026-12-16, so renew it before then |
 
-Small chores nobody has done yet:
+Standing rule:
 
 | What | Why |
 | --- | --- |
-| Delete the personal Slack test app | Add to Slack replaced it. |
 | Keep "Public Bot" on in the Discord Bot page | Add to Discord needs it, so other servers can add the bot. |
 
 Parked on purpose:
@@ -105,7 +104,7 @@ Everything is under the company admin account (`admin@hiiiiiiiiiii.com`), so the
 - **TikTok for Developers:** organization `Human Intelligence Studio Limited`, which already had an old unfinished mini game app ("HI Studio Verification", left alone). New app "Recatch" (type Other), App ID 7694605918150952978. The domain `recatch.app` is verified. **The production form does not keep a half finished draft** (reloading wipes it), because review needs everything at once including the demo video. The working setup is the **sandbox** "Recatch sandbox", which does save: icon (the logo as a 1024 by 1024 PNG), category Business, description, terms and privacy URLs, Web platform, Login Kit with redirect `https://recatch.app/api/connections/tiktok/callback`, and the `user.info.basic` scope. Target user `ezzawan`. The sandbox has its own client key and secret, which are the ones in Railway. The production app has separate credentials.
 - **Discord:** application "Recatch" in the Discord Developer Portal, application id 1557320195750629386, with the Recatch logo and a bot user named Recatch. This is the shared bot behind Add to Discord. Its token is shown only once (Reset Token on the Bot page) and lives in Railway as `DISCORD_BOT_TOKEN`. The test server is "Human Intelligence Studio's server". No privileged intents are needed for DMs.
 - **Slack:** the company app "Recatch" at api.slack.com/apps, created from `slack-app-manifest.json`, public distribution on. Its Client ID, Client Secret and Signing Secret are in Railway.
-- **Bluesky:** no account with Bluesky is needed for the company app. Recatch's signing key is `BLUESKY_OAUTH_KEY` in Railway, and Bluesky reads the metadata and key list from `recatch.app`. The accounts used in testing are personal ones, and a company Bluesky account is still to make.
+- **Bluesky:** no account with Bluesky is needed for the company app. Recatch's signing key is `BLUESKY_OAUTH_KEY` in Railway, and Bluesky reads the metadata and key list from `recatch.app`. The company Bluesky account is `@hiiiiiiiiiii2048.bsky.social`, on the company email. `@ezzawan.bsky.social` is a personal account used in testing.
 - **LinkedIn:** nothing created. Needs a company Page for HI Studio first.
 
 ## Start here next session
@@ -130,7 +129,7 @@ In the order that unlocks the most:
 4. **TikTok.** Submitted for production review on 2026-10-14, and business verification is done. When approved, set the production `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET` in Railway (a person does this with a piped command), then sign in once with a non-sandbox account to confirm. Do not swap the keys before approval, because the sandbox keys are the ones that work today.
 5. **Pinterest.** When Trial access arrives, build the Pinterest connection (sign-in, publish, read boards) so there is something to show, then request Standard access.
 6. **LinkedIn.** Create the company Page, then apply to the Community Management API.
-7. **Slack, Discord, Bluesky.** Done and confirmed with real accounts, all three one click. Clean-up left (the old "Relay (Discord)" account was disconnected on 2026-10-14): delete the personal Slack test app, make a company Bluesky account instead of the test one, and re-check that a brand new Slack contact shows a name (the form-encoding fix is deployed).
+7. **Slack, Discord, Bluesky.** Done and confirmed with real accounts, all three one click. Clean-up finished on 2026-10-14: the old "Relay (Discord)" account is disconnected, the personal Slack test app is deleted, a brand new Slack contact shows their name, and the company Bluesky account exists.
 8. **Meta, one click.** When Meta is unblocked, aim for the same shape as Slack: one Recatch Meta app with Facebook Login so customers click instead of pasting a Page token. The Setup page's token form stays as the fallback.
 9. **Security.** Next.js went to 16.4.0 and `npm audit fix` cleared the rest on 2026-10-14. The one advisory left in production deps is `braces`, pulled in by the shadcn CLI. Nothing upstream fixes it yet, and the app only uses shadcn for a CSS import at build time, so no request ever reaches it. Check again when shadcn ships a new release.
 10. **Bluesky comments.** Only DMs are handled today.
