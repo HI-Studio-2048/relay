@@ -485,6 +485,14 @@ export const blueskyOauthStore = pgTable("bluesky_oauth_store", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Addresses SES reported as a hard bounce or a complaint. `sendEmail` skips them. See lib/email-feedback.ts. */
+export const emailSuppressions = pgTable("email_suppressions", {
+  email: text("email").primaryKey(),
+  reason: text("reason").notNull(),
+  detail: text("detail"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const botsRelations = relations(bots, ({ many }) => ({
   contacts: many(contacts),
   tags: many(tags),

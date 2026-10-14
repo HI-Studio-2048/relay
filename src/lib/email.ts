@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import { isSuppressed } from "@/lib/email-feedback";
 import { log } from "@/lib/logger";
 
 /**
@@ -78,6 +79,10 @@ export type EmailInput = { to: string; subject: string; text: string; html?: str
 export async function sendEmail(input: EmailInput): Promise<boolean> {
   const cfg = config();
   if (!cfg) return false;
+  if (await isSuppressed(input.to)) {
+    log.info("Skipped an email to an address that bounced or complained before");
+    return false;
+  }
   const host = `email.${cfg.region}.amazonaws.com`;
   const path = "/v2/email/outbound-emails";
   const body = JSON.stringify({

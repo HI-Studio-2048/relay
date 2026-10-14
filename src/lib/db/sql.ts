@@ -372,4 +372,11 @@ CREATE TABLE IF NOT EXISTS bluesky_oauth_store (
   value_encrypted text NOT NULL,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS email_suppressions (
+  email text PRIMARY KEY,
+  reason text NOT NULL,
+  detail text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 `;

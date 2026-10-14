@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { emailConfigured, renderEmail, sendEmail, signRequest } from "@/lib/email";
 
+// The suppression list lives in the database; email-feedback.integration.test.ts covers it.
+vi.mock("@/lib/email-feedback", () => ({ isSuppressed: async () => false }));
+
 const base = {
   host: "email.us-east-1.amazonaws.com",
   path: "/v2/email/outbound-emails",

@@ -25,6 +25,7 @@ const PUBLIC_PREFIXES = [
   "/api/bluesky/jwks.json",
   "/api/zernio/webhook",
   "/api/stripe/webhook",
+  "/api/email/feedback",
   "/api/v1",
   "/go",
   "/widget",
