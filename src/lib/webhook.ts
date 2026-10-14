@@ -20,6 +20,7 @@ import { buttonSourceStep, recordFlowEvents } from "@/lib/analytics";
 import { runAiAutoReply } from "@/lib/ai-runtime";
 import { applyAutoTags } from "@/lib/auto-tags";
 import { hideZernioComment, replyToZernioComment, sendZernioPrivateReply } from "@/lib/channels/zernio";
+import { replyToBlueskyComment } from "@/lib/channels/bluesky";
 import { moderationReason, readModeration } from "@/lib/social-triggers";
 import { deliverReplies, loadBotFieldValues } from "@/lib/flow-dispatch";
 import { interpolateTemplate } from "@/lib/flow-effects";
@@ -317,7 +318,9 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
   ]);
 
   let replies = result.replies;
-  if (kind === "comment" && inbound.comment && account.channel === "zernio" && inbound.channelAccountId) {
+  const zernioComment = kind === "comment" && Boolean(inbound.comment) && account.channel === "zernio" && Boolean(inbound.channelAccountId);
+  const blueskyComment = kind === "comment" && Boolean(inbound.comment) && account.channel === "bluesky";
+  if (zernioComment || blueskyComment) {
     let publicReply = result.publicReply ?? null;
     const commentFlow = result.matchedFlowId ? flows.find((flow) => flow.id === result.matchedFlowId) : null;
     const commentConfig = commentFlow?.definition.trigger;
@@ -326,7 +329,7 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
         publicReply = await writeCommentReply({
           provider: readAiProvider(bot.settings),
           comment: text ?? "",
-          postCaption: inbound.comment.postCaption ?? null,
+          postCaption: inbound.comment?.postCaption ?? null,
           examples: commentConfig.publicReplies ?? [],
           settings: readAiSettings(bot.settings),
           brandName: bot.name,
@@ -335,15 +338,20 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
         log.warn("AI comment reply failed; using a preset", error instanceof Error ? error.message : error);
       }
     }
-    const answered = await answerComment(botId, account, contact, inbound, publicReply, replies);
-    replies = [];
-    if (answered.session !== undefined) await persistSession(contact.id, answered.session);
-    const matched = result.matchedFlowId ? flows.find((flow) => flow.id === result.matchedFlowId) : null;
-    if (matched?.definition.trigger?.hideAfterReply && commentRef) {
-      try {
-        await hideZernioComment(account.token, commentRef);
-      } catch (error) {
-        log.warn("Hiding a comment failed", error instanceof Error ? error.message : error);
+    if (blueskyComment) {
+      await answerBlueskyComment(botId, account, contact, inbound, publicReply, replies);
+      replies = [];
+    } else {
+      const answered = await answerComment(botId, account, contact, inbound, publicReply, replies);
+      replies = [];
+      if (answered.session !== undefined) await persistSession(contact.id, answered.session);
+      const matched = result.matchedFlowId ? flows.find((flow) => flow.id === result.matchedFlowId) : null;
+      if (matched?.definition.trigger?.hideAfterReply && commentRef) {
+        try {
+          await hideZernioComment(account.token, commentRef);
+        } catch (error) {
+          log.warn("Hiding a comment failed", error instanceof Error ? error.message : error);
+        }
       }
     }
   }
@@ -474,6 +482,38 @@ async function answerComment(
     return { session: null };
   }
   return { session };
+}
+
+/**
+ * Bluesky comment: the public reply goes into the thread under the comment, and the flow carries on as DMs.
+ * Bluesky only delivers a DM when the person accepts messages from the account (by default, only from
+ * accounts they follow), so a refused DM ends the flow instead of leaving it waiting on someone who never got it.
+ */
+async function answerBlueskyComment(
+  botId: string,
+  account: ChannelAccount,
+  contact: ContactRecord,
+  inbound: NormalizedInbound,
+  publicReply: string | null,
+  replies: OutboundReply[],
+) {
+  const comment = inbound.comment!;
+  if (publicReply && comment.cid && comment.rootCid) {
+    try {
+      const textReply = interpolateTemplate(publicReply, contact, await loadBotFieldValues(botId));
+      await replyToBlueskyComment(account, { uri: comment.id, cid: comment.cid, rootUri: comment.postId, rootCid: comment.rootCid }, textReply);
+      await saveMessage({ botId, contactId: contact.id, direction: "outbound", source: "flow", body: `[public reply] ${textReply}` });
+    } catch (error) {
+      log.warn("Public Bluesky reply failed", error instanceof Error ? error.message : error);
+    }
+  }
+  if (replies.length === 0) return;
+  try {
+    await deliverReplies({ botId, account, contact, replies });
+  } catch (error) {
+    log.warn("Bluesky DM after a comment was not delivered", error instanceof Error ? error.message : error);
+    await persistSession(contact.id, null);
+  }
 }
 
 /** Telegram does not echo the button text, so read it back from the flow that drew the button. */

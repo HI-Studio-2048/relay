@@ -69,12 +69,18 @@ export type SocialFlow = {
   definition: FlowDefinition;
 };
 
+const BLUESKY_POST_LINK = /^https:\/\/bsky\.app\/profile\/[^/]+\/post\/([^/?#]+)/;
+
 function postMatches(config: SocialTriggerConfig | undefined, event: SocialEvent) {
   const wanted = (config?.postIds ?? []).map((id) => id.trim()).filter(Boolean);
   if (wanted.length === 0) return true;
   const ids = [event.postId, event.platformPostId].filter(Boolean) as string[];
   return wanted.some(
-    (want) => ids.includes(want) || Boolean(event.permalink && want.startsWith("http") && event.permalink.startsWith(want.replace(/\/+$/, ""))),
+    (want) =>
+      ids.includes(want) ||
+      Boolean(event.permalink && want.startsWith("http") && event.permalink.startsWith(want.replace(/\/+$/, ""))) ||
+      // A bsky.app link may name the account by handle or by DID, so match on the post's own key.
+      Boolean(event.platformPostId && want.match(BLUESKY_POST_LINK)?.[1] === event.platformPostId),
   );
 }
 

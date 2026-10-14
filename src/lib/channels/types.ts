@@ -204,6 +204,9 @@ export type InboundComment = {
   isReply: boolean;
   postCaption?: string | null;
   permalink?: string | null;
+  /** Bluesky: content hashes of the comment and of the post at the top of its thread, which a reply needs. */
+  cid?: string;
+  rootCid?: string;
 };
 
 /** Who to send to. Telegram and Meta only need the user id; hub channels also need the thread. */

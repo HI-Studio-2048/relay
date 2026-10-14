@@ -8,7 +8,11 @@ const PDS = "https://bsky.social";
 const PUBLIC_API = "https://public.api.bsky.app";
 /** Chat lives on its own service; the PDS forwards requests that carry this header. */
 const CHAT_PROXY = "did:web:api.bsky.chat#bsky_chat";
+/** Notifications and other app reads go to Bluesky's app view, also through the account's own server. */
+const APPVIEW_PROXY = "did:web:api.bsky.app#bsky_appview";
 const MAX_CHARS = 1000;
+/** A post, and so a public reply, holds at most 300 characters. */
+const MAX_POST_CHARS = 300;
 
 class BlueskyError extends ChannelApiError {
   constructor(message: string, readonly status: number, readonly code: string) {
@@ -41,12 +45,12 @@ type XrpcError = { error?: string; message?: string };
 const store = globalThis as unknown as { __relayBluesky?: Map<string, Session> };
 const sessions = (store.__relayBluesky ??= new Map<string, Session>());
 
-async function xrpc<T>(method: "GET" | "POST", nsid: string, opts: { jwt?: string; query?: Record<string, string>; body?: unknown; chat?: boolean; base?: string } = {}): Promise<T> {
+async function xrpc<T>(method: "GET" | "POST", nsid: string, opts: { jwt?: string; query?: Record<string, string>; body?: unknown; proxy?: string; base?: string } = {}): Promise<T> {
   const url = new URL(`${opts.base ?? PDS}/xrpc/${nsid}`);
   for (const [key, value] of Object.entries(opts.query ?? {})) url.searchParams.set(key, value);
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (opts.jwt) headers.authorization = `Bearer ${opts.jwt}`;
-  if (opts.chat) headers["atproto-proxy"] = CHAT_PROXY;
+  if (opts.proxy) headers["atproto-proxy"] = opts.proxy;
   const response = await fetch(url, { method, headers, body: opts.body === undefined ? undefined : JSON.stringify(opts.body) });
   const data = (await response.json().catch(() => ({}))) as T & XrpcError;
   if (!response.ok) {
@@ -92,8 +96,10 @@ export function forgetBlueskySession(accountId: string) {
   sessions.delete(accountId);
 }
 
-/** One chat call through the account's OAuth session, which signs and refreshes itself. */
-async function chatWithOauth<T>(account: ChannelAccount, method: "GET" | "POST", nsid: string, data: { query?: Record<string, string>; body?: unknown }): Promise<T> {
+type CallData = { query?: Record<string, string>; body?: unknown; proxy?: string };
+
+/** One call through the account's OAuth session, which signs and refreshes itself. */
+async function callWithOauth<T>(account: ChannelAccount, method: "GET" | "POST", nsid: string, data: CallData): Promise<T> {
   const { restoreBlueskySession } = await import("@/lib/channels/bluesky-oauth");
   let session;
   try {
@@ -104,7 +110,7 @@ async function chatWithOauth<T>(account: ChannelAccount, method: "GET" | "POST",
   const query = data.query ? `?${new URLSearchParams(data.query)}` : "";
   const response = await session.fetchHandler(`/xrpc/${nsid}${query}`, {
     method,
-    headers: { "atproto-proxy": CHAT_PROXY, ...(data.body === undefined ? {} : { "content-type": "application/json" }) },
+    headers: { ...(data.proxy ? { "atproto-proxy": data.proxy } : {}), ...(data.body === undefined ? {} : { "content-type": "application/json" }) },
     body: data.body === undefined ? undefined : JSON.stringify(data.body),
   });
   const parsed = (await response.json().catch(() => ({}))) as T & XrpcError;
@@ -112,19 +118,23 @@ async function chatWithOauth<T>(account: ChannelAccount, method: "GET" | "POST",
   return parsed;
 }
 
-/** One chat call as the account. A rejected token drops the cached session and tries once more. */
-async function chat<T>(account: ChannelAccount, method: "GET" | "POST", nsid: string, data: { query?: Record<string, string>; body?: unknown } = {}, retried = false): Promise<T> {
-  if (account.oauth) return chatWithOauth<T>(account, method, nsid, data);
+/** One call as the account. A rejected token drops the cached session and tries once more. */
+async function call<T>(account: ChannelAccount, method: "GET" | "POST", nsid: string, data: CallData = {}, retried = false): Promise<T> {
+  if (account.oauth) return callWithOauth<T>(account, method, nsid, data);
   const session = await blueskySession(account);
   try {
-    return await xrpc<T>(method, nsid, { jwt: session.accessJwt, chat: true, base: pdsOf(session), ...data });
+    return await xrpc<T>(method, nsid, { jwt: session.accessJwt, base: pdsOf(session), ...data });
   } catch (error) {
     if (!retried && error instanceof BlueskyError && (error.status === 401 || error.code === "ExpiredToken" || error.code === "InvalidToken")) {
       forgetBlueskySession(account.id);
-      return chat<T>(account, method, nsid, data, true);
+      return call<T>(account, method, nsid, data, true);
     }
     throw error;
   }
+}
+
+function chat<T>(account: ChannelAccount, method: "GET" | "POST", nsid: string, data: Omit<CallData, "proxy"> = {}): Promise<T> {
+  return call<T>(account, method, nsid, { ...data, proxy: CHAT_PROXY });
 }
 
 /** The message you get when an app password was made without the "Allow access to direct messages" box ticked. */
@@ -140,7 +150,7 @@ export function explainBlueskyError(error: unknown): string {
 export async function checkBlueskyAccount(identifier: string, password: string) {
   const session = await createBlueskySession(identifier, password);
   try {
-    await xrpc("GET", "chat.bsky.convo.listConvos", { jwt: session.accessJwt, chat: true, base: pdsOf(session), query: { limit: "1" } });
+    await xrpc("GET", "chat.bsky.convo.listConvos", { jwt: session.accessJwt, proxy: CHAT_PROXY, base: pdsOf(session), query: { limit: "1" } });
   } catch (error) {
     throw new ChannelApiError(explainBlueskyError(error));
   }
@@ -275,11 +285,148 @@ export async function acceptBlueskyConvo(account: ChannelAccount, convoId: strin
   }
 }
 
-export function blueskyEventId(event: BlueskyEvent): string {
-  return `${event.convoId}:${event.messageId}`;
+/**
+ * A reply under one of the account's own posts: Bluesky's version of a comment. `uri` and `cid` name the
+ * reply itself, `rootUri` and `rootCid` the account's post at the top of the thread. Replying needs both.
+ */
+export type BlueskyCommentEvent = {
+  type: "comment";
+  did: string;
+  handle?: string | null;
+  displayName?: string | null;
+  uri: string;
+  cid: string;
+  text: string;
+  rootUri: string;
+  rootCid: string;
+  parentUri: string;
+  indexedAt: string;
+};
+
+type Notification = {
+  uri?: string;
+  cid?: string;
+  reason?: string;
+  indexedAt?: string;
+  author?: { did?: string; handle?: string; displayName?: string };
+  record?: { text?: string; embed?: unknown; reply?: { root?: { uri?: string; cid?: string }; parent?: { uri?: string; cid?: string } } };
+};
+
+const isAfter = (value: string | undefined, since: string) => Boolean(value) && Date.parse(value!) > Date.parse(since);
+
+/** Replies newer than `since` in threads the account started. Its own replies, and replies in other people's threads, are skipped. */
+export function commentsFromNotifications(items: Notification[], ownDid: string, since: string): BlueskyCommentEvent[] {
+  const events: BlueskyCommentEvent[] = [];
+  for (const item of items) {
+    if (item.reason !== "reply" || !isAfter(item.indexedAt, since)) continue;
+    const did = item.author?.did;
+    const root = item.record?.reply?.root;
+    if (!did || did === ownDid || !item.uri || !item.cid || !root?.uri || !root.cid) continue;
+    if (!root.uri.startsWith(`at://${ownDid}/`)) continue;
+    const text = item.record?.text?.trim() || (item.record?.embed ? "[attachment]" : "");
+    if (!text) continue;
+    events.push({
+      type: "comment",
+      did,
+      handle: item.author?.handle ?? null,
+      displayName: item.author?.displayName ?? null,
+      uri: item.uri,
+      cid: item.cid,
+      text,
+      rootUri: root.uri,
+      rootCid: root.cid,
+      parentUri: item.record?.reply?.parent?.uri ?? root.uri,
+      indexedAt: item.indexedAt!,
+    });
+  }
+  return events;
 }
 
-export function parseBlueskyEvent(event: BlueskyEvent): NormalizedInbound[] {
+export type ReplyPage = { events: BlueskyCommentEvent[]; since: string };
+
+/**
+ * New replies to the account's posts since the last look, oldest first. Bluesky lists notifications newest
+ * first, so this pages back until it reaches `since`. With no `since` it only records where things stand,
+ * like the chat log, so replies from before the account was connected are never answered.
+ */
+export async function pollBlueskyReplies(account: ChannelAccount, since: string | null, now = new Date()): Promise<ReplyPage> {
+  const ownDid = account.externalAccountId ?? "";
+  const events: BlueskyCommentEvent[] = [];
+  let newest = since;
+  let cursor: string | undefined;
+  for (let page = 0; page < 5; page++) {
+    const result = await call<{ cursor?: string; notifications?: Notification[] }>(account, "GET", "app.bsky.notification.listNotifications", {
+      proxy: APPVIEW_PROXY,
+      query: { reasons: "reply", limit: "50", ...(cursor ? { cursor } : {}) },
+    });
+    const items = result.notifications ?? [];
+    for (const item of items) if (item.indexedAt && (!newest || isAfter(item.indexedAt, newest))) newest = item.indexedAt;
+    if (!since) break;
+    events.push(...commentsFromNotifications(items, ownDid, since));
+    if (!result.cursor || items.length === 0 || items.some((item) => !isAfter(item.indexedAt, since))) break;
+    cursor = result.cursor;
+  }
+  if (!since) return { events: [], since: newest ?? now.toISOString() };
+  return { events: events.reverse(), since: newest ?? since };
+}
+
+export type BlueskyCommentRef = { uri: string; cid: string; rootUri: string; rootCid: string };
+
+/** Post a public reply under a comment, in the same thread. Returns the new post's address. */
+export async function replyToBlueskyComment(account: ChannelAccount, ref: BlueskyCommentRef, text: string): Promise<string> {
+  const chars = Array.from(text.trim());
+  const body = chars.length > MAX_POST_CHARS ? `${chars.slice(0, MAX_POST_CHARS - 1).join("")}…` : chars.join("");
+  const facets = linkFacets(body);
+  const created = await call<{ uri: string }>(account, "POST", "com.atproto.repo.createRecord", {
+    body: {
+      repo: account.externalAccountId,
+      collection: "app.bsky.feed.post",
+      record: {
+        $type: "app.bsky.feed.post",
+        text: body,
+        createdAt: new Date().toISOString(),
+        reply: { root: { uri: ref.rootUri, cid: ref.rootCid }, parent: { uri: ref.uri, cid: ref.cid } },
+        ...(facets.length ? { facets } : {}),
+      },
+    },
+  });
+  return created.uri;
+}
+
+const rkeyOf = (uri: string) => uri.split("/").pop() ?? "";
+
+const isComment = (event: BlueskyEvent | BlueskyCommentEvent): event is BlueskyCommentEvent => (event as BlueskyCommentEvent).type === "comment";
+
+export function blueskyEventId(event: BlueskyEvent | BlueskyCommentEvent): string {
+  return isComment(event) ? `reply:${event.uri}` : `${event.convoId}:${event.messageId}`;
+}
+
+export function parseBlueskyEvent(event: BlueskyEvent | BlueskyCommentEvent): NormalizedInbound[] {
   if (!event?.did || !event.text) return [];
+  if (isComment(event)) {
+    const [first, ...rest] = (event.displayName ?? "").trim().split(" ");
+    const owner = event.rootUri.split("/")[2];
+    return [
+      {
+        externalUserId: event.did,
+        username: event.handle ?? null,
+        firstName: first || null,
+        lastName: rest.join(" ") || null,
+        text: event.text,
+        externalMessageId: event.uri,
+        kind: "comment",
+        platform: "bluesky",
+        comment: {
+          id: event.uri,
+          postId: event.rootUri,
+          platformPostId: rkeyOf(event.rootUri),
+          isReply: event.parentUri !== event.rootUri,
+          permalink: `https://bsky.app/profile/${owner}/post/${rkeyOf(event.rootUri)}`,
+          cid: event.cid,
+          rootCid: event.rootCid,
+        },
+      },
+    ];
+  }
   return [{ externalUserId: event.did, text: event.text, externalMessageId: event.messageId }];
 }

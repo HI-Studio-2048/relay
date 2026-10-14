@@ -18,7 +18,20 @@ const world = {
   dmScope: true,
   expireNextChatCall: false,
   sessions: 0,
+  notifications: [] as Record<string, unknown>[],
+  posts: [] as Record<string, unknown>[],
 };
+
+const POST = `at://${ME}/app.bsky.feed.post/3post`;
+/** A reply notification: someone answering under one of the account's posts, or under someone else's. */
+const replyTo = (rkey: string, text: string, indexedAt: string, root = POST, did = "did:plc:bea") => ({
+  uri: `at://${did}/app.bsky.feed.post/${rkey}`,
+  cid: `cid-${rkey}`,
+  reason: "reply",
+  indexedAt,
+  author: { did, handle: "bea.bsky.social", displayName: "Bea Smith" },
+  record: { text, reply: { root: { uri: root, cid: "cid-root" }, parent: { uri: root, cid: "cid-root" } } },
+});
 
 const incoming = (rev: string, id: string, text: string, did = "did:plc:ada") => ({
   rev,
@@ -42,6 +55,14 @@ function fakeBluesky() {
       return reply({ accessJwt: jwt(Math.floor(Date.now() / 1000) + 7200), refreshJwt: jwt(Math.floor(Date.now() / 1000) + 86400), did: ME, handle: "recatch.bsky.social", didDoc: { service: [{ id: "#atproto_pds", serviceEndpoint: "https://pds.example.test" }] } });
     }
     if (nsid === "app.bsky.actor.getProfile") return reply({ handle: "ada.bsky.social", displayName: "Ada Lovelace" });
+    if (nsid === "app.bsky.notification.listNotifications") {
+      if (url.host !== "pds.example.test" || headers.get("atproto-proxy") !== "did:web:api.bsky.app#bsky_appview") return reply({ error: "MethodNotImplemented" }, 501);
+      return reply({ notifications: [...world.notifications].reverse() });
+    }
+    if (nsid === "com.atproto.repo.createRecord") {
+      world.posts.push(body);
+      return reply({ uri: `at://${ME}/app.bsky.feed.post/reply-${world.posts.length}`, cid: "cid-new" });
+    }
     if (!nsid.startsWith("chat.bsky.")) return reply({ error: "MethodNotImplemented" }, 501);
     // The sign-in entryway does not forward chat; only the account's own server does.
     if (url.host !== "pds.example.test") return reply({ error: "MethodNotImplemented", message: "Method Not Implemented" }, 501);
@@ -188,6 +209,62 @@ describe("Bluesky through the whole app", () => {
     world.dmScope = true;
     await pollBlueskyAccount(await currentRow());
     expect(await currentRow()).toMatchObject({ status: "connected", lastHealthError: null });
+  });
+
+  it("answers a reply under the account's post with a public reply in the thread and a DM", async () => {
+    const { pollBlueskyAccount } = await import("@/lib/channels/bluesky-manager");
+    const { getDb } = await import("@/lib/db");
+    const { contacts, flows, messages } = await import("@/lib/db/schema");
+    const db = await getDb();
+    await db.insert(flows).values({
+      id: "flow-comment",
+      botId,
+      name: "Guide on comment",
+      triggerType: "comment",
+      triggerValue: "guide",
+      isActive: true,
+      definition: {
+        startStepId: "s1",
+        steps: [{ id: "s1", type: "text", text: "Here is the guide, {{first_name}}" }],
+        trigger: { postIds: ["https://bsky.app/profile/recatch.bsky.social/post/3post"], publicReplies: ["Sent you a DM {{first_name}}"] },
+      },
+    });
+
+    // Earlier polls took the first look and recorded the time, so a reply from before it is never answered.
+    const since = Date.parse(String((await currentRow()).settings?.blueskyRepliesSince));
+    const at = (minutes: number) => new Date(since + minutes * 60_000).toISOString();
+    world.notifications = [
+      replyTo("old", "guide please", at(-60)),
+      replyTo("new", "can I get the guide?", at(1)),
+      replyTo("elsewhere", "guide", at(2), "at://did:plc:other/app.bsky.feed.post/theirs"),
+      replyTo("mine", "guide", at(3), POST, ME),
+    ];
+    calls.length = 0;
+    await pollBlueskyAccount(await currentRow());
+
+    await vi.waitFor(() => expect(world.posts).toHaveLength(1), { timeout: 5000 });
+    expect(world.posts[0]).toMatchObject({
+      repo: ME,
+      collection: "app.bsky.feed.post",
+      record: {
+        text: "Sent you a DM Bea",
+        reply: { root: { uri: POST, cid: "cid-root" }, parent: { uri: "at://did:plc:bea/app.bsky.feed.post/new", cid: "cid-new" } },
+      },
+    });
+    await vi.waitFor(() => expect(calls.some((call) => call.nsid === "chat.bsky.convo.sendMessage")).toBe(true), { timeout: 5000 });
+    const dm = calls.find((call) => call.nsid === "chat.bsky.convo.sendMessage")!;
+    expect((dm.body.message as { text: string }).text).toBe("Here is the guide, Bea");
+
+    const [bea] = await db.select().from(contacts).where(eq(contacts.telegramUserId, "did:plc:bea"));
+    expect(bea).toMatchObject({ username: "bea.bsky.social", firstName: "Bea" });
+    const log = await db.select().from(messages).where(eq(messages.contactId, bea!.id));
+    expect(log.map((message) => message.body)).toEqual(expect.arrayContaining(["[comment] can I get the guide?", "[public reply] Sent you a DM Bea"]));
+    expect((await currentRow()).settings?.blueskyRepliesSince).toBe(at(3));
+
+    // Polling again changes nothing: each reply is answered once.
+    await pollBlueskyAccount(await currentRow());
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(world.posts).toHaveLength(1);
   });
 
   it("health check signs in again and keeps the account connected", async () => {

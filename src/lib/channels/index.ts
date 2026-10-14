@@ -3,7 +3,7 @@ import { decryptSecret } from "@/lib/crypto";
 import type { bots } from "@/lib/db/schema";
 import { ackDiscordInteraction, parseDiscordEvent, sendDiscordReply, sendDiscordTyping, type DiscordGatewayEvent } from "@/lib/channels/discord";
 import { fetchSlackProfile, parseSlackEvent, sendSlackReply, type SlackPayload } from "@/lib/channels/slack";
-import { fetchBlueskyProfile, parseBlueskyEvent, sendBlueskyReply, type BlueskyEvent } from "@/lib/channels/bluesky";
+import { fetchBlueskyProfile, parseBlueskyEvent, sendBlueskyReply, type BlueskyCommentEvent, type BlueskyEvent } from "@/lib/channels/bluesky";
 import { fetchMetaProfile, parseMetaWebhook, sendMetaReply, sendMetaTyping, type MetaWebhookPayload } from "@/lib/channels/meta";
 import {
   channelOf,
@@ -125,6 +125,6 @@ export function parseChannelUpdate(account: ChannelAccount, payload: unknown): N
   if (account.channel === "whatsapp") return parseWhatsAppWebhook(payload as WhatsAppWebhookPayload);
   if (account.channel === "discord") return parseDiscordEvent(payload as DiscordGatewayEvent);
   if (account.channel === "slack") return parseSlackEvent(payload as SlackPayload);
-  if (account.channel === "bluesky") return parseBlueskyEvent(payload as BlueskyEvent);
+  if (account.channel === "bluesky") return parseBlueskyEvent(payload as BlueskyEvent | BlueskyCommentEvent);
   return parseMetaWebhook(payload as MetaWebhookPayload);
 }

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { accountFromRow } from "@/lib/channels";
-import { acceptBlueskyConvo, blueskyEventId, explainBlueskyError, pollBlueskyLog } from "@/lib/channels/bluesky";
+import { acceptBlueskyConvo, blueskyEventId, explainBlueskyError, pollBlueskyLog, pollBlueskyReplies } from "@/lib/channels/bluesky";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
 import { log } from "@/lib/logger";
@@ -16,11 +16,14 @@ const busy = (store.__relayBlueskyBusy ??= new Set<string>());
 
 type Row = typeof bots.$inferSelect;
 
-async function record(row: Row, error: string | null, cursor: string | null) {
-  const settings = { ...(row.settings ?? {}), blueskyCursor: cursor };
+/** Where the poller got to: the chat log cursor, and the time of the newest reply seen. */
+type Position = { blueskyCursor: string | null; blueskyRepliesSince: string | null };
+
+async function record(row: Row, error: string | null, position: Position) {
+  const settings = { ...(row.settings ?? {}), ...position };
   const changedStatus = error ? row.status !== "error" || row.lastHealthError !== error : row.status !== "connected";
-  const changedCursor = cursor !== ((row.settings?.blueskyCursor as string | undefined) ?? null);
-  if (!changedStatus && !changedCursor) return;
+  const changedPosition = (Object.keys(position) as (keyof Position)[]).some((key) => position[key] !== ((row.settings?.[key] as string | undefined) ?? null));
+  if (!changedStatus && !changedPosition) return;
   const db = await getDb();
   await db
     .update(bots)
@@ -32,11 +35,27 @@ async function record(row: Row, error: string | null, cursor: string | null) {
     .where(eq(bots.id, row.id));
 }
 
-/** Read one account's new DMs and queue them. The cursor only moves after the messages are queued. */
+/**
+ * Queue replies to the account's posts, which comment automations answer. Kept apart from the DMs so a
+ * failure here only logs and never marks the account as broken.
+ */
+async function pollReplies(row: Row, account: ReturnType<typeof accountFromRow>, since: string | null): Promise<{ since: string | null; queued: number }> {
+  try {
+    const page = await pollBlueskyReplies(account, since);
+    for (const event of page.events) await enqueueWebhook({ kind: "webhook", botId: row.id, update: event, eventId: blueskyEventId(event) });
+    return { since: page.since, queued: page.events.length };
+  } catch (error) {
+    log.warn("Bluesky reply poll failed", row.id, error instanceof Error ? error.message : error);
+    return { since, queued: 0 };
+  }
+}
+
+/** Read one account's new DMs and replies and queue them. The cursors only move after the events are queued. */
 export async function pollBlueskyAccount(row: Row) {
   if (busy.has(row.id)) return;
   busy.add(row.id);
   let cursor = (row.settings?.blueskyCursor as string | undefined) ?? null;
+  let repliesSince = (row.settings?.blueskyRepliesSince as string | undefined) ?? null;
   try {
     const account = accountFromRow(row);
     const seen = new Set<string>();
@@ -52,12 +71,14 @@ export async function pollBlueskyAccount(row: Row) {
       cursor = result.cursor;
       if (!result.more) break;
     }
-    if (seen.size > 0 && shouldRunWorker()) void drainJobs(5);
-    await record(row, null, cursor);
+    const replies = await pollReplies(row, account, repliesSince);
+    repliesSince = replies.since;
+    if ((seen.size > 0 || replies.queued > 0) && shouldRunWorker()) void drainJobs(5);
+    await record(row, null, { blueskyCursor: cursor, blueskyRepliesSince: repliesSince });
   } catch (error) {
     const message = explainBlueskyError(error);
     log.warn("Bluesky poll failed", row.id, message);
-    await record(row, message, cursor).catch(() => undefined);
+    await record(row, message, { blueskyCursor: cursor, blueskyRepliesSince: repliesSince }).catch(() => undefined);
   } finally {
     busy.delete(row.id);
   }
