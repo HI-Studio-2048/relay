@@ -73,6 +73,7 @@ Local-only `POST /api/dev/seed` (disabled in production) creates a demo bot, a l
 | `MEDIA_DIR` | no | Flow image/GIF uploads. Default `.data/media` |
 | `ANTHROPIC_API_KEY` | optional | Server-wide AI (Claude) for accounts that have not saved their own key. Accounts can instead paste an OpenRouter key on the AI assistant page |
 | `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`, `AWS_SES_REGION`, `EMAIL_FROM` | for email | Amazon SES for password reset, welcome and hand-off emails. All four or email stays off. `EMAIL_FROM` must be verified in SES. Optional: `EMAIL_REPLY_TO`, `AWS_SES_SESSION_TOKEN` |
+| `AWS_SES_SNS_TOPIC_ARN` | no | The SNS topic SES publishes bounces and complaints to. Subscribe `https://<your domain>/api/email/feedback` to it (HTTPS); Recatch confirms the subscription and stops mailing addresses that hard-bounce or complain |
 | `ADMIN_TELEGRAM_CHAT_ID` | no | Also send team alerts to a Telegram chat (Slack / Discord / Teams alerts are set per account in Settings) |
 
 Never commit tokens or `.env*`. Tokens are never logged (outbound logs are redacted).
@@ -89,7 +90,7 @@ In **Channels** (the Setup page), pick the platform and use the one-click button
 
 - **Slack:** **Add to Slack**, approve in the workspace. People message the Recatch app and the flows answer.
 - **Discord:** **Add to Discord**, pick the server. Members type `/chat` in the server and Recatch starts a private chat with them.
-- **Bluesky:** **Sign in with Bluesky**, approve on Bluesky. Recatch polls for new direct messages every few seconds. Buttons arrive as a numbered list and people answer by typing the number.
+- **Bluesky:** **Sign in with Bluesky**, approve on Bluesky. Recatch polls for new direct messages every few seconds. Buttons arrive as a numbered list and people answer by typing the number. Replies under your own posts count as comments, so comment automations work there too: the public reply goes into the thread, and the rest of the flow goes out as a DM if the person accepts DMs from you.
 
 ## Connect a Telegram bot
 
