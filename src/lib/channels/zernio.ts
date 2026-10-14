@@ -95,8 +95,11 @@ export type ZernioAccount = {
   profilePicture?: string | null;
   isActive?: boolean;
   needsReconnection?: boolean;
-  profileId?: string;
+  /** Zernio returns the profile filled in as an object; older or other responses give the bare id. */
+  profileId?: string | { _id?: string; name?: string; externalId?: string | null } | null;
 };
+
+const profileIdOf = (account: ZernioAccount) => (typeof account.profileId === "object" ? account.profileId?._id : account.profileId) ?? null;
 
 /**
  * The Meta networks people can connect from Recatch's Channels page, through Zernio's hosted connect flow
@@ -168,7 +171,10 @@ export async function disconnectZernioAccount(apiKey: string, accountId: string)
 /** Accounts inside one profile. Never list without a profile: the company key sees every customer's accounts. */
 export async function listZernioAccounts(apiKey: string, profileId: string): Promise<ZernioAccount[]> {
   const data = await zernioRequest<{ accounts?: ZernioAccount[] }>("GET", `/v1/accounts?profileId=${encodeURIComponent(profileId)}`, apiKey);
-  return (data.accounts ?? []).filter((account) => !account.profileId || account.profileId === profileId);
+  return (data.accounts ?? []).filter((account) => {
+    const owner = profileIdOf(account);
+    return !owner || owner === profileId;
+  });
 }
 
 export function verifyZernioSignature(secret: string | null, rawBody: string, header: string | null): boolean {

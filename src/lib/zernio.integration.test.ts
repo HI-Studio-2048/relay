@@ -45,7 +45,11 @@ function fakeZernio() {
     }
     if (url.pathname === "/api/v1/accounts" && method === "GET") {
       const wanted = url.searchParams.get("profileId");
-      return respond({ accounts: accounts.filter((account) => !wanted || account.profileId === wanted) });
+      // The real API fills in the profile as an object, not the bare id; matching on the id alone dropped every account.
+      const populated = accounts
+        .filter((account) => !wanted || account.profileId === wanted)
+        .map((account) => ({ ...account, profileId: { _id: account.profileId, name: "Recatch", externalId: profiles.find((profile) => profile._id === account.profileId)?.externalId ?? null } }));
+      return respond({ accounts: populated });
     }
     if (url.pathname.startsWith("/api/v1/accounts/") && method === "DELETE") {
       const id = url.pathname.split("/").pop();
