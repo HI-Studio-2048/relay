@@ -15,6 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { ToneChip, type ToneName } from "@/components/chrome/tone";
+import { PromoVideo } from "@/components/marketing/promo-video";
 import { Button } from "@/components/ui/button";
 import { CHANNEL_IDS, CHANNELS } from "@/lib/channels/types";
 
@@ -156,7 +157,7 @@ export default function WelcomePage() {
   return (
     <>
       <section className="overflow-hidden">
-        <div className="mx-auto grid w-full max-w-6xl gap-14 px-4 pt-16 pb-20 md:px-8 md:pt-24 lg:grid-cols-[1.05fr_1fr] lg:items-center">
+        <div className="mx-auto grid w-full max-w-6xl gap-14 px-4 pt-16 pb-8 md:px-8 md:pt-24 md:pb-10 lg:grid-cols-[1.05fr_1fr] lg:items-center">
           <div>
             <p className="inline-flex items-center gap-2 rounded-full bg-[#eef6ff] px-3 py-1 text-[12px] font-medium text-[#0069cc]">
               <span className="inline-block size-1.5 rounded-full bg-[#0084ff]" />
@@ -186,6 +187,18 @@ export default function WelcomePage() {
             </ul>
           </div>
           <HeroVisual />
+        </div>
+      </section>
+
+      <section aria-labelledby="abandoned-cart-video" className="scroll-mt-20">
+        <div className="mx-auto w-full max-w-6xl px-4 pb-16 md:px-8 md:pb-20">
+          <h2
+            id="abandoned-cart-video"
+            className="mb-6 text-center font-heading text-[22px] leading-tight font-semibold tracking-tight text-balance text-[#1b1f24] md:text-[28px]"
+          >
+            Abandoned cart? Follow up automatically.
+          </h2>
+          <PromoVideo />
         </div>
       </section>
 
