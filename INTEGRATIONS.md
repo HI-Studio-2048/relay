@@ -1,6 +1,6 @@
 # Integrations log
 
-Where each platform stands in Recatch. Last updated on 2026-10-12. Zernio is used again for Instagram, Messenger and WhatsApp only (one company key, one profile per customer). Every other channel is direct. Four channels are confirmed with real accounts (Telegram, Slack, Discord, Bluesky) and three of them connect with one click through a company-owned app. `main` is the only branch that matters.
+Where each platform stands in Recatch. Last updated on 2026-10-14. Zernio is used again for Instagram, Messenger and WhatsApp only (one company key, one profile per customer). Every other channel is direct. Four channels are confirmed with real accounts (Telegram, Slack, Discord, Bluesky) and three of them connect with one click through a company-owned app. `main` is the only branch that matters.
 
 "Direct" means Recatch talks to the platform's own API with our credentials. There is no hub in between any more. The Channels page lists every channel in `src/lib/channels/catalog.ts` (live ones connect from Setup, the rest are greyed out as "On the way"), so update that file when a channel changes state.
 
@@ -13,16 +13,16 @@ Waiting on someone else (nothing for us to do until they answer):
 | What | Status | Waiting on |
 | --- | --- | --- |
 | Pinterest app, App ID 1621662 | Submitted 2026-10-09, "Trial access pending" | Pinterest's review |
+| TikTok production review (Login Kit, `user.info.basic`) | Submitted 2026-10-14 with the demo video. The organization's business verification is already done (verified 2026-10-13). | TikTok's review. When approved, a person puts the production client key and secret into Railway |
+| YouTube (Google) verification of the `youtube.readonly` scope | Submitted 2026-10-14, "data access is under review". The home page domain was verified in Search Console first. | Google's review, which replies by email to the admin account |
 | Meta developer account | Blocked with "Account confirmation needed" when we opened developers.facebook.com | A person finishing Meta's identity check in the Facebook tab |
 
 Waiting on a person (we can't do these from the browser):
 
 | What | Why |
 | --- | --- |
-| Demo video for Google (YouTube) verification | Needs a screen recording of the live flow |
-| Demo video for the TikTok production review | Same |
 | LinkedIn company Page | Needs a person to create it before any application |
-| Company documents for Meta Business Verification and TikTok business verification | Business registration, proof of address and so on |
+| Company documents for Meta Business Verification | Business registration, proof of address and so on. TikTok already accepted the same documents. The business registration certificate on file expires 2026-12-16, so renew it before then |
 
 Small chores nobody has done yet:
 
@@ -83,10 +83,10 @@ Public `/privacy`, `/terms` and `/data-deletion` pages are live, linked from the
 | Meta (Instagram, Messenger, WhatsApp, Threads) direct | Code is ready. Needs the developer account confirmed, then a Meta app in development mode, then Business Verification and App Review. |
 | Telegram, one bot for all of Recatch | Telegram has no company-wide API. The only way is Telegram Business, which needs every customer to pay for Telegram Premium. Dropped. |
 | Reddit direct | API access form not sent (see Snapshot). |
-| YouTube direct | Sign-in works. Verification (sensitive scope) and a quota increase are still to do. Comments only anyway, since YouTube has no DMs. |
+| YouTube direct | Sign-in works. Verification of the sensitive scope was submitted on 2026-10-14 and is under review. A quota increase can be requested after it passes. Comments only anyway, since YouTube has no DMs. |
 | Pinterest direct | Waiting for Trial access, then a Standard access request. Its API covers pins and boards, not messages. There is no Pinterest connection in Recatch yet. |
 | X direct | DMs need a paid API tier. |
-| TikTok direct | Sandbox sign-in works. Production review still to do. DM access is limited to TikTok's business messaging partners, so this app is for login and posting only. |
+| TikTok direct | Sandbox sign-in works. The production review was submitted on 2026-10-14. Until it passes, only the sandbox target user (`ezzawan`) can sign in. DM access is limited to TikTok's business messaging partners, so this app is for login and posting only. |
 | LinkedIn direct | Messaging is partner-program only, and they're selective. |
 | iMessage direct | Apple only allows it through approved messaging providers. Nothing built. |
 | Snapchat | No public DM API. |
@@ -127,8 +127,8 @@ In the order that unlocks the most:
 0b. **Meta through Zernio.** Create the company key in Zernio, set `ZERNIO_API_KEY` and `ZERNIO_WEBHOOK_SECRET` in Railway (a person does this), register the webhook in Zernio, then connect a real Instagram account from recatch.app/channels and check that a DM and a comment arrive. Test a WhatsApp number separately. Read Zernio's terms on reselling.
 1. **Meta, direct.** Finish the identity check on the Facebook developer account. Then create the Meta app under the company's Business Manager. In dev mode the direct Instagram, Messenger and WhatsApp adapters already work with our own accounts as testers (WhatsApp gives a free test number). Record the screencast App Review wants, then do Business Verification with the company documents and App Review for `instagram_manage_messages`, `pages_messaging` and the WhatsApp permissions. Meta is the biggest win: it covers four networks.
 2. **Run a health check on the Telegram bot** (Setup page) so its webhook moves to `recatch.app`.
-3. **YouTube.** Record a short demo of the flow on `recatch.app` (Connect, Google consent, back on Channels showing the channel, Disconnect), then submit for verification and ask for a quota increase if needed.
-4. **TikTok.** Record the same kind of demo for the sandbox sign-in. Then fill in the production form in one go (the same fields, Login Kit, a written explanation and the video) and use the production client key and secret. Business verification on the organization is a separate step that needs the company documents.
+3. **YouTube.** Submitted for verification on 2026-10-14. Wait for Google's email to admin@hiiiiiiiiiii.com and answer anything it asks. Ask for a quota increase after it passes, if needed.
+4. **TikTok.** Submitted for production review on 2026-10-14, and business verification is done. When approved, set the production `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET` in Railway (a person does this with a piped command), then sign in once with a non-sandbox account to confirm. Do not swap the keys before approval, because the sandbox keys are the ones that work today.
 5. **Pinterest.** When Trial access arrives, build the Pinterest connection (sign-in, publish, read boards) so there is something to show, then request Standard access.
 6. **LinkedIn.** Create the company Page, then apply to the Community Management API.
 7. **Slack, Discord, Bluesky.** Done and confirmed with real accounts, all three one click. Clean-up left: disconnect the old "Relay (Discord)" account, delete the personal Slack test app, make a company Bluesky account instead of the test one, and re-check that a brand new Slack contact shows a name (the form-encoding fix is deployed).
