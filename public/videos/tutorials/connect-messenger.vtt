@@ -1,0 +1,112 @@
+WEBVTT
+
+00:00:00.700 --> 00:00:03.452
+Let's connect Facebook Messenger to Recatch.
+
+00:00:03.522 --> 00:00:05.387
+Messenger connects with a Facebook
+
+00:00:05.387 --> 00:00:06.759
+Page, using your own Meta
+
+00:00:06.759 --> 00:00:07.667
+app for now.
+
+00:00:07.967 --> 00:00:09.729
+Step one. Create your
+
+00:00:09.729 --> 00:00:11.908
+account at recatch.app.
+
+00:00:11.978 --> 00:00:13.816
+On the Create your workspace
+
+00:00:13.816 --> 00:00:15.718
+screen, enter your name, your
+
+00:00:15.718 --> 00:00:17.293
+email, and a password of
+
+00:00:17.293 --> 00:00:18.986
+at least 8 characters.
+
+00:00:19.056 --> 00:00:20.539
+Then click Create account.
+
+00:00:20.839 --> 00:00:21.860
+Step two. You land
+
+00:00:21.860 --> 00:00:23.414
+on the Channels screen.
+
+00:00:23.484 --> 00:00:25.747
+Under Connect a channel, click Messenger.
+
+00:00:26.047 --> 00:00:28.236
+Step three. In Meta for Developers,
+
+00:00:28.236 --> 00:00:30.112
+add Messenger to your app.
+
+00:00:30.182 --> 00:00:32.039
+Generate a Page access token
+
+00:00:32.039 --> 00:00:34.692
+with the pages_messaging permission, and
+
+00:00:34.692 --> 00:00:36.732
+note your Facebook Page ID.
+
+00:00:36.802 --> 00:00:39.036
+These values are fake examples.
+
+00:00:39.036 --> 00:00:40.981
+Never share your real token
+
+00:00:40.981 --> 00:00:42.240
+or app secret.
+
+00:00:42.540 --> 00:00:44.805
+Step four. Paste the Facebook Page
+
+00:00:44.805 --> 00:00:46.988
+ID and the Page access token.
+
+00:00:47.058 --> 00:00:49.605
+Adding your App secret is recommended.
+
+00:00:49.605 --> 00:00:52.470
+It's used to verify webhook signatures.
+
+00:00:52.770 --> 00:00:55.044
+Step five. Click Connect account.
+
+00:00:55.344 --> 00:00:57.656
+Recatch now shows a Callback URL
+
+00:00:57.656 --> 00:00:59.896
+and a Verify token, under Paste
+
+00:00:59.896 --> 00:01:02.169
+into the Meta App dashboard.
+
+00:01:02.469 --> 00:01:03.859
+Step six. Paste both
+
+00:01:03.859 --> 00:01:05.777
+into Messenger webhooks.
+
+00:01:05.847 --> 00:01:11.069
+Subscribe to messages, messaging_postbacks, and messaging_referrals.
+
+00:01:11.369 --> 00:01:13.658
+That's it. Messenger is connected.
+
+00:01:13.728 --> 00:01:15.480
+Next, build your first flow,
+
+00:01:15.480 --> 00:01:17.545
+from the lead-capture template or
+
+00:01:17.545 --> 00:01:18.734
+a blank canvas.

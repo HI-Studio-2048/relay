@@ -1,0 +1,109 @@
+WEBVTT
+
+00:00:00.700 --> 00:00:02.117
+Let's connect a Bluesky
+
+00:00:02.117 --> 00:00:03.537
+account to Recatch.
+
+00:00:03.837 --> 00:00:05.599
+Step one. Create your
+
+00:00:05.599 --> 00:00:07.778
+account at recatch.app.
+
+00:00:07.848 --> 00:00:09.686
+On the Create your workspace
+
+00:00:09.686 --> 00:00:11.588
+screen, enter your name, your
+
+00:00:11.588 --> 00:00:13.163
+email, and a password of
+
+00:00:13.163 --> 00:00:14.856
+at least 8 characters.
+
+00:00:14.926 --> 00:00:16.409
+Then click Create account.
+
+00:00:16.709 --> 00:00:17.722
+Step two. You land
+
+00:00:17.722 --> 00:00:19.267
+on the Channels screen.
+
+00:00:19.337 --> 00:00:21.768
+Under Connect a channel, click Bluesky.
+
+00:00:21.838 --> 00:00:23.160
+If you see Sign in with
+
+00:00:23.160 --> 00:00:25.461
+Bluesky, that's the one-click option. To
+
+00:00:25.461 --> 00:00:27.531
+paste an app password instead, click
+
+00:00:27.531 --> 00:00:29.391
+Use an app password instead.
+
+00:00:29.691 --> 00:00:32.996
+Step three. In Bluesky, open Settings,
+
+00:00:32.996 --> 00:00:36.040
+then Privacy and security, then App
+
+00:00:36.040 --> 00:00:38.291
+passwords, and add one.
+
+00:00:38.361 --> 00:00:40.274
+Tick Allow access to your direct
+
+00:00:40.274 --> 00:00:42.737
+messages, or Recatch can't read them.
+
+00:00:42.807 --> 00:00:44.473
+Never use your main password.
+
+00:00:44.543 --> 00:00:46.839
+These values are fake examples. Never
+
+00:00:46.839 --> 00:00:48.888
+share your real app password.
+
+00:00:49.188 --> 00:00:51.125
+Step four. Paste your Bluesky
+
+00:00:51.125 --> 00:00:53.245
+handle and the app password.
+
+00:00:53.545 --> 00:00:55.820
+Step five. Click Connect account.
+
+00:00:56.120 --> 00:00:58.207
+Bluesky doesn't push messages, so
+
+00:00:58.207 --> 00:00:59.915
+Recatch checks for new ones
+
+00:00:59.915 --> 00:01:01.303
+every few seconds.
+
+00:01:01.373 --> 00:01:03.153
+Only messages that arrive after
+
+00:01:03.153 --> 00:01:04.838
+you connect are answered.
+
+00:01:05.138 --> 00:01:07.338
+That's it. Bluesky is connected.
+
+00:01:07.408 --> 00:01:09.161
+Next, build your first flow,
+
+00:01:09.161 --> 00:01:11.226
+from the lead-capture template or
+
+00:01:11.226 --> 00:01:12.415
+a blank canvas.

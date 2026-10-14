@@ -1,0 +1,115 @@
+WEBVTT
+
+00:00:00.700 --> 00:00:03.217
+Let's connect Instagram to Recatch.
+
+00:00:03.287 --> 00:00:05.409
+Instagram connects through a Facebook
+
+00:00:05.409 --> 00:00:06.842
+Page, using your own Meta
+
+00:00:06.842 --> 00:00:07.780
+app for now.
+
+00:00:08.080 --> 00:00:09.842
+Step one. Create your
+
+00:00:09.842 --> 00:00:12.021
+account at recatch.app.
+
+00:00:12.091 --> 00:00:13.928
+On the Create your workspace
+
+00:00:13.928 --> 00:00:15.831
+screen, enter your name, your
+
+00:00:15.831 --> 00:00:17.405
+email, and a password of
+
+00:00:17.405 --> 00:00:19.099
+at least 8 characters.
+
+00:00:19.169 --> 00:00:20.649
+Then click Create account.
+
+00:00:20.949 --> 00:00:21.970
+Step two. You land
+
+00:00:21.970 --> 00:00:23.525
+on the Channels screen.
+
+00:00:23.595 --> 00:00:25.977
+Under Connect a channel, click Instagram.
+
+00:00:26.277 --> 00:00:28.653
+Step three. In Meta for Developers,
+
+00:00:28.653 --> 00:00:30.668
+add Instagram to your app.
+
+00:00:30.738 --> 00:00:32.945
+Connect your Instagram professional account
+
+00:00:32.945 --> 00:00:34.170
+to a Facebook Page.
+
+00:00:34.240 --> 00:00:36.494
+Then generate a Page access token
+
+00:00:36.494 --> 00:00:41.318
+with the instagram_manage_messages and pages_messaging permissions.
+
+00:00:41.388 --> 00:00:43.622
+These values are fake examples.
+
+00:00:43.622 --> 00:00:45.567
+Never share your real token
+
+00:00:45.567 --> 00:00:46.826
+or app secret.
+
+00:00:47.126 --> 00:00:49.392
+Step four. Paste the Facebook Page
+
+00:00:49.392 --> 00:00:51.574
+ID and the Page access token.
+
+00:00:51.644 --> 00:00:54.192
+Adding your App secret is recommended.
+
+00:00:54.192 --> 00:00:57.056
+It's used to verify webhook signatures.
+
+00:00:57.356 --> 00:00:59.631
+Step five. Click Connect account.
+
+00:00:59.931 --> 00:01:02.243
+Recatch now shows a Callback URL
+
+00:01:02.243 --> 00:01:04.483
+and a Verify token, under Paste
+
+00:01:04.483 --> 00:01:06.756
+into the Meta App dashboard.
+
+00:01:07.056 --> 00:01:08.782
+Step six. Paste both into
+
+00:01:08.782 --> 00:01:11.130
+your app's Instagram webhooks, and
+
+00:01:11.130 --> 00:01:14.556
+subscribe to messages and messaging_postbacks.
+
+00:01:14.856 --> 00:01:17.338
+That's it. Instagram is connected.
+
+00:01:17.408 --> 00:01:19.160
+Next, build your first flow,
+
+00:01:19.160 --> 00:01:21.225
+from the lead-capture template or
+
+00:01:21.225 --> 00:01:22.414
+a blank canvas.

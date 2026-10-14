@@ -40,4 +40,13 @@ describe("what a signed-out visitor can reach", () => {
     expect(signedOut("/api/bluesky/client-metadata.json.bak").status).toBe(401);
     expect(signedOut("/api/bluesky/jwks").status).toBe(401);
   });
+
+  it.each([
+    ["the how-to page", "/how-to"],
+    ["a connect tutorial video", "/videos/tutorials/connect-telegram.mp4"],
+    ["a connect tutorial poster", "/videos/tutorials/connect-telegram.webp"],
+    ["connect tutorial captions", "/videos/tutorials/connect-bluesky.vtt"],
+  ])("lets a signed-out visitor load %s", (_what, pathname) => {
+    expect(isPassedThrough(signedOut(pathname))).toBe(true);
+  });
 });

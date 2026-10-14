@@ -13,6 +13,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
             <a href="/welcome#features" className="hover:text-[#1b1f24]">Features</a>
             <a href="/welcome#channels" className="hover:text-[#1b1f24]">Channels</a>
             <a href="/welcome#how" className="hover:text-[#1b1f24]">How it works</a>
+            <Link href="/how-to" className="hover:text-[#1b1f24]">How to connect</Link>
           </nav>
           <div className="flex items-center gap-2">
             <Button variant="ghost" render={<Link href="/login" />}>
@@ -28,9 +29,10 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
       <footer className="border-t border-[#e5e7eb] bg-[#f4f6f8]">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-10 text-[13px] text-[#6b7280] md:flex-row md:items-center md:justify-between md:px-8">
           <MarketingBrand />
-          <div className="flex gap-6">
+          <div className="flex flex-wrap gap-x-6 gap-y-2">
             <Link href="/login" className="hover:text-[#1b1f24]">Log in</Link>
             <Link href="/signup" className="hover:text-[#1b1f24]">Create account</Link>
+            <Link href="/how-to" className="hover:text-[#1b1f24]">How to connect</Link>
             <Link href="/privacy" className="hover:text-[#1b1f24]">Privacy</Link>
             <Link href="/terms" className="hover:text-[#1b1f24]">Terms</Link>
             <Link href="/data-deletion" className="hover:text-[#1b1f24]">Delete your data</Link>

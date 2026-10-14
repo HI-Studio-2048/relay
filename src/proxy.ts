@@ -7,6 +7,8 @@ import { SESSION_COOKIE, USER_HEADER, verifySessionToken } from "@/lib/auth/sess
  */
 const PUBLIC_PREFIXES = [
   "/welcome",
+  // Promo videos on the welcome page. Proxy runs before public/ files, so an unlisted path redirects to login.
+  "/videos",
   "/login",
   "/signup",
   "/forgot-password",
@@ -14,6 +16,8 @@ const PUBLIC_PREFIXES = [
   "/privacy",
   "/terms",
   "/data-deletion",
+  // English connect tutorials. Their files sit under /videos, which is public for the same reason.
+  "/how-to",
   "/api/auth",
   "/api/health",
   "/api/telegram/webhook",

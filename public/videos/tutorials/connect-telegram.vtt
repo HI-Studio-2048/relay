@@ -1,0 +1,136 @@
+WEBVTT
+
+00:00:00.700 --> 00:00:01.944
+Let's connect your first
+
+00:00:01.944 --> 00:00:03.179
+channel in Recatch.
+
+00:00:03.249 --> 00:00:05.258
+We'll use Telegram, because all it
+
+00:00:05.258 --> 00:00:06.748
+needs is a bot token.
+
+00:00:07.048 --> 00:00:08.853
+Step one. Go to recatch.app
+
+00:00:08.853 --> 00:00:10.707
+and create your account.
+
+00:00:10.777 --> 00:00:12.614
+On the Create your workspace
+
+00:00:12.614 --> 00:00:14.517
+screen, enter your name, your
+
+00:00:14.517 --> 00:00:16.091
+email, and a password of
+
+00:00:16.091 --> 00:00:17.785
+at least 8 characters.
+
+00:00:17.855 --> 00:00:19.335
+Then click Create account.
+
+00:00:19.635 --> 00:00:21.223
+Step two. Recatch takes you
+
+00:00:21.223 --> 00:00:23.356
+straight to the Channels screen.
+
+00:00:23.426 --> 00:00:25.383
+Under Connect a channel, Telegram
+
+00:00:25.383 --> 00:00:26.984
+is already selected, with a
+
+00:00:26.984 --> 00:00:28.597
+short guide underneath.
+
+00:00:28.897 --> 00:00:30.766
+Step three. Open Telegram
+
+00:00:30.766 --> 00:00:32.735
+and talk to @BotFather.
+
+00:00:32.805 --> 00:00:34.074
+Create a bot, and copy
+
+00:00:34.074 --> 00:00:35.651
+the token it gives you.
+
+00:00:35.721 --> 00:00:37.174
+This one is a fake example.
+
+00:00:37.174 --> 00:00:39.361
+Your real token will look different.
+
+00:00:39.431 --> 00:00:40.726
+Treat it like a password,
+
+00:00:40.726 --> 00:00:41.961
+and never share it.
+
+00:00:42.261 --> 00:00:44.101
+Step four. Back in Recatch,
+
+00:00:44.101 --> 00:00:45.736
+paste the token into the
+
+00:00:45.736 --> 00:00:47.077
+Bot token field.
+
+00:00:47.147 --> 00:00:48.122
+It stays hidden as
+
+00:00:48.122 --> 00:00:49.076
+you paste it.
+
+00:00:49.376 --> 00:00:51.206
+Step five. Click Connect
+
+00:00:51.206 --> 00:00:52.676
+and set webhook.
+
+00:00:52.746 --> 00:00:54.649
+Recatch checks the token, stores
+
+00:00:54.649 --> 00:00:56.196
+it encrypted, and sets the
+
+00:00:56.196 --> 00:00:57.397
+webhook for you.
+
+00:00:57.697 --> 00:00:59.077
+When it's done, you'll see
+
+00:00:59.077 --> 00:01:00.457
+a Connected message, and a
+
+00:01:00.457 --> 00:01:01.625
+card for your bot with
+
+00:01:01.625 --> 00:01:03.096
+its status and webhook.
+
+00:01:03.166 --> 00:01:04.235
+You can run a health check
+
+00:01:04.235 --> 00:01:05.596
+from that card at any time.
+
+00:01:05.896 --> 00:01:07.524
+That's it. Your Telegram
+
+00:01:07.524 --> 00:01:08.926
+bot is connected.
+
+00:01:08.996 --> 00:01:10.749
+Next, build your first flow,
+
+00:01:10.749 --> 00:01:12.814
+from the lead-capture template or
+
+00:01:12.814 --> 00:01:14.003
+a blank canvas.

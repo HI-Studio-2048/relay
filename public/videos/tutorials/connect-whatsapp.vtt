@@ -1,0 +1,112 @@
+WEBVTT
+
+00:00:00.700 --> 00:00:03.356
+Let's connect WhatsApp Business to Recatch.
+
+00:00:03.426 --> 00:00:05.047
+It uses the WhatsApp Cloud
+
+00:00:05.047 --> 00:00:06.481
+API, with your own Meta
+
+00:00:06.481 --> 00:00:07.479
+app for now.
+
+00:00:07.779 --> 00:00:09.540
+Step one. Create your
+
+00:00:09.540 --> 00:00:11.720
+account at recatch.app.
+
+00:00:11.790 --> 00:00:13.627
+On the Create your workspace
+
+00:00:13.627 --> 00:00:15.529
+screen, enter your name, your
+
+00:00:15.529 --> 00:00:17.104
+email, and a password of
+
+00:00:17.104 --> 00:00:18.797
+at least 8 characters.
+
+00:00:18.867 --> 00:00:20.345
+Then click Create account.
+
+00:00:20.645 --> 00:00:21.666
+Step two. You land
+
+00:00:21.666 --> 00:00:23.221
+on the Channels screen.
+
+00:00:23.291 --> 00:00:25.492
+Under Connect a channel, click WhatsApp.
+
+00:00:25.792 --> 00:00:28.393
+Step three. In Meta for Developers,
+
+00:00:28.393 --> 00:00:30.501
+add WhatsApp to your app.
+
+00:00:30.571 --> 00:00:32.103
+Create a system-user token
+
+00:00:32.103 --> 00:00:35.181
+with the whatsapp_business_messaging permission.
+
+00:00:35.251 --> 00:00:37.204
+Then copy the Phone number ID
+
+00:00:37.204 --> 00:00:39.204
+from WhatsApp → API Setup.
+
+00:00:39.274 --> 00:00:41.508
+These values are fake examples.
+
+00:00:41.508 --> 00:00:43.453
+Never share your real token
+
+00:00:43.453 --> 00:00:44.712
+or app secret.
+
+00:00:45.012 --> 00:00:47.191
+Step four. Paste the Phone number
+
+00:00:47.191 --> 00:00:49.687
+ID and the Permanent access token.
+
+00:00:49.757 --> 00:00:52.304
+Adding your App secret is recommended.
+
+00:00:52.304 --> 00:00:55.169
+It's used to verify webhook signatures.
+
+00:00:55.469 --> 00:00:57.744
+Step five. Click Connect account.
+
+00:00:58.044 --> 00:01:00.356
+Recatch now shows a Callback URL
+
+00:01:00.356 --> 00:01:02.595
+and a Verify token, under Paste
+
+00:01:02.595 --> 00:01:04.868
+into the Meta App dashboard.
+
+00:01:05.168 --> 00:01:07.613
+Step six. Paste both into WhatsApp
+
+00:01:07.613 --> 00:01:10.451
+webhooks, and subscribe to messages.
+
+00:01:10.751 --> 00:01:13.016
+That's it. WhatsApp is connected.
+
+00:01:13.086 --> 00:01:14.839
+Next, build your first flow,
+
+00:01:14.839 --> 00:01:16.904
+from the lead-capture template or
+
+00:01:16.904 --> 00:01:18.093
+a blank canvas.
