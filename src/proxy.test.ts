@@ -37,6 +37,13 @@ describe("what a signed-out visitor can reach", () => {
     expect(response.status).toBe(401);
   });
 
+  it.each(["/affiliates", "/affiliates/commission", "/affiliates/signup", "/affiliates/promote"])(
+    "lets a signed-out visitor read %s",
+    (pathname) => {
+      expect(isPassedThrough(signedOut(pathname))).toBe(true);
+    },
+  );
+
   it("does not open up look-alike paths under the two Bluesky files", () => {
     expect(signedOut("/api/bluesky/client-metadata.json.bak").status).toBe(401);
     expect(signedOut("/api/bluesky/jwks").status).toBe(401);
