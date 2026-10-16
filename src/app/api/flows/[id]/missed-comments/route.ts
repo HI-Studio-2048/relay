@@ -24,9 +24,10 @@ export async function POST(request: Request, context: RouteParams<{ id: string }
   try {
     const { id } = await context.params;
     await requireRowAccess("flow", id);
-    const body = await readJson<{ accountId?: string; postId?: string; limit?: number }>(request);
+    const body = await readJson<{ accountId?: string; postId?: string; limit?: number; skip?: string[] }>(request);
     if (!body.accountId || !body.postId) return json({ error: "Pick a post first" }, 400);
-    return json(await sendMissedComments({ flowId: id, accountId: body.accountId, postId: body.postId, limit: body.limit }));
+    const skip = Array.isArray(body.skip) ? body.skip.filter((item): item is string => typeof item === "string") : [];
+    return json(await sendMissedComments({ flowId: id, accountId: body.accountId, postId: body.postId, limit: body.limit, skip }));
   } catch (error) {
     return fail(error);
   }

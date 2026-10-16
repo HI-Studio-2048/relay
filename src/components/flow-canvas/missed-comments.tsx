@@ -21,6 +21,9 @@ export function MissedComments({ flowId, onClose }: { flowId: string; onClose: (
   const [post, setPost] = useState<Post | null>(null);
   const [missed, setMissed] = useState<Missed[] | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
+  /** Comment ids taken off this send. Not saved: they show again next time the panel opens. */
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+  const chosen = missed?.filter((item) => !removed.has(item.commentId)) ?? null;
 
   useEffect(() => {
     const timer = setTimeout(
@@ -40,6 +43,7 @@ export function MissedComments({ flowId, onClose }: { flowId: string; onClose: (
     setPost(next);
     setMissed(null);
     setProgress(null);
+    setRemoved(new Set());
     try {
       const query = new URLSearchParams({ accountId: next.accountId, postId: next.id });
       const data = await api<{ missed: Missed[] }>(`/api/flows/${flowId}/missed-comments?${query}`);
@@ -51,27 +55,29 @@ export function MissedComments({ flowId, onClose }: { flowId: string; onClose: (
   };
 
   const send = async () => {
-    if (!post || !missed?.length) return;
-    if (!window.confirm(`Send this flow's DM to ${missed.length} ${missed.length === 1 ? "person" : "people"}? No public replies are posted.`)) return;
+    if (!post || !chosen?.length) return;
+    if (!window.confirm(`Send this flow's DM to ${chosen.length} ${chosen.length === 1 ? "person" : "people"}? No public replies are posted.`)) return;
+    const total = chosen.length;
+    const skip = [...removed];
     let sent = 0;
     let failed = 0;
-    setProgress({ sent, failed, total: missed.length, done: false });
+    setProgress({ sent, failed, total, done: false });
     try {
       for (let round = 0; round < 100; round++) {
         const data = await api<{ sent: number; failed: number; remaining: number }>(`/api/flows/${flowId}/missed-comments`, {
           method: "POST",
-          body: JSON.stringify({ accountId: post.accountId, postId: post.id, limit: 20 }),
+          body: JSON.stringify({ accountId: post.accountId, postId: post.id, limit: 20, skip }),
         });
         sent += data.sent;
         failed += data.failed;
-        setProgress({ sent, failed, total: missed.length, done: false });
+        setProgress({ sent, failed, total, done: false });
         if (data.remaining === 0 || data.sent + data.failed === 0) break;
       }
       toast.success(`Sent ${sent} DM${sent === 1 ? "" : "s"}`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Sending stopped");
     } finally {
-      setProgress({ sent, failed, total: missed.length, done: true });
+      setProgress({ sent, failed, total, done: true });
     }
   };
 
@@ -140,6 +146,14 @@ export function MissedComments({ flowId, onClose }: { flowId: string; onClose: (
                 ? "Everyone whose comment matches this flow already got the DM."
                 : `${missed.length} ${missed.length === 1 ? "person" : "people"} commented a matching word and never got the DM.`}
             </p>
+            {removed.size > 0 ? (
+              <p className="mb-2 text-[12px] text-[#6b7280]">
+                {removed.size} taken off this send.{" "}
+                <button type="button" className="text-[#0084ff] hover:underline" disabled={sending} onClick={() => setRemoved(new Set())}>
+                  Put them back
+                </button>
+              </p>
+            ) : null}
             {missed.length > 0 ? (
               <p className="mb-3 text-[11px] leading-snug text-[#6b7280]">
                 Each gets this flow&apos;s first message as a private reply to their comment, from the saved version of the flow. No public
@@ -153,21 +167,33 @@ export function MissedComments({ flowId, onClose }: { flowId: string; onClose: (
               </p>
             ) : null}
             <ul className="space-y-1.5">
-              {missed.map((item) => (
-                <li key={item.commentId} className="rounded-lg px-2.5 py-1.5 text-[12px] ring-1 ring-[#eef0f3]">
-                  <span className="font-medium text-[#1b1f24]">{item.username ? `@${item.username}` : item.name ?? "Someone"}</span>
-                  <span className="ml-1.5 text-[#8b95a1]">{when(item.createdAt)}</span>
-                  <p className="truncate text-[#374151]">{item.text}</p>
+              {(chosen ?? []).map((item) => (
+                <li key={item.commentId} className="flex items-start gap-2 rounded-lg px-2.5 py-1.5 text-[12px] ring-1 ring-[#eef0f3]">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-medium text-[#1b1f24]">{item.username ? `@${item.username}` : item.name ?? "Someone"}</span>
+                    <span className="ml-1.5 text-[#8b95a1]">{when(item.createdAt)}</span>
+                    <p className="truncate text-[#374151]">{item.text}</p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`Leave ${item.username ? `@${item.username}` : "this person"} out`}
+                    title="Leave out of this send"
+                    disabled={sending || Boolean(progress?.done)}
+                    className="mt-0.5 shrink-0 text-[#8b95a1] hover:text-[#1b1f24] disabled:opacity-40"
+                    onClick={() => setRemoved((current) => new Set(current).add(item.commentId))}
+                  >
+                    <X className="size-3.5" />
+                  </button>
                 </li>
               ))}
             </ul>
           </>
         )}
       </div>
-      {post && missed?.length && !progress?.done ? (
+      {post && chosen?.length && !progress?.done ? (
         <footer className="border-t p-3">
           <Button className="w-full" disabled={sending} onClick={() => void send()}>
-            {sending ? "Sending…" : `Send the DM to ${missed.length} ${missed.length === 1 ? "person" : "people"}`}
+            {sending ? "Sending…" : `Send the DM to ${chosen.length} ${chosen.length === 1 ? "person" : "people"}`}
           </Button>
         </footer>
       ) : null}

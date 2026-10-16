@@ -105,13 +105,22 @@ const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * nothing remains, so one request never runs long. Two at once for the same flow could DM someone twice,
  * so the second is refused.
  */
-export async function sendMissedComments(input: { flowId: string; accountId: string; postId: string; limit?: number; gapMs?: number }) {
+export async function sendMissedComments(input: {
+  flowId: string;
+  accountId: string;
+  postId: string;
+  limit?: number;
+  gapMs?: number;
+  /** Comment ids taken off the list on the page: those people are left alone. */
+  skip?: string[];
+}) {
   if (running.has(input.flowId)) throw new CatchUpError("Already sending for this flow");
   running.add(input.flowId);
   try {
     const { flow, bot, accounts } = await loadTarget(input.flowId);
     const platform = accounts.find((account) => account.id === input.accountId)?.platform ?? "instagram";
-    const missed = await findMissedComments(input.flowId, input.accountId, input.postId);
+    const skip = new Set(input.skip ?? []);
+    const missed = (await findMissedComments(input.flowId, input.accountId, input.postId)).filter((comment) => !skip.has(comment.commentId));
     const batch = missed.slice(0, Math.max(1, Math.min(input.limit ?? 20, 50)));
     const startedAt = new Date();
     for (const [index, comment] of batch.entries()) {

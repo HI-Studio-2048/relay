@@ -380,10 +380,14 @@ describe("Meta accounts through the company Zernio key", () => {
     const before = sentBodies.length;
     expect(sentBodies.slice(0, before).some((body) => String(body.path).includes("c-a"))).toBe(false);
 
-    const send = async () =>
+    const send = async (skip: string[] = []) =>
       (await (
-        await route.POST(new Request("https://recatch.test/api/flows/giveaway/missed-comments", { method: "POST", body: JSON.stringify({ accountId: "a-3", postId: "post-9", limit: 1 }) }), params)
+        await route.POST(new Request("https://recatch.test/api/flows/giveaway/missed-comments", { method: "POST", body: JSON.stringify({ accountId: "a-3", postId: "post-9", limit: 1, skip }) }), params)
       ).json()) as { sent: number; failed: number; remaining: number };
+    // People taken off the list on the page are left alone, and stay on the list for next time.
+    expect(await send(["c-a", "c-r"])).toEqual({ sent: 0, failed: 0, remaining: 0 });
+    expect(sentBodies).toHaveLength(before);
+    expect(await preview()).toHaveLength(2);
     expect(await send()).toEqual({ sent: 1, failed: 0, remaining: 1 });
     expect(await send()).toEqual({ sent: 1, failed: 0, remaining: 0 });
     expect(await preview()).toEqual([]);
