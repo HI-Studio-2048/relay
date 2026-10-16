@@ -60,6 +60,12 @@ function fakeZernio() {
       accounts = accounts.filter((account) => account._id !== id);
       return respond({ ok: true });
     }
+    // Comment replies. A comment id with "gone" in it stands for one Instagram won't answer (deleted, restricted).
+    if (url.pathname.startsWith("/api/v1/inbox/comments/") && method === "POST") {
+      if (url.pathname.includes("gone")) return respond({ error: "The commenter's account was not found." }, 400);
+      sentBodies.push({ path: url.pathname, ...body });
+      return respond({ data: { messageId: `c-${sentBodies.length}` } });
+    }
     if (url.pathname.startsWith("/api/v1/inbox/conversations/") && method === "POST") {
       sentBodies.push(body);
       return respond({ data: { messageId: `out-${sentBodies.length}` } });
@@ -275,5 +281,52 @@ describe("Meta accounts through the company Zernio key", () => {
     // Only Recatch's own uploads go out from Live Chat.
     const foreign = await reply(new Request("https://recatch.test/api/inbox/x/reply", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ media: { url: "https://evil.test/a.png" } }) }), params);
     expect(foreign.status).toBe(400);
+  });
+
+  it("keeps a waiting comment flow when a later comment's DM fails, so the button still works", async () => {
+    signedIn = "owner-1";
+    const { getDb } = await import("@/lib/db");
+    const { bots, flows } = await import("@/lib/db/schema");
+    const db = await getDb();
+    const [row] = await db.select().from(bots).where(and(eq(bots.ownerId, "owner-1"), eq(bots.channel, "zernio")));
+    await db.insert(flows).values({
+      id: "giveaway",
+      botId: row!.id,
+      name: "Giveaway",
+      triggerType: "comment",
+      triggerValue: "enter",
+      isActive: true,
+      definition: {
+        startStepId: "open",
+        trigger: { publicReplies: ["You're in!"], oncePerContact: true },
+        steps: [
+          { id: "open", type: "text", text: "You're entered", buttons: [{ text: "Count me in", next: "ask" }] },
+          { id: "ask", type: "capture", field: "email", prompt: "What's your email?", skippable: true, next: "done" },
+          { id: "done", type: "end", text: "All set" },
+        ],
+      },
+    });
+    const { processChannelUpdate } = await import("@/lib/webhook");
+    const comment = (id: string, postId: string) =>
+      processChannelUpdate(row!.id, {
+        event: "comment.received",
+        profiles: [{ id: "p-1", externalId: "owner-1" }],
+        account: { accountId: "a-3", platform: "instagram" },
+        comment: { id, text: "Enter", postId, platformPostId: postId, platform: "instagram", author: { id: "u-give", username: "giver" } },
+      });
+
+    await comment("c-1", "post-1");
+    expect(sentBodies.at(-1)).toMatchObject({ path: "/api/v1/inbox/comments/post-1/c-1/private-reply" });
+    // A second comment elsewhere whose DM Instagram refuses.
+    await comment("c-gone", "post-2");
+
+    await processChannelUpdate(row!.id, {
+      event: "message.received",
+      profiles: [{ id: "p-1", externalId: "owner-1" }],
+      account: { accountId: "a-3", platform: "instagram" },
+      metadata: { postbackPayload: "n:ask" },
+      message: { id: "m-tap", conversationId: "conv-give", text: "Count me in", sender: { id: "u-give" } },
+    });
+    expect(sentBodies.at(-1)).toMatchObject({ accountId: "a-3", message: "What's your email?" });
   });
 });

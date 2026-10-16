@@ -359,7 +359,7 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
       await answerBlueskyComment(botId, account, contact, inbound, publicReply, replies);
       replies = [];
     } else {
-      const answered = await answerComment(botId, account, contact, inbound, publicReply, replies);
+      const answered = await answerComment(botId, account, contact, inbound, publicReply, replies, session);
       replies = [];
       if (answered.session !== undefined) await persistSession(contact.id, answered.session);
       const matched = result.matchedFlowId ? flows.find((flow) => flow.id === result.matchedFlowId) : null;
@@ -445,7 +445,8 @@ function inboundLabel(kind: string, text: string | null) {
  * private reply (the only DM Instagram/Facebook allow before the person writes back). Anything after
  * it waits for a tap: the flow's own button, or a Continue button Recatch adds when there is none.
  * Platforms without private replies (TikTok, YouTube, LinkedIn…) only get the public reply.
- * Returns the session to store (undefined keeps the engine's).
+ * Returns the session to store (undefined keeps the engine's). `previous` is what the person had going
+ * before this comment: a DM that fails must not end a conversation that was already waiting on a tap.
  */
 async function answerComment(
   botId: string,
@@ -454,6 +455,7 @@ async function answerComment(
   inbound: NormalizedInbound,
   publicReply: string | null,
   replies: OutboundReply[],
+  previous: FlowSessionState | null,
 ): Promise<{ session: FlowSessionState | null | undefined }> {
   const ref = {
     accountId: inbound.channelAccountId!,
@@ -510,7 +512,7 @@ async function answerComment(
     }
   } catch (error) {
     log.warn("Private reply failed", error instanceof Error ? error.message : error);
-    return { session: null };
+    return { session: previous };
   }
   return { session };
 }
