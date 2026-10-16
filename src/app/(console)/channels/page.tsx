@@ -14,7 +14,7 @@ export default async function ChannelsPage({ searchParams }: { searchParams: Pro
   const query = await searchParams;
   const userId = await currentUserId();
   const connections = userId ? await listConnections(userId) : [];
-  const apps: ConnectedApp[] = PROVIDER_IDS.map((id) => ({
+  const apps: ConnectedApp[] = PROVIDER_IDS.filter((id) => id !== "google").map((id) => ({
     provider: id,
     label: PROVIDERS[id].label,
     purpose: PROVIDERS[id].purpose,

@@ -2,6 +2,7 @@ import { requireUserId } from "@/lib/auth";
 import { publicUrl } from "@/lib/env";
 import { log } from "@/lib/logger";
 import { relativeLocation, type RouteParams } from "@/lib/http";
+import { connectYouTubeChannel } from "@/lib/bots";
 import { saveConnection } from "@/lib/oauth/connections";
 import { callbackUrl, exchangeCode, fetchProfile, isProviderId, PROVIDERS } from "@/lib/oauth/providers";
 import { verifyState, VERIFIER_COOKIE } from "@/lib/oauth/state";
@@ -45,6 +46,8 @@ export async function GET(request: Request, context: RouteParams<{ provider: str
     });
     const profile = await fetchProfile(provider, tokens);
     const saved = await saveConnection({ ownerId: userId, provider, profile, tokens });
+    // A YouTube sign-in is also a channel: its comments come into Live Chat.
+    if (provider === "google") await connectYouTubeChannel({ ownerId: userId, connectionId: saved.id, channelId: profile.externalId, title: profile.displayName });
     return finish("connected", `${label} connected${saved.displayName ? `: ${saved.displayName}` : ""}`);
   } catch (error) {
     // The message can come from the provider; it never contains our tokens.

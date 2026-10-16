@@ -83,7 +83,7 @@ describe("providers", () => {
     expect(Object.fromEntries(url.searchParams)).toMatchObject({
       client_id: "g-id",
       response_type: "code",
-      scope: "https://www.googleapis.com/auth/youtube.readonly",
+      scope: "https://www.googleapis.com/auth/youtube.force-ssl",
       state: "S",
       access_type: "offline",
       prompt: "consent",

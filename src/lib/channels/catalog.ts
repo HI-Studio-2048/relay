@@ -21,6 +21,8 @@ export type CatalogEntry = {
   channel?: ChannelId;
   /** One line on how it connects, or why it is not ready. */
   how: string;
+  /** Where Connect goes when it is a sign-in rather than the Setup form. */
+  connectHref?: string;
 };
 
 export const CHANNEL_CATALOG: CatalogEntry[] = [
@@ -28,6 +30,7 @@ export const CHANNEL_CATALOG: CatalogEntry[] = [
   { id: "slack", label: "Slack", mark: "SL", color: "#4A154B", what: "Direct messages to the Recatch app", state: "live", channel: "slack", how: "Add to Slack, one click" },
   { id: "discord", label: "Discord", mark: "DC", color: "#5865F2", what: "Private chats started with /chat in your server", state: "live", channel: "discord", how: "Add to Discord, one click" },
   { id: "bluesky", label: "Bluesky", mark: "bsky", color: "#1185FE", what: "Direct messages", state: "live", channel: "bluesky", how: "Sign in with Bluesky, one click" },
+  { id: "youtube", label: "YouTube", mark: "YT", color: "#FF0000", what: "Comments on your videos, answered from Live Chat or by automation", state: "live", channel: "youtube", how: "Sign in with Google, one click", connectHref: "/api/connections/google/start" },
   { id: "instagram", label: "Instagram", mark: "IG", color: "#E1306C", what: "DMs and story replies", state: "meta", channel: "instagram", meta: "instagram", how: "Your own Meta app and Page token for now" },
   { id: "messenger", label: "Messenger", mark: "f", color: "#0084FF", what: "Facebook Page DMs", state: "meta", channel: "messenger", meta: "facebook", how: "Your own Meta app and Page token for now" },
   { id: "whatsapp", label: "WhatsApp", mark: "WA", color: "#25D366", what: "WhatsApp Business conversations", state: "meta", channel: "whatsapp", meta: "whatsapp", how: "Your own Meta app and phone number ID for now" },
@@ -35,7 +38,6 @@ export const CHANNEL_CATALOG: CatalogEntry[] = [
   { id: "x", label: "X", mark: "X", color: "#111111", what: "DMs and replies", state: "soon", how: "X charges for DM access" },
   { id: "tiktok", label: "TikTok", mark: "TT", color: "#FE2C55", what: "Video comments and DMs", state: "soon", how: "Sign-in works under Connected apps. Messaging needs TikTok's approval" },
   { id: "reddit", label: "Reddit", mark: "r/", color: "#FF4500", what: "Chats and comment replies", state: "soon", how: "Waiting on Reddit API access" },
-  { id: "youtube", label: "YouTube", mark: "YT", color: "#FF0000", what: "Comments on your videos", state: "soon", how: "Sign-in works under Connected apps. Google verification is next" },
   { id: "linkedin", label: "LinkedIn", mark: "in", color: "#0A66C2", what: "Comments on your company posts", state: "soon", how: "Needs LinkedIn's partner program" },
   { id: "pinterest", label: "Pinterest", mark: "P", color: "#E60023", what: "Pins and boards", state: "soon", how: "Waiting on Pinterest's review" },
   { id: "imessage", label: "iMessage", mark: "iM", color: "#34C759", what: "Apple Messages for Business", state: "soon", how: "Apple only allows it through approved providers" },

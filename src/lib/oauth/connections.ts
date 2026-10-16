@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { getDb } from "@/lib/db";
 import { oauthConnections } from "@/lib/db/schema";
+import { log } from "@/lib/logger";
 import { isProviderId, OAuthError, refreshTokens, type Profile, type ProviderId, type TokenSet } from "@/lib/oauth/providers";
 
 type Row = typeof oauthConnections.$inferSelect;
@@ -71,9 +72,26 @@ export async function saveConnection(input: { ownerId: string; provider: Provide
   return toPublic(row!);
 }
 
-export async function disconnectConnection(ownerId: string, id: string): Promise<boolean> {
+/**
+ * Delete a connection and tell the provider to drop the grant, so the account stops showing Recatch as
+ * having access. A failed revoke is logged, not fatal: the tokens are gone from Recatch either way.
+ */
+export async function disconnectConnection(ownerId: string, id: string, fetcher: Fetcher = fetch): Promise<boolean> {
   const db = await getDb();
   const removed = await db.delete(oauthConnections).where(and(eq(oauthConnections.id, id), eq(oauthConnections.ownerId, ownerId))).returning();
+  const row = removed[0];
+  if (row && row.provider === "google") {
+    const grant = row.refreshTokenEncrypted ?? row.accessTokenEncrypted;
+    try {
+      await fetcher("https://oauth2.googleapis.com/revoke", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ token: decryptSecret(grant) }),
+      });
+    } catch (error) {
+      log.warn("Google revoke failed", error instanceof Error ? error.message : error);
+    }
+  }
   return removed.length > 0;
 }
 
@@ -126,4 +144,12 @@ export async function getAccessToken(ownerId: string, id: string, options: { fet
   })().finally(() => refreshing.delete(id));
   refreshing.set(id, work);
   return work;
+}
+
+/** The same, for code that holds a connection id but not the owner (the YouTube channel, which stores the id). */
+export async function getConnectionAccessToken(id: string, options: { fetcher?: Fetcher; now?: number } = {}): Promise<string> {
+  const db = await getDb();
+  const [row] = await db.select({ ownerId: oauthConnections.ownerId }).from(oauthConnections).where(eq(oauthConnections.id, id)).limit(1);
+  if (!row) throw new OAuthError("The Google sign-in for this channel is gone. Connect YouTube again.");
+  return getAccessToken(row.ownerId, id, options);
 }

@@ -13,6 +13,7 @@ import {
   type SentMessage,
 } from "@/lib/channels/types";
 import { parseZernioWebhook, sendZernioReply, sendZernioTyping, type ZernioWebhookPayload } from "@/lib/channels/zernio";
+import { parseYouTubeEvent, sendYouTubeReply, type YouTubeCommentEvent } from "@/lib/channels/youtube";
 import { parseWhatsAppWebhook, sendWhatsAppReply, type WhatsAppWebhookPayload } from "@/lib/channels/whatsapp";
 import { answerCallbackQuery, sendChatAction, sendFlowReply, type TelegramUpdate } from "@/lib/telegram";
 import type { OutboundReply } from "@/lib/types";
@@ -27,8 +28,11 @@ export function accountFromRow(row: BotRow): ChannelAccount {
     id: row.id,
     channel: channelOf(row.channel),
     // Servers added through Add to Discord use the one shared bot, and Meta accounts use the company Zernio key, so neither has a token of its own to decrypt.
+    // YouTube reads a fresh token from its Google connection on each call.
     token:
-      row.channel === "discord" && row.settings?.discordShared === true
+      row.channel === "youtube"
+        ? ""
+        : row.channel === "discord" && row.settings?.discordShared === true
         ? (process.env.DISCORD_BOT_TOKEN?.trim() ?? "")
         : row.channel === "zernio" && row.settings?.zernioManaged === true
           ? (process.env.ZERNIO_API_KEY?.trim() ?? "")
@@ -38,6 +42,7 @@ export function accountFromRow(row: BotRow): ChannelAccount {
     appSecret: row.appSecretEncrypted ? decryptSecret(row.appSecretEncrypted) : null,
     verifyToken: row.webhookSecret,
     oauth: row.channel === "bluesky" && row.settings?.blueskyOauth === true,
+    connectionId: row.channel === "youtube" ? ((row.settings?.youtubeConnectionId as string | undefined) ?? null) : null,
   };
 }
 
@@ -67,6 +72,7 @@ export async function sendChannelReply(
   if (account.channel === "discord") return sendDiscordReply(account, to, reply);
   if (account.channel === "slack") return sendSlackReply(account, to, reply);
   if (account.channel === "bluesky") return sendBlueskyReply(account, to, reply);
+  if (account.channel === "youtube") return sendYouTubeReply(account, target, reply);
   return sendMetaReply(account, to, reply);
 }
 
@@ -75,7 +81,7 @@ export async function sendChannelTyping(account: ChannelAccount, recipient: stri
   const to = target.externalUserId;
   if (account.channel === "zernio") return sendZernioTyping(account, target);
   if (account.channel === "telegram") return void (await sendChatAction(account.token, to, "typing"));
-  if (account.channel === "whatsapp" || account.channel === "slack" || account.channel === "bluesky") return;
+  if (account.channel === "whatsapp" || account.channel === "slack" || account.channel === "bluesky" || account.channel === "youtube") return;
   if (account.channel === "discord") return sendDiscordTyping(account, to);
   await sendMetaTyping(account, to);
 }
@@ -126,5 +132,6 @@ export function parseChannelUpdate(account: ChannelAccount, payload: unknown): N
   if (account.channel === "discord") return parseDiscordEvent(payload as DiscordGatewayEvent);
   if (account.channel === "slack") return parseSlackEvent(payload as SlackPayload);
   if (account.channel === "bluesky") return parseBlueskyEvent(payload as BlueskyEvent | BlueskyCommentEvent);
+  if (account.channel === "youtube") return parseYouTubeEvent(payload as YouTubeCommentEvent);
   return parseMetaWebhook(payload as MetaWebhookPayload);
 }

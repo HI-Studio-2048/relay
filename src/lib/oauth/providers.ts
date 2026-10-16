@@ -41,11 +41,13 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
   google: {
     id: "google",
     label: "YouTube",
-    purpose: "Read the connected channel's details and comments.",
+    purpose: "Comments on your videos land in Live Chat, and you or a comment automation reply under them.",
     authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
     tokenUrl: "https://oauth2.googleapis.com/token",
     clientIdParam: "client_id",
-    scopes: ["https://www.googleapis.com/auth/youtube.readonly"],
+    // force-ssl is the narrowest scope that can post a comment reply and hold a comment for review.
+    // readonly can read comments but cannot answer them, which is the whole feature.
+    scopes: ["https://www.googleapis.com/auth/youtube.force-ssl"],
     scopeSeparator: " ",
     pkce: true,
     // offline + consent make Google return a refresh token every time, not only the first.

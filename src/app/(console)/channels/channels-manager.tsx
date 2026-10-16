@@ -193,7 +193,7 @@ export function ChannelsManager({ notice, metaReady }: { notice: Notice; metaRea
                     size="sm"
                     variant={connected ? "outline" : "default"}
                     nativeButton={false}
-                    render={<Link href={`/setup?channel=${entry.channel}`} />}
+                    render={entry.connectHref ? <a href={entry.connectHref} /> : <Link href={`/setup?channel=${entry.channel}`} />}
                   >
                     {connected ? "Add another" : "Connect"}
                   </Button>

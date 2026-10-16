@@ -7,6 +7,7 @@ import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
 import { json, fail, readJson, type RouteParams } from "@/lib/http";
 import { revokeBlueskySession } from "@/lib/channels/bluesky-oauth";
+import { disconnectConnection } from "@/lib/oauth/connections";
 import { leaveDiscordGuild } from "@/lib/channels/discord-install";
 import { revokeSlackToken } from "@/lib/channels/slack-install";
 import { deleteWebhook } from "@/lib/telegram";
@@ -43,6 +44,10 @@ export async function DELETE(request: Request, context: RouteParams<{ id: string
     if (row.channel === "slack" && row.settings?.slackInstalled === true) await revokeSlackToken(decryptSecret(row.tokenEncrypted));
     // A Bluesky account that signed in with OAuth signs out at Bluesky too.
     if (row.channel === "bluesky" && row.settings?.blueskyOauth === true) await revokeBlueskySession(String(row.externalAccountId));
+    // A YouTube channel drops its Google sign-in too, and Google is told to revoke the grant.
+    if (row.channel === "youtube" && row.ownerId && typeof row.settings?.youtubeConnectionId === "string") {
+      await disconnectConnection(row.ownerId, row.settings.youtubeConnectionId);
+    }
     // A Meta account stops billing at Zernio when it goes: its accounts are disconnected and its profile dropped.
     let zernioWarning: string | null = null;
     if (row.channel === "zernio") {

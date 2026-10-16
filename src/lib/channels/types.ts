@@ -3,9 +3,9 @@
  * every send and every inbound webhook in Recatch goes through the adapter for the account's channel.
  * `zernio` is a hub: one API key brings every social account in a Zernio workspace.
  */
-export type ChannelId = "zernio" | "telegram" | "instagram" | "messenger" | "whatsapp" | "discord" | "slack" | "bluesky";
+export type ChannelId = "zernio" | "telegram" | "instagram" | "messenger" | "whatsapp" | "discord" | "slack" | "bluesky" | "youtube";
 
-export const CHANNEL_IDS: ChannelId[] = ["zernio", "telegram", "instagram", "messenger", "whatsapp", "discord", "slack", "bluesky"];
+export const CHANNEL_IDS: ChannelId[] = ["zernio", "telegram", "instagram", "messenger", "whatsapp", "discord", "slack", "bluesky", "youtube"];
 
 export type ChannelMeta = {
   id: ChannelId;
@@ -132,6 +132,19 @@ export const CHANNELS: Record<ChannelId, ChannelMeta> = {
     formatting: "plain",
     linkStyle: "ref",
   },
+  youtube: {
+    id: "youtube",
+    label: "YouTube",
+    color: "#FF0000",
+    maxButtons: 0,
+    maxQuickReplies: 0,
+    supportsUrlButtons: false,
+    supportsTyping: false,
+    supportsCommands: false,
+    supportsPhoneShare: false,
+    formatting: "plain",
+    linkStyle: "ref",
+  },
 };
 
 export function channelOf(value: string | null | undefined): ChannelId {
@@ -161,6 +174,8 @@ export type ChannelAccount = {
   verifyToken: string;
   /** Bluesky: signed in with OAuth, so requests go through a stored session instead of an app password. */
   oauth?: boolean;
+  /** YouTube: the Google connection whose token the calls use (refreshed there, never stored on the account). */
+  connectionId?: string | null;
 };
 
 /** Channel-neutral inbound event, produced by each adapter's webhook parser. */

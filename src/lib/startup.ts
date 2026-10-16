@@ -11,6 +11,8 @@ export async function ensureReady() {
     startDiscordGateways();
     const { startBlueskyPolling } = await import("@/lib/channels/bluesky-manager");
     startBlueskyPolling();
+    const { startYouTubePolling } = await import("@/lib/channels/youtube-manager");
+    startYouTubePolling();
   }
   log.info("Recatch ready");
 }

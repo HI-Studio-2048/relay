@@ -21,6 +21,7 @@ import { runAiAutoReply } from "@/lib/ai-runtime";
 import { applyAutoTags } from "@/lib/auto-tags";
 import { hideZernioComment, replyToZernioComment, sendZernioPrivateReply } from "@/lib/channels/zernio";
 import { replyToBlueskyComment } from "@/lib/channels/bluesky";
+import { holdYouTubeComment, replyToYouTubeComment } from "@/lib/channels/youtube";
 import { moderationReason, readModeration } from "@/lib/social-triggers";
 import { deliverReplies, loadBotFieldValues } from "@/lib/flow-dispatch";
 import { interpolateTemplate } from "@/lib/flow-effects";
@@ -187,10 +188,13 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
     kind === "comment" && inbound.comment && account.channel === "zernio" && inbound.channelAccountId
       ? { accountId: inbound.channelAccountId, postId: inbound.comment.postId, commentId: inbound.comment.id, platform: inbound.platform ?? null }
       : null;
-  const hideReason = commentRef ? moderationReason(readModeration(bot.settings), text ?? "") : null;
-  if (commentRef && hideReason) {
+  const youtubeComment = kind === "comment" && inbound.comment && account.channel === "youtube" ? inbound.comment : null;
+  const hideReason = commentRef || youtubeComment ? moderationReason(readModeration(bot.settings), text ?? "") : null;
+  if ((commentRef || youtubeComment) && hideReason) {
     try {
-      await hideZernioComment(account.token, commentRef);
+      // YouTube cannot hide a comment outright: holding it for review takes it off the video until the channel approves it.
+      if (youtubeComment) await holdYouTubeComment(account, youtubeComment.id);
+      else await hideZernioComment(account.token, commentRef!);
     } catch (error) {
       log.warn("Hiding a comment failed", error instanceof Error ? error.message : error);
     }
@@ -320,7 +324,7 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
   let replies = result.replies;
   const zernioComment = kind === "comment" && Boolean(inbound.comment) && account.channel === "zernio" && Boolean(inbound.channelAccountId);
   const blueskyComment = kind === "comment" && Boolean(inbound.comment) && account.channel === "bluesky";
-  if (zernioComment || blueskyComment) {
+  if (zernioComment || blueskyComment || youtubeComment) {
     let publicReply = result.publicReply ?? null;
     const commentFlow = result.matchedFlowId ? flows.find((flow) => flow.id === result.matchedFlowId) : null;
     const commentConfig = commentFlow?.definition.trigger;
@@ -338,7 +342,19 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
         log.warn("AI comment reply failed; using a preset", error instanceof Error ? error.message : error);
       }
     }
-    if (blueskyComment) {
+    if (youtubeComment) {
+      await answerYouTubeComment(botId, account, contact, inbound, publicReply);
+      replies = [];
+      await persistSession(contact.id, null);
+      const matched = result.matchedFlowId ? flows.find((flow) => flow.id === result.matchedFlowId) : null;
+      if (matched?.definition.trigger?.hideAfterReply) {
+        try {
+          await holdYouTubeComment(account, youtubeComment.id);
+        } catch (error) {
+          log.warn("Holding a YouTube comment failed", error instanceof Error ? error.message : error);
+        }
+      }
+    } else if (blueskyComment) {
       await answerBlueskyComment(botId, account, contact, inbound, publicReply, replies);
       replies = [];
     } else {
@@ -513,6 +529,22 @@ async function answerBlueskyComment(
   } catch (error) {
     log.warn("Bluesky DM after a comment was not delivered", error instanceof Error ? error.message : error);
     await persistSession(contact.id, null);
+  }
+}
+
+/**
+ * YouTube comment: only the public reply, posted under the comment. YouTube has no private messages, so the
+ * rest of a matched flow is dropped rather than posted in public.
+ */
+async function answerYouTubeComment(botId: string, account: ChannelAccount, contact: ContactRecord, inbound: NormalizedInbound, publicReply: string | null) {
+  const threadId = inbound.threadId;
+  if (!publicReply || !threadId) return;
+  try {
+    const textReply = interpolateTemplate(publicReply, contact, await loadBotFieldValues(botId));
+    const id = await replyToYouTubeComment(account, threadId, textReply);
+    await saveMessage({ botId, contactId: contact.id, direction: "outbound", source: "flow", body: `[public reply] ${textReply}`, telegramMessageId: id || null });
+  } catch (error) {
+    log.warn("Public YouTube reply failed", error instanceof Error ? error.message : error);
   }
 }
 

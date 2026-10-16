@@ -85,8 +85,27 @@ export default function PrivacyPage() {
           <li>Zernio, which carries Instagram, Messenger and WhatsApp messages and comments for businesses that connect those accounts.</li>
           <li>Our hosting provider, which runs the servers and database.</li>
           <li>Stripe, Slack, Discord or Microsoft Teams, only if the business connects them.</li>
+          <li>Google, through the YouTube API Services, for businesses that connect a YouTube channel.</li>
         </ul>
         <p>We may also disclose data when the law requires it.</p>
+      </LegalSection>
+
+      <LegalSection heading="YouTube">
+        <p>
+          A business can connect its YouTube channel by signing in with Google. Recatch uses the YouTube API Services
+          for this. With that access Recatch reads the comments left on the channel&apos;s videos, along with each
+          commenter&apos;s public name, picture and channel id, and shows them in the business&apos;s inbox. It posts a
+          reply under a comment when someone on the business&apos;s team writes one, or when the business has set up an
+          automatic reply for that kind of comment, and it holds a comment for review when the business&apos;s comment
+          moderation rules say so. It does nothing else on the channel: no uploads, no edits, no deleting.
+        </p>
+        <p>
+          The Google sign-in is encrypted and stored only to make those calls. Disconnecting the channel in Recatch
+          deletes it and tells Google to revoke it. You can also remove Recatch&apos;s access any time from your 
+          <a href="https://myaccount.google.com/connections" className="text-[#0084ff] hover:underline">Google account&apos;s connections page</a>. Google&apos;s
+          handling of your data is covered by the 
+          <a href="https://policies.google.com/privacy" className="text-[#0084ff] hover:underline">Google Privacy Policy</a>.
+        </p>
       </LegalSection>
 
       <LegalSection heading="Cookies">

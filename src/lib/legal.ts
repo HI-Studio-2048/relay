@@ -2,7 +2,7 @@
 export const LEGAL = {
   company: "HI Studio",
   product: "Recatch",
-  updated: "9 October 2026",
+  updated: "16 October 2026",
 };
 
 /** Public contact for privacy and deletion requests. Platform reviewers (Meta, Google, TikTok) check it exists. */

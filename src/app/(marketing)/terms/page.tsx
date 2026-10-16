@@ -58,6 +58,10 @@ export default function TermsPage() {
           its API, limits your account or goes down, parts of Recatch may stop working until it&apos;s fixed. We
           aren&apos;t responsible for their decisions.
         </p>
+        <p>
+          Connecting a YouTube channel uses the YouTube API Services, and by doing it you agree to be bound by the 
+          <a href="https://www.youtube.com/t/terms" className="text-[#0084ff] hover:underline">YouTube Terms of Service</a>.
+        </p>
       </LegalSection>
 
       <LegalSection heading="AI features">

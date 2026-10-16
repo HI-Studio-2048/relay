@@ -447,6 +447,41 @@ export async function connectBlueskyOauth(input: { ownerId: string; did: string 
 }
 
 /**
+ * A YouTube channel signed in with Google. The tokens live on the Google connection, which refreshes them,
+ * so the account only stores which connection it uses. Comments are polled (see youtube-manager.ts).
+ */
+export async function connectYouTubeChannel(input: { ownerId: string; connectionId: string; channelId: string; title: string | null }) {
+  const db = await getDb();
+  const existing = await db.select().from(bots);
+  const match = existing.find((row) => channelOf(row.channel) === "youtube" && row.externalAccountId === input.channelId);
+  assertOwnable(match, input.ownerId);
+  const id = match?.id ?? crypto.randomUUID();
+  const values = {
+    ownerId: input.ownerId,
+    name: `${input.title ?? input.channelId} (YouTube)`,
+    channel: "youtube" as const,
+    telegramUsername: input.title,
+    telegramBotId: null,
+    externalAccountId: input.channelId,
+    // Not used: calls take a fresh token from the Google connection. The column cannot be empty.
+    tokenEncrypted: encryptSecret("youtube-oauth"),
+    webhookSecret: match?.webhookSecret ?? randomSecret(12),
+    webhookUrl: null,
+    settings: { ...(match?.settings ?? {}), youtubeConnectionId: input.connectionId },
+    status: "connected",
+    lastHealthAt: new Date(),
+    lastHealthError: null,
+    updatedAt: new Date(),
+  };
+  if (match) await db.update(bots).set(values).where(eq(bots.id, id));
+  else await db.insert(bots).values({ id, ...values });
+
+  await seedBotDefaults(id);
+  const [row] = await db.select().from(bots).where(eq(bots.id, id)).limit(1);
+  return publicBot(row!);
+}
+
+/**
  * Connect a Bluesky account with its handle and an app password (never the main password). There is
  * no webhook: the worker polls the account's chat log. The app password needs the "Allow access to
  * your direct messages" box ticked, which checkBlueskyAccount verifies.
@@ -495,6 +530,7 @@ export async function connectChannelAccount(input: ChannelConnectInput) {
   if (input.channel === "slack") return connectSlack(input);
   if (input.channel === "bluesky") return connectBluesky(input);
   if (input.channel === "zernio") throw new Error("Connect Instagram, Messenger or WhatsApp from the Channels page");
+  if (input.channel === "youtube") throw new Error("Connect YouTube with Sign in with Google on the Channels page");
   const token = input.token.trim();
   const accountId = (input.externalAccountId ?? "").trim();
   if (!accountId) {
@@ -582,6 +618,13 @@ export async function healthCheckBot(botId: string, origin?: string) {
       .update(bots)
       .set({ name, status: error ? "error" : bot.status === "error" ? "disconnected" : bot.status, lastHealthAt: new Date(), lastHealthError: error, updatedAt: new Date() })
       .where(eq(bots.id, botId));
+    const [updated] = await db.select().from(bots).where(eq(bots.id, botId)).limit(1);
+    return { bot: publicBot(updated!), webhook: null, me: null };
+  }
+  if (channelOf(bot.channel) === "youtube") {
+    // One comment check doubles as the health check: it proves the Google sign-in and the channel both work.
+    const { pollYouTubeChannel } = await import("@/lib/channels/youtube-manager");
+    await pollYouTubeChannel(bot);
     const [updated] = await db.select().from(bots).where(eq(bots.id, botId)).limit(1);
     return { bot: publicBot(updated!), webhook: null, me: null };
   }
