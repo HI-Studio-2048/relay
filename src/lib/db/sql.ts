@@ -264,6 +264,7 @@ CREATE TABLE IF NOT EXISTS team_members (
 );
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS assigned_to text;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS author text;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS media jsonb;
 ALTER TABLE flow_events ADD COLUMN IF NOT EXISTS name text;
 ALTER TABLE flow_events ADD COLUMN IF NOT EXISTS value double precision;
 ALTER TABLE sequence_steps ADD COLUMN IF NOT EXISTS flow_id text REFERENCES flows(id) ON DELETE SET NULL;
@@ -377,6 +378,16 @@ CREATE TABLE IF NOT EXISTS email_suppressions (
   email text PRIMARY KEY,
   reason text NOT NULL,
   detail text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS media_files (
+  id text PRIMARY KEY,
+  mime text NOT NULL,
+  filename text NOT NULL,
+  kind text NOT NULL,
+  size integer NOT NULL,
+  bytes bytea NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 `;

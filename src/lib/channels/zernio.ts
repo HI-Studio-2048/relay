@@ -439,6 +439,9 @@ export function parseZernioWebhook(payload: ZernioWebhookPayload, accountFilter:
         threadId: message.conversationId ?? payload.conversation?.id ?? null,
         avatarUrl: message.sender?.picture ?? payload.conversation?.participantPicture ?? null,
         storyUrl: meta.storyReply?.storyUrl ?? null,
+        attachments: (message.attachments ?? [])
+          .filter((item): item is ZernioAttachment & { url: string } => Boolean(item.url))
+          .map((item) => ({ url: item.url, type: item.originalType ?? item.type ?? null })),
         profileFields: mergeFields(instagramProfileFields(message.sender?.instagramProfile), referralFields(meta.referral)),
       },
     ];

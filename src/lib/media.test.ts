@@ -1,15 +1,17 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   classifyMedia,
   mediaCaption,
   mediaFromPublicUrl,
   outboundPreview,
   parseStoredMediaUrl,
+  readMediaFile,
   resolveUploadMime,
   saveMediaFile,
+  saveRemoteMedia,
   telegramMediaField,
   telegramSendMethod,
   toFlowMedia,
@@ -67,31 +69,48 @@ describe("media classification", () => {
 });
 
 describe("media file store", () => {
-  let dir: string | undefined;
-  const previous = process.env.MEDIA_DIR;
-
-  afterEach(async () => {
-    if (previous === undefined) delete process.env.MEDIA_DIR;
-    else process.env.MEDIA_DIR = previous;
-    if (dir) await rm(dir, { recursive: true, force: true });
+  // Media lives in the database now; give it a fresh one away from the repo's .data.
+  beforeAll(() => {
+    process.chdir(mkdtempSync(path.join(tmpdir(), "relay-media-")));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("persists an upload and returns a /api/media URL", async () => {
-    dir = await mkdtemp(path.join(tmpdir(), "relay-media-"));
-    process.env.MEDIA_DIR = dir;
     const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
     const record = await saveMediaFile({ bytes: png, mime: "image/png", filename: "logo.png" });
     expect(record.kind).toBe("photo");
     expect(toFlowMedia(record).url).toBe(`/api/media/${record.id}`);
+    const read = await readMediaFile(record.id);
+    expect(read.record).toEqual(record);
+    expect([...read.bytes]).toEqual([...png]);
   });
 
   it("saves a GIF when mime is missing and the filename ends in .gif", async () => {
-    dir = await mkdtemp(path.join(tmpdir(), "relay-media-"));
-    process.env.MEDIA_DIR = dir;
     const gif = new Uint8Array([71, 73, 70, 56, 57, 97]);
     const record = await saveMediaFile({ bytes: gif, mime: "", filename: "wave.gif" });
     expect(record.kind).toBe("animation");
     expect(record.mime).toBe("image/gif");
+  });
+
+  it("keeps a copy of a remote file, and skips links it can't or shouldn't keep", async () => {
+    const gif = new Uint8Array([71, 73, 70, 56, 57, 97]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("gone")) return new Response("", { status: 404 });
+        if (url.includes("page")) return new Response("<html>", { headers: { "content-type": "text/html" } });
+        return new Response(gif, { headers: { "content-type": "image/gif" } });
+      }),
+    );
+    const kept = await saveRemoteMedia("https://cdn.example/loop.gif?sig=1");
+    expect(kept?.kind).toBe("animation");
+    expect(kept?.filename).toBe("loop.gif");
+    expect(await saveRemoteMedia("http://cdn.example/plain.gif")).toBeNull();
+    expect(await saveRemoteMedia("https://cdn.example/gone.png")).toBeNull();
+    expect(await saveRemoteMedia("https://cdn.example/page")).toBeNull();
   });
 });
 

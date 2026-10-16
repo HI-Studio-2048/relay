@@ -7,7 +7,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 
 // The routes read the signed-in user from proxy.ts; stand in for it here.
 let signedIn = "owner-1";
-vi.mock("@/lib/auth", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/auth")>()), requireUserId: async () => signedIn }));
+vi.mock("@/lib/auth", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/auth")>()), requireUserId: async () => signedIn, requireBotAccess: async () => signedIn }));
 
 const queued: { botId: string; update: unknown }[] = [];
 vi.mock("@/lib/queue", () => ({
@@ -24,11 +24,15 @@ type Account = { _id: string; platform: string; username: string; profileId: str
 let profiles: Profile[] = [];
 let accounts: Account[] = [];
 const calls: string[] = [];
+const sentBodies: Record<string, unknown>[] = [];
+const PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13]);
 
 /** A stand-in for Zernio's API that keeps profiles and accounts, like the real one. */
 function fakeZernio() {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
+    // Instagram's CDN, where the pictures people send live for a while.
+    if (url.hostname === "cdn.instagram.test") return new Response(PNG, { headers: { "content-type": "image/png" } });
     if (url.hostname !== "zernio.com") return realFetch(input, init);
     const method = init?.method ?? "GET";
     calls.push(`${method} ${url.pathname}${url.search}`);
@@ -55,6 +59,10 @@ function fakeZernio() {
       const id = url.pathname.split("/").pop();
       accounts = accounts.filter((account) => account._id !== id);
       return respond({ ok: true });
+    }
+    if (url.pathname.startsWith("/api/v1/inbox/conversations/") && method === "POST") {
+      sentBodies.push(body);
+      return respond({ data: { messageId: `out-${sentBodies.length}` } });
     }
     if (url.pathname.startsWith("/api/v1/connect/") && method === "GET") {
       return respond({ authUrl: `https://www.instagram.com/oauth/authorize?profile=${url.searchParams.get("profileId")}` });
@@ -221,5 +229,51 @@ describe("Meta accounts through the company Zernio key", () => {
     const response = await POST(new Request("https://recatch.test/api/zernio/webhook", { method: "POST", body: "{}" }));
     expect(response.status).toBe(503);
     vi.stubEnv("ZERNIO_WEBHOOK_SECRET", "whsec");
+  });
+
+  it("keeps a copy of an image someone sends, and a teammate can send one back", async () => {
+    signedIn = "owner-1";
+    const { getDb } = await import("@/lib/db");
+    const { bots, messages } = await import("@/lib/db/schema");
+    const db = await getDb();
+    const [row] = await db.select().from(bots).where(and(eq(bots.ownerId, "owner-1"), eq(bots.channel, "zernio")));
+    const { processChannelUpdate } = await import("@/lib/webhook");
+    await processChannelUpdate(row!.id, {
+      event: "message.received",
+      profiles: [{ id: "p-1", externalId: "owner-1" }],
+      account: { accountId: "a-3", platform: "instagram" },
+      message: {
+        id: "m-img",
+        conversationId: "conv-1",
+        sender: { id: "u-pic", name: "Pic Sender" },
+        attachments: [{ type: "image", url: "https://cdn.instagram.test/v/123_n.jpg?stp=1" }],
+      },
+    });
+
+    const { readMediaFile, parseStoredMediaUrl } = await import("@/lib/media");
+    const [inbound] = await db.select().from(messages).where(and(eq(messages.botId, row!.id), eq(messages.direction, "inbound")));
+    expect(inbound!.body).toBe("[image]");
+    const kept = parseStoredMediaUrl(inbound!.media![0]!.url);
+    expect(kept?.type).toBe("local");
+    const stored = await readMediaFile((kept as { id: string }).id);
+    expect(stored.record.kind).toBe("photo");
+    expect([...stored.bytes]).toEqual([...PNG]);
+
+    const upload = new FormData();
+    upload.append("file", new File([PNG], "reply.png", { type: "image/png" }));
+    const media = await import("@/app/api/media/route");
+    const uploaded = (await (await media.POST(new Request("https://recatch.test/api/media", { method: "POST", body: upload }))).json()) as { media: { url: string } };
+
+    const { POST: reply } = await import("@/app/api/inbox/[contactId]/reply/route");
+    const params = { params: Promise.resolve({ contactId: inbound!.contactId }) };
+    const sent = await reply(new Request("https://recatch.test/api/inbox/x/reply", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "", media: { url: uploaded.media.url, kind: "document" } }) }), params);
+    expect(sent.status).toBe(200);
+    expect(sentBodies.at(-1)).toMatchObject({ accountId: "a-3", attachmentUrl: `https://recatch.test${uploaded.media.url}`, attachmentType: "image" });
+    const outbound = await db.select().from(messages).where(and(eq(messages.contactId, inbound!.contactId), eq(messages.direction, "outbound")));
+    expect(outbound.at(-1)).toMatchObject({ body: "[image]", media: [expect.objectContaining({ url: uploaded.media.url, kind: "photo" })] });
+
+    // Only Recatch's own uploads go out from Live Chat.
+    const foreign = await reply(new Request("https://recatch.test/api/inbox/x/reply", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ media: { url: "https://evil.test/a.png" } }) }), params);
+    expect(foreign.status).toBe(400);
   });
 });

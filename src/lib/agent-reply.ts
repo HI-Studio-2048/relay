@@ -4,11 +4,13 @@ import { getDb } from "@/lib/db";
 import { bots, contacts, messages, scheduledMessages } from "@/lib/db/schema";
 import { interpolateTemplate } from "@/lib/flow-effects";
 import { log } from "@/lib/logger";
+import { MEDIA_KIND_LABEL } from "@/lib/media-kinds";
 import { messagingWindow } from "@/lib/messaging-window";
 import { acquireSendSlot } from "@/lib/rate-limit";
 import { loadContactRecord, pauseContactAutomation, saveMessage } from "@/lib/store";
 import { assignContact } from "@/lib/team";
 import { botFieldValues } from "@/lib/template";
+import type { FlowMedia } from "@/lib/types";
 
 export class AgentReplyError extends Error {}
 
@@ -17,7 +19,13 @@ export class AgentReplyError extends Error {}
  * window on direct Meta accounts, logs it with the author, assigns an unassigned chat to them, and
  * pauses the bot for that person. Shared by "Send" and scheduled replies.
  */
-export async function sendAgentReply(input: { contactId: string; text: string; agent: { id: string; name: string } | null }) {
+export async function sendAgentReply(input: {
+  contactId: string;
+  text: string;
+  agent: { id: string; name: string } | null;
+  /** One image, GIF, video or file uploaded through /api/media. */
+  media?: FlowMedia | null;
+}) {
   const db = await getDb();
   const [contact] = await db.select().from(contacts).where(eq(contacts.id, input.contactId)).limit(1);
   if (!contact) throw new AgentReplyError("Contact not found");
@@ -35,8 +43,10 @@ export async function sendAgentReply(input: { contactId: string; text: string; a
   const record = await loadContactRecord(input.contactId);
   const raw = input.text.trim();
   const text = raw.includes("{{") && record ? interpolateTemplate(raw, record, botFieldValues(bot.settings)) : raw;
+  const media = input.media ?? null;
   const sent = await sendChannelReply(accountFromRow(bot), channelTarget(contact), {
     text,
+    ...(media ? { media } : {}),
     source: "agent",
     // Direct Meta accounts: after 24 hours a human reply must carry the HUMAN_AGENT tag.
     ...(window.kind === "human_agent" ? { humanAgent: true } : {}),
@@ -48,9 +58,10 @@ export async function sendAgentReply(input: { contactId: string; text: string; a
       contactId: input.contactId,
       direction: "outbound",
       source: "agent",
-      body: text,
+      body: text || (media ? `[${MEDIA_KIND_LABEL[media.kind].toLowerCase()}]` : ""),
       telegramMessageId: sent.message_id || null,
       author: input.agent?.name ?? null,
+      media: media ? [media] : null,
     });
     // Whoever answers an unassigned conversation picks it up.
     if (input.agent?.id && !contact.assignedTo) await assignContact(input.contactId, input.agent.id);

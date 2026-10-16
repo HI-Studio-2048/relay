@@ -206,10 +206,14 @@ export type NormalizedInbound = {
   threadId?: string | null;
   avatarUrl?: string | null;
   storyUrl?: string | null;
+  /** Images, GIFs, videos and files the person sent, as the platform's (often short-lived) links. */
+  attachments?: InboundAttachment[];
   comment?: InboundComment | null;
   /** Profile facts the platform sent with this event (follows_you, ig_followers, ig_verified). */
   profileFields?: Record<string, string>;
 };
+
+export type InboundAttachment = { url: string; type?: string | null; filename?: string | null };
 
 export type InboundComment = {
   id: string;

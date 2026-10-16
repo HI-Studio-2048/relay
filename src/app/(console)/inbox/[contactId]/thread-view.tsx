@@ -2,18 +2,20 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlarmClock, ArrowLeft, BookmarkPlus, Clock, Eye, Languages, Sparkles, CheckCircle2, MessageCircle, PanelRight, Play, RotateCcw, Send, X } from "lucide-react";
+import { AlarmClock, ArrowLeft, BookmarkPlus, Clock, Eye, FileText, Languages, Paperclip, Sparkles, CheckCircle2, MessageCircle, PanelRight, Play, RotateCcw, Send, X } from "lucide-react";
 import { toast } from "sonner";
 import { useBot } from "@/components/bot-provider";
 import { ContactAvatar } from "@/components/chrome/avatar";
+import { isMediaFile, uploadMediaFile } from "@/components/flow-canvas/media-picker";
 import { PlatformBadge } from "@/components/chrome/platform-badge";
 import { useTeam } from "@/components/use-team";
+import { MEDIA_ACCEPT, MEDIA_KIND_LABEL } from "@/lib/media-kinds";
 import { messagingWindow } from "@/lib/messaging-window";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client";
 import { displayName } from "@/lib/lead-capture";
 import { cn } from "@/lib/utils";
-import type { ContactRecord } from "@/lib/types";
+import type { ContactRecord, FlowMedia } from "@/lib/types";
 
 type Message = {
   id: string;
@@ -22,6 +24,7 @@ type Message = {
   body: string;
   createdAt: string;
   author?: string | null;
+  media?: FlowMedia[] | null;
 };
 
 type Automation = { status: "active" | "paused" | "completed" | "idle"; flowId: string | null; flowName: string | null };
@@ -39,6 +42,40 @@ type Assist = {
 
 /** Inbox lines Recatch writes for non-DM events. Shown as labeled cards instead of chat bubbles. */
 const EVENT_PREFIX = /^\[(comment|story reply|public reply|mentioned you in their story)\]\s*/i;
+
+/** Bodies like "[image]" that only stand in for an attachment. Not worth showing next to the real thing, or translating. */
+const PLACEHOLDER = /^\[[a-z_ ]+\]$/i;
+
+function MediaItem({ media }: { media: FlowMedia }) {
+  const label = media.filename || MEDIA_KIND_LABEL[media.kind];
+  if (media.kind === "photo" || media.kind === "animation") {
+    return (
+      <a href={media.url} target="_blank" rel="noreferrer" className="block">
+        {/* eslint-disable-next-line @next/next/no-img-element -- uploads and platform links, not static assets */}
+        <img src={media.url} alt={label} loading="lazy" className="max-h-72 max-w-full rounded-lg object-contain" />
+      </a>
+    );
+  }
+  if (media.kind === "video") return <video src={media.url} controls preload="metadata" className="max-h-72 max-w-full rounded-lg" />;
+  if (media.kind === "audio") return <audio src={media.url} controls preload="metadata" className="max-w-full" />;
+  return (
+    <a href={media.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 underline underline-offset-2">
+      <FileText className="size-4 shrink-0" />
+      <span className="truncate">{label}</span>
+    </a>
+  );
+}
+
+function MediaList({ media }: { media?: FlowMedia[] | null }) {
+  if (!media?.length) return null;
+  return (
+    <div className="mb-1 space-y-1.5">
+      {media.map((item, index) => (
+        <MediaItem key={`${item.url}-${index}`} media={item} />
+      ))}
+    </div>
+  );
+}
 
 function SourceLabel({ message }: { message: Message }) {
   if (message.direction === "inbound") return null;
@@ -68,6 +105,8 @@ function Bubble({
 }) {
   const outbound = message.direction === "outbound";
   const event = message.body.match(EVENT_PREFIX);
+  // "[image]" stands in for the attachment. Once the attachment itself shows, the stand-in is noise.
+  const hasText = !(message.media?.length && PLACEHOLDER.test(message.body.trim()));
   const time = new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   if (message.body.endsWith(" [rating request]")) {
     return (
@@ -115,6 +154,7 @@ function Bubble({
                   ? "Replied to your story"
                   : "Mentioned you in their story"}
           </p>
+          <MediaList media={message.media} />
           {text ? <p className="whitespace-pre-wrap text-[#1b1f24]">{text}</p> : null}
           <p className="mt-1 text-[10px] text-[#8b95a1]">{time}</p>
         </div>
@@ -133,7 +173,8 @@ function Bubble({
             : "rounded-bl-md bg-white text-[#1b1f24] ring-1 ring-[#e5e7eb]",
         )}
       >
-        <p className="break-words whitespace-pre-wrap">{message.body}</p>
+        <MediaList media={message.media} />
+        {hasText ? <p className="break-words whitespace-pre-wrap">{message.body}</p> : null}
         {translation && translation !== "loading" ? (
           <p className="mt-1.5 border-t border-[#eef0f3] pt-1.5 break-words whitespace-pre-wrap text-[#374151]">
             <span className="mr-1 text-[10px] font-medium text-[#7b61ff] uppercase">{translation.from} →</span>
@@ -144,7 +185,7 @@ function Bubble({
           <SourceLabel message={message} />
           {outbound ? "·" : null}
           {time}
-          {!outbound && onTranslate && !translation ? (
+          {!outbound && hasText && onTranslate && !translation ? (
             <button type="button" onClick={onTranslate} className="ml-1 text-[#0084ff] hover:underline">
               Translate
             </button>
@@ -193,6 +234,8 @@ export function ThreadView({
   initialMessages: Message[];
 }) {
   const { botId, bot } = useBot();
+  // YouTube replies are public comments, which take text only.
+  const canAttach = bot?.channel !== "youtube";
   const [contact, setContact] = useState(initialContact);
   const [messages, setMessages] = useState(initialMessages);
   const [text, setText] = useState("");
@@ -201,6 +244,9 @@ export function ThreadView({
   const [translatingDraft, setTranslatingDraft] = useState(false);
   const [notes, setNotes] = useState(initialContact.notes ?? "");
   const [sending, setSending] = useState(false);
+  const [attachment, setAttachment] = useState<FlowMedia | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [automation, setAutomation] = useState<Automation>({ status: "idle", flowId: null, flowName: null });
   const [flowOptions, setFlowOptions] = useState<FlowOption[]>([]);
   const [flowToSend, setFlowToSend] = useState("");
@@ -353,12 +399,29 @@ export function ThreadView({
     patchRef.current = patchContact;
   });
 
+  const attach = async (file: File | null | undefined) => {
+    if (!file) return;
+    if (!isMediaFile(file)) {
+      toast.error("Attach an image, GIF, video, audio or a document");
+      return;
+    }
+    setUploading(true);
+    try {
+      setAttachment(await uploadMediaFile(file));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const send = async () => {
-    if (!text.trim()) return;
+    if (!text.trim() && !attachment) return;
     setSending(true);
     try {
-      await api(`/api/inbox/${contactId}/reply`, { method: "POST", body: JSON.stringify({ text }) });
+      await api(`/api/inbox/${contactId}/reply`, { method: "POST", body: JSON.stringify({ text, media: attachment }) });
       setText("");
+      setAttachment(null);
       setUntranslated(null);
       setAssist(null);
       await load();
@@ -727,7 +790,45 @@ export function ThreadView({
               </button>
             </p>
           ) : null}
+          {attachment ? (
+            <div className="mb-2 flex items-center gap-2 rounded-lg bg-[#f4f6f8] px-2 py-1.5 text-[12px] text-[#1b1f24]">
+              {attachment.kind === "photo" || attachment.kind === "animation" ? (
+                // eslint-disable-next-line @next/next/no-img-element -- a fresh upload
+                <img src={attachment.url} alt="" className="size-10 rounded object-cover" />
+              ) : (
+                <FileText className="size-4 shrink-0 text-[#6b7280]" />
+              )}
+              <span className="min-w-0 flex-1 truncate">{attachment.filename || MEDIA_KIND_LABEL[attachment.kind]}</span>
+              <button type="button" aria-label="Remove attachment" className="text-[#6b7280] hover:text-[#1b1f24]" onClick={() => setAttachment(null)}>
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ) : null}
           <div className="flex items-end gap-2">
+            {canAttach ? (
+              <>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept={MEDIA_ACCEPT}
+                  className="hidden"
+                  onChange={(event) => {
+                    void attach(event.target.files?.[0]);
+                    event.target.value = "";
+                  }}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Attach an image, GIF or file"
+                  title="Attach an image, GIF or file"
+                  disabled={uploading || sending}
+                  onClick={() => fileInput.current?.click()}
+                >
+                  <Paperclip className={cn("size-4", uploading && "animate-pulse")} />
+                </Button>
+              </>
+            ) : null}
             <textarea
               value={text}
               onChange={(event) => {
@@ -736,6 +837,13 @@ export function ThreadView({
               }}
               placeholder={`Reply to ${contact.firstName ?? name}… (/ for saved replies)`}
               rows={2}
+              onPaste={(event) => {
+                const file = canAttach ? Array.from(event.clipboardData.files)[0] : undefined;
+                if (file) {
+                  event.preventDefault();
+                  void attach(file);
+                }
+              }}
               className="max-h-40 min-h-[2.5rem] flex-1 resize-none rounded-xl border border-[#e5e7eb] bg-[#f9fafb] px-3 py-2 text-[13px] outline-none focus:border-[#0084ff]"
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
@@ -773,7 +881,7 @@ export function ThreadView({
               aria-label="Send later"
               title="Send later"
               value=""
-              disabled={!text.trim()}
+              disabled={!text.trim() || Boolean(attachment)}
               onChange={(event) => void scheduleReply(event.target.value)}
               className="field-sizing-content h-9 rounded-lg border border-[#e5e7eb] bg-white px-1.5 text-[12px] text-[#6b7280] disabled:opacity-50"
             >
@@ -783,7 +891,7 @@ export function ThreadView({
               <option value="tomorrow">Tomorrow 9:00</option>
               <option value="week">Monday 9:00</option>
             </select>
-            <Button size="icon" aria-label="Send" onClick={() => void send()} disabled={sending || !text.trim()}>
+            <Button size="icon" aria-label="Send" onClick={() => void send()} disabled={sending || uploading || (!text.trim() && !attachment)}>
               <Send className="size-4" />
             </Button>
           </div>

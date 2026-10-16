@@ -17,7 +17,7 @@ import { emitWebhookSoon, publicContact } from "@/lib/developer";
 import { fireContactRules } from "@/lib/rules";
 import { syncContactSequences } from "@/lib/sequences";
 import { EXAMPLE_GROWTH_LINK_FLOW, EXAMPLE_LEAD_CAPTURE_FLOW } from "@/lib/example-flow";
-import type { ContactRecord, FlowDefinition, FlowSessionState } from "@/lib/types";
+import type { ContactRecord, FlowDefinition, FlowMedia, FlowSessionState } from "@/lib/types";
 import type { FlowRecord } from "@/lib/flow-engine";
 
 function now() {
@@ -347,6 +347,7 @@ export async function saveMessage(input: {
   telegramMessageId?: string | null;
   /** Team member name for agent replies. */
   author?: string | null;
+  media?: FlowMedia[] | null;
 }) {
   const db = await getDb();
   await db.insert(messages).values({
@@ -358,6 +359,7 @@ export async function saveMessage(input: {
     body: input.body,
     telegramMessageId: input.telegramMessageId ?? null,
     author: input.author ?? null,
+    media: input.media?.length ? input.media : null,
   });
 }
 

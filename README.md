@@ -70,7 +70,7 @@ Local-only `POST /api/dev/seed` (disabled in production) creates a demo bot, a l
 | `WORKER_MODE` | no | `all` (default), `web`, or `worker` |
 | `TELEGRAM_SENDS_PER_SECOND` | no | Default 20, capped at 25 |
 | `PORT` | Railway | Next.js reads this automatically |
-| `MEDIA_DIR` | no | Flow image/GIF uploads. Default `.data/media` |
+| `MEDIA_DIR` | no | Only for reading uploads saved on disk before they moved into the database. Default `.data/media` |
 | `ANTHROPIC_API_KEY` | optional | Server-wide AI (Claude) for accounts that have not saved their own key. Accounts can instead paste an OpenRouter key on the AI assistant page |
 | `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`, `AWS_SES_REGION`, `EMAIL_FROM` | for email | Amazon SES for password reset, welcome and hand-off emails. All four or email stays off. `EMAIL_FROM` must be verified in SES. Optional: `EMAIL_REPLY_TO`, `AWS_SES_SESSION_TOKEN` |
 | `AWS_SES_SNS_TOPIC_ARN` | no | The SNS topic SES publishes bounces and complaints to. Subscribe `https://<your domain>/api/email/feedback` to it (HTTPS); Recatch confirms the subscription and stops mailing addresses that hard-bounce or complain |
@@ -154,7 +154,7 @@ Subscribe writes a matching tag so tag-scoped broadcasts can target the list. Un
 
 On a **Message**, **Image / GIF**, or **Buttons** node, upload or drop a JPEG/PNG/WebP/GIF, or paste an `https://` URL. Empty browser mime types still work when the filename ends in `.gif` / `.png` / `.jpg` / `.webp`.
 
-- Uploads are stored under `MEDIA_DIR` (default `.data/media`) and served at `/api/media/:id`. Mount a Railway volume there if you want files to survive deploys. No extra API keys.
+- Uploads, and copies of images and files people send in a DM, are stored in Postgres (`media_files`) and served at `/api/media/:id`. They used to sit on the container disk, which every deploy wiped. Platform links to received media expire, which is why Recatch keeps its own copy. No extra API keys.
 - Public HTTPS URLs are stored as-is. Telegram fetches them.
 - Local uploads are sent as multipart (`sendPhoto` / `sendAnimation`) so Telegram does not need a public media URL.
 - Broadcasts stay text-only; the confirm gate is unchanged.

@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import {
   boolean,
+  customType,
   doublePrecision,
   index,
   integer,
@@ -11,6 +12,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import type { FlowMedia } from "@/lib/types";
 
 /** A customer login. Each user owns the channel accounts (bots) they connect. */
 export const users = pgTable(
@@ -208,6 +210,8 @@ export const messages = pgTable("messages", {
   telegramMessageId: text("telegram_message_id"),
   /** Team member who wrote an agent reply. */
   author: text("author"),
+  /** Images, GIFs and files on this message (uploads or saved copies of what the person sent). */
+  media: jsonb("media").$type<FlowMedia[]>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -490,6 +494,24 @@ export const emailSuppressions = pgTable("email_suppressions", {
   email: text("email").primaryKey(),
   reason: text("reason").notNull(),
   detail: text("detail"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
+  dataType: () => "bytea",
+  // postgres-js hands back a Buffer and PGlite a Uint8Array; callers get a plain Uint8Array either way.
+  fromDriver: (value) => new Uint8Array(value),
+  toDriver: (value) => Buffer.from(value),
+});
+
+/** Uploaded and received media. Kept in the database because the container disk is wiped on every deploy. */
+export const mediaFiles = pgTable("media_files", {
+  id: text("id").primaryKey(),
+  mime: text("mime").notNull(),
+  filename: text("filename").notNull(),
+  kind: text("kind").notNull(),
+  size: integer("size").notNull(),
+  bytes: bytea("bytes").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

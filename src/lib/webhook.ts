@@ -25,7 +25,7 @@ import { holdYouTubeComment, replyToYouTubeComment } from "@/lib/channels/youtub
 import { moderationReason, readModeration } from "@/lib/social-triggers";
 import { deliverReplies, loadBotFieldValues } from "@/lib/flow-dispatch";
 import { interpolateTemplate } from "@/lib/flow-effects";
-import { outboundPreview } from "@/lib/media";
+import { classifyMedia, outboundPreview, saveRemoteMedia, toFlowMedia } from "@/lib/media";
 import { applyFlowEffects } from "@/lib/flow-effects";
 import { processInboundEvent, type EngineResult } from "@/lib/flow-engine";
 import { SLUG_PATTERN } from "@/lib/growth";
@@ -52,7 +52,7 @@ import {
   hasOpenCsatRequest,
 } from "@/lib/store";
 import type { TelegramUpdate } from "@/lib/telegram";
-import { stepButtons, type ContactRecord, type FlowSessionState, type FlowStep, type OutboundReply } from "@/lib/types";
+import { stepButtons, type ContactRecord, type FlowMedia, type FlowSessionState, type FlowStep, type OutboundReply } from "@/lib/types";
 
 type BotRow = typeof bots.$inferSelect;
 
@@ -293,6 +293,7 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
           ? `[shared phone] ${inbound.contactPhone}`
           : `[button] ${inbound.callbackTitle ?? buttonLabel(flows, session, inbound.callbackData)}`),
       telegramMessageId: inbound.externalMessageId ?? null,
+      media: await keepInboundMedia(inbound.attachments),
     });
   }
 
@@ -416,6 +417,20 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
   if (kind === "message" || kind === "story_reply") {
     void applyAutoTags({ botId, brandName: bot.name, settings: bot.settings, contactId: contact.id, contactTags: contact.tags, text: inbound.text });
   }
+}
+
+/** Saved copies of what the person sent, or the platform's own link when a copy can't be made. */
+async function keepInboundMedia(attachments: NormalizedInbound["attachments"]): Promise<FlowMedia[] | null> {
+  if (!attachments?.length) return null;
+  const kept = await Promise.all(
+    attachments.slice(0, 10).map(async (item): Promise<FlowMedia> => {
+      const saved = await saveRemoteMedia(item.url, item.filename);
+      if (saved) return toFlowMedia(saved);
+      const kind = item.type === "video" ? "video" : item.type === "audio" ? "audio" : item.type === "file" ? "document" : classifyMedia("", item.url.split("?")[0]!);
+      return { url: item.url, kind, filename: item.filename ?? undefined };
+    }),
+  );
+  return kept;
 }
 
 function inboundLabel(kind: string, text: string | null) {
