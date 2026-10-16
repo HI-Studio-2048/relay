@@ -14,6 +14,7 @@ const PUBLIC_PREFIXES = [
   "/privacy",
   "/terms",
   "/data-deletion",
+  "/affiliates",
   "/api/auth",
   "/api/health",
   "/api/telegram/webhook",
