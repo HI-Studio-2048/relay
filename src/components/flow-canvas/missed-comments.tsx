@@ -78,6 +78,13 @@ export function MissedComments({ flowId, onClose }: { flowId: string; onClose: (
       toast.error(error instanceof Error ? error.message : "Sending stopped");
     } finally {
       setProgress({ sent, failed, total, done: true });
+      // Show who is still waiting (the people taken off, anyone who commented meanwhile), not the ones just messaged.
+      try {
+        const query = new URLSearchParams({ accountId: post.accountId, postId: post.id });
+        setMissed((await api<{ missed: Missed[] }>(`/api/flows/${flowId}/missed-comments?${query}`)).missed);
+      } catch {
+        // The totals above still stand; reopening the panel reloads the list.
+      }
     }
   };
 
