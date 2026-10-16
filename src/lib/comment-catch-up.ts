@@ -1,9 +1,9 @@
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, inArray } from "drizzle-orm";
 import { accountFromRow } from "@/lib/channels";
 import type { NormalizedInbound } from "@/lib/channels/types";
 import { listZernioPostComments, listZernioPosts, splitName, zernioContactKey, type ZernioPost } from "@/lib/channels/zernio";
 import { getDb } from "@/lib/db";
-import { bots, flowEvents, flows } from "@/lib/db/schema";
+import { bots, contacts, flowEvents, flows } from "@/lib/db/schema";
 import { alreadyAnswered, matchSocialFlow } from "@/lib/social-triggers";
 import { findContactByTelegram } from "@/lib/store";
 import type { FlowDefinition, TriggerType } from "@/lib/types";
@@ -140,11 +140,24 @@ export async function sendMissedComments(input: {
       await processCatchUpComments(bot.id, [inbound]);
     }
     // A DM that went out leaves a "sent" event; one Instagram refused leaves none (and the person is not retried).
+    // Only count this batch: live comments answered meanwhile leave events too.
     const db = await getDb();
-    const sentRows = await db
-      .select({ contactId: flowEvents.contactId })
-      .from(flowEvents)
-      .where(and(eq(flowEvents.flowId, flow.id), eq(flowEvents.kind, "sent"), gte(flowEvents.createdAt, startedAt)));
+    const keys = batch.map((comment) => zernioContactKey(input.accountId, comment.authorId));
+    const sentRows = keys.length
+      ? await db
+          .select({ contactId: flowEvents.contactId })
+          .from(flowEvents)
+          .innerJoin(contacts, eq(contacts.id, flowEvents.contactId))
+          .where(
+            and(
+              eq(flowEvents.flowId, flow.id),
+              eq(flowEvents.kind, "sent"),
+              gte(flowEvents.createdAt, startedAt),
+              eq(contacts.botId, bot.id),
+              inArray(contacts.telegramUserId, keys),
+            ),
+          )
+      : [];
     const sent = new Set(sentRows.map((row) => row.contactId)).size;
     return { sent, failed: batch.length - sent, remaining: missed.length - batch.length };
   } finally {

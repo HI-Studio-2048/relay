@@ -351,7 +351,7 @@ describe("Meta accounts through the company Zernio key", () => {
   it("finds the comments a flow missed and DMs them in batches, without public replies", async () => {
     signedIn = "owner-1";
     const { getDb } = await import("@/lib/db");
-    const { bots, messages } = await import("@/lib/db/schema");
+    const { bots, contacts, messages } = await import("@/lib/db/schema");
     const db = await getDb();
     const [row] = await db.select().from(bots).where(and(eq(bots.ownerId, "owner-1"), eq(bots.channel, "zernio")));
     // u-done's comment was answered live.
@@ -388,6 +388,10 @@ describe("Meta accounts through the company Zernio key", () => {
     expect(await send(["c-a", "c-r"])).toEqual({ sent: 0, failed: 0, remaining: 0 });
     expect(sentBodies).toHaveLength(before);
     expect(await preview()).toHaveLength(2);
+    // A live comment answered while the catch-up runs leaves its own "sent" event; it must not count here.
+    const { flowEvents } = await import("@/lib/db/schema");
+    const [done] = await db.select().from(contacts).where(eq(contacts.telegramUserId, "a-3:u-done"));
+    await db.insert(flowEvents).values({ id: "live-dm", botId: row!.id, flowId: "giveaway", contactId: done!.id, kind: "sent", createdAt: new Date(Date.now() + 60_000) });
     expect(await send()).toEqual({ sent: 1, failed: 0, remaining: 1 });
     expect(await send()).toEqual({ sent: 1, failed: 0, remaining: 0 });
     expect(await preview()).toEqual([]);
