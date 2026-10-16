@@ -215,7 +215,7 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
     };
     await persistContact(botId, record);
     await saveMessage({ botId, contactId: record.id, direction: "inbound", source: "user", body: `[comment] ${text ?? ""}`.trim() });
-    await saveMessage({ botId, contactId: record.id, direction: "outbound", source: "flow", body: `[public reply] Hidden automatically (${hideReason})` });
+    await saveMessage({ botId, contactId: record.id, direction: "outbound", source: "flow", body: `[public reply] ${youtubeComment ? "Held for review" : "Hidden"} automatically (${hideReason})` });
     return;
   }
 

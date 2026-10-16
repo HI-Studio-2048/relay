@@ -144,6 +144,11 @@ describe("YouTube comments through the whole app", () => {
     await vi.waitFor(() => expect(world.replies).toHaveLength(1), { timeout: 5000 });
     expect(world.replies[0]).toEqual({ parentId: "thread-new", textOriginal: "Link's in the description, Bea" });
     await vi.waitFor(() => expect(world.held).toEqual(["comment-spam"]), { timeout: 5000 });
+    const [sam] = await db.select().from(contacts).where(eq(contacts.telegramUserId, "UC-sam"));
+    await vi.waitFor(async () => {
+      const held = await db.select().from(messages).where(eq(messages.contactId, sam!.id));
+      expect(held.map((message) => message.body)).toContain("[public reply] Held for review automatically (“scam”)");
+    });
 
     const [bea] = await db.select().from(contacts).where(eq(contacts.telegramUserId, "UC-bea"));
     expect(bea).toMatchObject({ firstName: "Bea", threadId: "thread-new" });
