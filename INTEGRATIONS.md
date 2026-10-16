@@ -1,6 +1,6 @@
 # Integrations log
 
-Where each platform stands in Recatch. Last updated on 2026-10-14. Zernio is used again for Instagram, Messenger and WhatsApp only (one company key, one profile per customer). Every other channel is direct. Four channels are confirmed with real accounts (Telegram, Slack, Discord, Bluesky) and three of them connect with one click through a company-owned app. `main` is the only branch that matters.
+Where each platform stands in Recatch. Last updated on 2026-10-16. Zernio is used again for Instagram, Messenger and WhatsApp only (one company key, one profile per customer). Every other channel is direct. Four channels are confirmed with real accounts (Telegram, Slack, Discord, Bluesky) and three of them connect with one click through a company-owned app. `main` is the only branch that matters.
 
 "Direct" means Recatch talks to the platform's own API with our credentials. There is no hub in between any more. The Channels page lists every channel in `src/lib/channels/catalog.ts` (live ones connect from Setup, the rest are greyed out as "On the way"), so update that file when a channel changes state.
 
@@ -73,7 +73,13 @@ These are set up once by a person under the company admin account. Secrets go in
 - The callback only synced when the address carried `connected` and `accountId`. Zernio sends the platform but no `accountId`. It now always re-reads the account list from Zernio unless there is an `error`, and logs the parameter names when they're missing.
 - The webhook only looked for the customer in `profiles[]`. It now also checks `profile` and `account.profileId`, and logs when it finds nobody.
 - The real cause of the last failures: Zernio returns each account's `profileId` as an object (`{ _id, name, externalId }`), and `listZernioAccounts` compared it to a string, so every account was filtered out. The fake Zernio in the tests now answers with the object too.
-Nobody had retried after the last deploy when this was written, so there is still no `zernio` row in `bots`.
+Nobody had retried after the last deploy when this was written, so there is still no `zernio` row in `bots`. (Since fixed: the connect works, see Pick up here.)
+
+**Instagram in real use (2026-10-16).** `@danielphilipwatch` runs a giveaway: post `18113813108030596` (instagram.com/p/DefrA2Rm9Ow), comment "enter", two winners on October 31st. The comment flow is "Giveaway entry (Oct 31)" (flow id `a85fcf19-83cf-4112-93a6-1470fdb03cf9`, keywords `dp, enter`): a public reply, a private-reply DM with a "Count me in" button, an email question (skippable), the tag `giveaway-oct-31`, and a closing message linking danielphilip.com. On the 31st, filter Contacts by that tag to pick winners. What the day taught us:
+- About 120 people commented "enter" before the flow had that keyword. The flow editor's Missed comments panel (comment flows on Meta accounts only) lists a post's comments through Zernio (`GET /v1/inbox/comments?accountId=` for posts, `/v1/inbox/comments/<postId>?accountId=` for comments, paged by `cursor`), shows who matched and never got the DM, and sends the DM as private replies, one per person, no public reply. Instagram allows a private reply for 7 days after a comment. 117 were sent with no refusals.
+- A save from a flow editor tab opened before a change silently overwrites that change. It reverted `dp, enter` to `dp` once. The editor has no stale-save check yet.
+- When a second comment's private reply failed (Instagram said the commenter's account was not found, likely a deleted comment), Recatch used to clear the person's waiting flow, so the button in the first DM did nothing. Fixed in `7f48ada`.
+- Pictures, GIFs and files people send now show in Live Chat, and Live Chat can send them (paperclip or paste). Recatch keeps its own copy because Instagram's links expire. Not yet seen with a real Instagram image, only a fake Zernio.
 
 **YouTube comments.** Signing in with Google (scope `youtube.force-ssl`) saves the Google connection and makes a `youtube` account in `bots` that points at it (`settings.youtubeConnectionId`). Tokens stay on the connection and are refreshed there. YouTube doesn't push comments, so the worker polls `commentThreads?allThreadsRelatedToChannelId=` every two minutes (`youtube-manager.ts`), with the newest comment time in `settings.youtubeCommentsSince`. The first look only records it. Only top-level comments come in, and the channel's own are skipped. Each comment lands in Live Chat. A comment automation posts its public reply under the comment, the rest of the flow is dropped (no DMs on YouTube), and comment moderation holds a matching comment for review (`setModerationStatus heldForReview`, YouTube can't hide outright). A reply typed in Live Chat posts under the person's latest comment. Anything automatic that isn't a comment reply (broadcasts, follow-ups, surveys) is refused, so nothing gets posted in public by accident. Deleting the account deletes the Google connection and revokes the grant at Google. Quota: each poll is one unit, about 720 a day per channel against the default 10,000, so ask Google for more before a dozen channels. Why force-ssl and not readonly: readonly can read comments but can't reply or moderate, and Google's reviewers want the video to show every scope in use. The privacy page has a YouTube section (what is read and posted, revoke link, Google Privacy Policy) and the terms link YouTube's Terms of Service, which the YouTube API policies ask for.
 
@@ -87,7 +93,7 @@ Public `/privacy`, `/terms` and `/data-deletion` pages are live, linked from the
 
 | Platform | Why |
 | --- | --- |
-| Meta (Instagram, Messenger, WhatsApp, Threads) direct | Code is ready. Needs the developer account confirmed, then a Meta app in development mode, then Business Verification and App Review. |
+| Meta (Instagram, Messenger, WhatsApp, Threads) direct | Code is ready and the Meta app exists (Tech Provider, dev mode). Parked at Business and access verification, then App Review. Zernio covers Meta meanwhile. |
 | Telegram, one bot for all of Recatch | Telegram has no company-wide API. The only way is Telegram Business, which needs every customer to pay for Telegram Premium. Dropped. |
 | Reddit direct | API access form not sent (see Snapshot). |
 | Pinterest direct | Waiting for Trial access, then a Standard access request. Its API covers pins and boards, not messages. There is no Pinterest connection in Recatch yet. |
@@ -118,7 +124,11 @@ Everything is under the company admin account (`admin@hiiiiiiiiiii.com`), so the
 
 ## Start here next session
 
-**Pick up here (left on 2026-10-16):**
+**Pick up here (left on 2026-10-16, evening):**
+- [x] Giveaway comment flow on `@danielphilipwatch` live with `enter`, and the 117 missed commenters DMd through Missed comments. 29 had tapped "Count me in" within minutes.
+- [ ] Send a real photo or GIF to `@danielphilipwatch` and check it shows in Live Chat. Built and tested only against a fake Zernio; it depends on Zernio including the attachment `url`.
+- [ ] Consider a stale-save check in the flow editor (refuse a save when the flow changed since the tab loaded). It bit once on 2026-10-16.
+- [ ] October 31st: winners. Contacts filtered by `giveaway-oct-31`.
 - [x] Instagram through Zernio: connect saves in Recatch and the Channels page lists `@danielphilipwatch`. Confirmed 2026-10-15.
 - [x] Instagram DM and comment land in Live Chat. Confirmed 2026-10-15.
 - [x] YouTube rebuilt as a comments channel, tested live, re-submitted to Google with a new video on 2026-10-16. Now waiting on Google's email to admin@hiiiiiiiiiii.com. If they ask again, the video has to show each use of `youtube.force-ssl`: reading comments, posting a reply (automatic and from Live Chat), holding for review.
@@ -128,7 +138,7 @@ Everything is under the company admin account (`admin@hiiiiiiiiiii.com`), so the
 - [ ] Bluesky comments, live test: set up a comment automation on a post by `@hiiiiiiiiiii2048.bsky.social` (signed in as `lilrannee@gmail.com`, which owns that account), reply from `@ezzawan.bsky.social`, and check the public reply in the thread and the DM. Both accounts already poll notifications without errors.
 
 1. `git pull`, then `npm test` and `npx tsc --noEmit`. Vitest allows 20 seconds per test and 30 for setup, because the integration suites load large libraries and start a database when many run at once. If one still times out, rerun it by itself before assuming something broke.
-2. Open the Facebook tab: Meta's identity check on the developer account is the first blocker, and only a person can finish it.
+2. Meta direct is parked at Business and access verification (the account check is done and the app exists). Don't restart it unless asked.
 3. Railway builds take 5 to 6 minutes, and the old build serves until then. On 2026-10-14 a member retried the Instagram connect two minutes after a push and hit the old code, which looked like the fix had failed. Tell people to wait for SUCCESS in `railway deployment list`. After a push, check the change in a signed-in browser. A 401 from a signed-out request proves nothing, because `proxy.ts` returns it for any `/api` path.
 4. The browser extension can drop its connection for a minute. Retry before assuming a page is broken.
 5. Never read or enter secrets, passwords, CAPTCHAs or consent screens on someone's behalf. Those are done by a person.
