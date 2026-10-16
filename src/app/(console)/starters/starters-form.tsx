@@ -216,11 +216,11 @@ export function StartersForm({
         <Textarea rows={2} value={hours.awayMessage} onChange={(event) => setHours({ ...hours, awayMessage: event.target.value })} />
       </Panel>
 
-      {channel === "zernio" ? (
+      {channel === "zernio" || channel === "youtube" ? (
         <Panel tone="stop" icon={ShieldCheck} label="Comment moderation" title="Hide spam and abuse before anyone sees it">
           <label className="flex items-center gap-2 text-[13px]">
             <input type="checkbox" checked={moderation.enabled} onChange={(event) => setModeration({ ...moderation, enabled: event.target.checked })} />
-            Hide comments that match — they get no reply and are logged in Live Chat
+            {channel === "youtube" ? "Hold matching comments for review in YouTube Studio. They get no reply and are logged in Live Chat" : "Hide comments that match. They get no reply and are logged in Live Chat"}
           </label>
           <Textarea rows={2} value={wordsText} onChange={(event) => setWordsText(event.target.value)} placeholder="scam, crypto, dm me, free followers" />
           <label className="flex items-center gap-2 text-[13px]">
