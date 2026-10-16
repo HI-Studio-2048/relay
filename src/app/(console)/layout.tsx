@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { Fragment } from "react";
 import { AppShell } from "@/components/app-shell";
 import { BotProvider } from "@/components/bot-provider";
 import { currentUser, ensureOwnerAccount } from "@/lib/auth";
@@ -31,7 +32,9 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
   return (
     <BotProvider initialBots={bots} initialBotId={bot?.id ?? null}>
       <AppShell user={user} inboxCount={inboxCount} confirmCount={confirmCount}>
-        {children}
+        {/* Pages copy their server data into state, so switching accounts has to remount them.
+            Without this the Flows list kept showing the old account while New flow saved to the new one. */}
+        <Fragment key={bot?.id ?? "none"}>{children}</Fragment>
       </AppShell>
     </BotProvider>
   );
