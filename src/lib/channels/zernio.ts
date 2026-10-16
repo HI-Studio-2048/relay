@@ -279,6 +279,63 @@ export async function sendZernioTyping(account: ChannelAccount, target: ChannelT
 
 export type ZernioCommentRef = { accountId: string; postId: string; commentId: string; platform?: string | null };
 
+export type ZernioPost = { id: string; caption: string; permalink: string | null; picture: string | null; createdAt: string | null };
+
+/** The account's recent posts that have comments, newest first. */
+export async function listZernioPosts(apiKey: string, accountId: string): Promise<ZernioPost[]> {
+  const data = await zernioRequest<{ data?: { id: string; content?: string; permalink?: string; picture?: string; createdTime?: string }[] }>(
+    "GET",
+    `/v1/inbox/comments?accountId=${encodeURIComponent(accountId)}&limit=20`,
+    apiKey,
+  );
+  return (data.data ?? []).map((post) => ({
+    id: String(post.id),
+    caption: post.content ?? "",
+    permalink: post.permalink ?? null,
+    picture: post.picture ?? null,
+    createdAt: post.createdTime ?? null,
+  }));
+}
+
+export type ZernioPostComment = {
+  id: string;
+  text: string;
+  createdAt: string | null;
+  author: { id: string; username: string | null; name: string | null; isOwner: boolean };
+  isReply: boolean;
+  canReply: boolean;
+};
+
+/** Every comment on a post, replies included. Capped so a viral post can't keep a request going forever. */
+export async function listZernioPostComments(apiKey: string, accountId: string, postId: string): Promise<ZernioPostComment[]> {
+  type Raw = { id: string; message?: string; createdTime?: string; from?: { id?: string; username?: string; name?: string; isOwner?: boolean }; canReply?: boolean; replies?: Raw[] };
+  const toComment = (raw: Raw, isReply: boolean): ZernioPostComment => ({
+    id: String(raw.id),
+    text: raw.message ?? "",
+    createdAt: raw.createdTime ?? null,
+    author: { id: String(raw.from?.id ?? ""), username: raw.from?.username ?? null, name: raw.from?.name ?? null, isOwner: Boolean(raw.from?.isOwner) },
+    isReply,
+    canReply: raw.canReply !== false,
+  });
+  const comments: ZernioPostComment[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < 30; page++) {
+    const query = `accountId=${encodeURIComponent(accountId)}&limit=100${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`;
+    const data: { comments?: Raw[]; pagination?: { hasMore?: boolean; cursor?: string } } = await zernioRequest(
+      "GET",
+      `/v1/inbox/comments/${encodeURIComponent(postId)}?${query}`,
+      apiKey,
+    );
+    for (const raw of data.comments ?? []) {
+      comments.push(toComment(raw, false));
+      for (const reply of raw.replies ?? []) comments.push(toComment(reply, true));
+    }
+    cursor = data.pagination?.hasMore && data.pagination.cursor ? data.pagination.cursor : null;
+    if (!cursor) break;
+  }
+  return comments;
+}
+
 /** Public reply under a comment. */
 export async function replyToZernioComment(apiKey: string, ref: ZernioCommentRef, message: string) {
   await zernioRequest("POST", `/v1/inbox/comments/${encodeURIComponent(ref.postId)}`, apiKey, {
@@ -376,7 +433,7 @@ function mergeFields(...parts: (Record<string, string> | undefined)[]) {
   return Object.keys(merged).length ? merged : undefined;
 }
 
-function splitName(name: string | undefined | null) {
+export function splitName(name: string | undefined | null) {
   const [first, ...rest] = (name ?? "").trim().split(/\s+/);
   return { firstName: first || null, lastName: rest.join(" ") || null };
 }

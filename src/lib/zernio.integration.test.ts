@@ -25,6 +25,16 @@ let profiles: Profile[] = [];
 let accounts: Account[] = [];
 const calls: string[] = [];
 const sentBodies: Record<string, unknown>[] = [];
+const ago = (hours: number) => new Date(Date.now() - hours * 3600_000).toISOString();
+/** Comments on the giveaway post, as Zernio lists them. */
+const postNine = [
+  { id: "c-a", message: "Enter!", createdTime: ago(30), from: { id: "u-a", username: "anna" }, replies: [{ id: "c-r", message: "enter too", createdTime: ago(20), from: { id: "u-r", username: "rob" } }] },
+  { id: "c-b", message: "nice watch", createdTime: ago(29), from: { id: "u-b", username: "ben" } },
+  { id: "c-own", message: "enter here", createdTime: ago(28), from: { id: "brand", username: "danielphilipwatch", isOwner: true } },
+  { id: "c-a2", message: "enter again", createdTime: ago(10), from: { id: "u-a", username: "anna" } },
+  { id: "c-old", message: "enter", createdTime: ago(24 * 8), from: { id: "u-old", username: "late" } },
+  { id: "c-done", message: "ENTER", createdTime: ago(5), from: { id: "u-done", username: "done" } },
+];
 const PNG = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13]);
 
 /** A stand-in for Zernio's API that keeps profiles and accounts, like the real one. */
@@ -59,6 +69,14 @@ function fakeZernio() {
       const id = url.pathname.split("/").pop();
       accounts = accounts.filter((account) => account._id !== id);
       return respond({ ok: true });
+    }
+    // Reading a post's comments for the missed-comments catch-up.
+    if (url.pathname === "/api/v1/inbox/comments" && method === "GET") {
+      return respond({ data: [{ id: "post-9", content: "Giveaway! Comment enter", permalink: "https://www.instagram.com/p/x/", createdTime: new Date().toISOString() }] });
+    }
+    if (url.pathname === "/api/v1/inbox/comments/post-9" && method === "GET") {
+      const page = url.searchParams.get("cursor") === "page-2" ? 2 : 1;
+      return respond(page === 1 ? { comments: postNine.slice(0, 3), pagination: { hasMore: true, cursor: "page-2" } } : { comments: postNine.slice(3), pagination: { hasMore: false } });
     }
     // Comment replies. A comment id with "gone" in it stands for one Instagram won't answer (deleted, restricted).
     if (url.pathname.startsWith("/api/v1/inbox/comments/") && method === "POST") {
@@ -328,5 +346,51 @@ describe("Meta accounts through the company Zernio key", () => {
       message: { id: "m-tap", conversationId: "conv-give", text: "Count me in", sender: { id: "u-give" } },
     });
     expect(sentBodies.at(-1)).toMatchObject({ accountId: "a-3", message: "What's your email?" });
+  });
+
+  it("finds the comments a flow missed and DMs them in batches, without public replies", async () => {
+    signedIn = "owner-1";
+    const { getDb } = await import("@/lib/db");
+    const { bots, messages } = await import("@/lib/db/schema");
+    const db = await getDb();
+    const [row] = await db.select().from(bots).where(and(eq(bots.ownerId, "owner-1"), eq(bots.channel, "zernio")));
+    // u-done's comment was answered live.
+    const { processChannelUpdate } = await import("@/lib/webhook");
+    await processChannelUpdate(row!.id, {
+      event: "comment.received",
+      profiles: [{ id: "p-1", externalId: "owner-1" }],
+      account: { accountId: "a-3", platform: "instagram" },
+      comment: { id: "c-done", text: "ENTER", postId: "post-9", platformPostId: "post-9", platform: "instagram", author: { id: "u-done", username: "done" } },
+    });
+
+    const route = await import("@/app/api/flows/[id]/missed-comments/route");
+    const params = { params: Promise.resolve({ id: "giveaway" }) };
+    const posts = (await (await route.GET(new Request("https://recatch.test/api/flows/giveaway/missed-comments"), params)).json()) as { posts: { id: string; accountId: string }[] };
+    expect(posts.posts.map((post) => [post.id, post.accountId])).toEqual([["post-9", "a-3"]]);
+
+    const preview = async () =>
+      ((await (await route.GET(new Request("https://recatch.test/api/flows/giveaway/missed-comments?accountId=a-3&postId=post-9"), params)).json()) as {
+        missed: { commentId: string; username: string }[];
+      }).missed;
+    // Anna once (her first comment), Rob's reply; not Ben (no keyword), the brand, an 8-day-old comment, or Done.
+    expect((await preview()).map((item) => [item.username, item.commentId])).toEqual([
+      ["anna", "c-a"],
+      ["rob", "c-r"],
+    ]);
+    const before = sentBodies.length;
+    expect(sentBodies.slice(0, before).some((body) => String(body.path).includes("c-a"))).toBe(false);
+
+    const send = async () =>
+      (await (
+        await route.POST(new Request("https://recatch.test/api/flows/giveaway/missed-comments", { method: "POST", body: JSON.stringify({ accountId: "a-3", postId: "post-9", limit: 1 }) }), params)
+      ).json()) as { sent: number; failed: number; remaining: number };
+    expect(await send()).toEqual({ sent: 1, failed: 0, remaining: 1 });
+    expect(await send()).toEqual({ sent: 1, failed: 0, remaining: 0 });
+    expect(await preview()).toEqual([]);
+
+    const paths = sentBodies.slice(before).map((body) => body.path);
+    expect(paths).toEqual(["/api/v1/inbox/comments/post-9/c-a/private-reply", "/api/v1/inbox/comments/post-9/c-r/private-reply"]);
+    const logged = await db.select().from(messages).where(and(eq(messages.botId, row!.id), eq(messages.telegramMessageId, "c-a")));
+    expect(logged.map((message) => message.body)).toEqual(["[comment] Enter!"]);
   });
 });

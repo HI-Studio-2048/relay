@@ -70,8 +70,10 @@ describe("media classification", () => {
 
 describe("media file store", () => {
   // Media lives in the database now; give it a fresh one away from the repo's .data.
-  beforeAll(() => {
+  beforeAll(async () => {
     process.chdir(mkdtempSync(path.join(tmpdir(), "relay-media-")));
+    // Start the database here, where setup gets 30 seconds, not inside the first test.
+    await (await import("@/lib/db")).getDb();
   });
   afterEach(() => {
     vi.unstubAllGlobals();

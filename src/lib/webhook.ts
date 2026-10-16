@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   accountFromRow,
   ackChannelCallback,
@@ -10,7 +10,7 @@ import {
   type NormalizedInbound,
 } from "@/lib/channels";
 import { getDb } from "@/lib/db";
-import { bots } from "@/lib/db/schema";
+import { bots, messages } from "@/lib/db/schema";
 import { aiConfigured, classifyIntent, readAiSettings, writeCommentReply } from "@/lib/ai";
 import { readAiProvider } from "@/lib/ai-provider";
 import { intentFlows, routeToIntent, shouldCheckIntents } from "@/lib/intents";
@@ -72,6 +72,25 @@ export async function processChannelUpdate(botId: string, payload: unknown) {
       log.error("Inbound processing failed", error instanceof Error ? error.message : error);
     }
   }
+}
+
+/** Run comments that arrived while no flow answered them, as if they had just come in (see comment-catch-up.ts). */
+export async function processCatchUpComments(botId: string, inbounds: NormalizedInbound[]) {
+  const db = await getDb();
+  const [bot] = await db.select().from(bots).where(eq(bots.id, botId)).limit(1);
+  if (!bot) throw new Error("Account not found");
+  const account = accountFromRow(bot);
+  for (const inbound of inbounds) await processInbound(bot, account, { ...inbound, catchUp: true });
+}
+
+async function messageLogged(botId: string, externalMessageId: string) {
+  const db = await getDb();
+  const [row] = await db
+    .select({ id: messages.id })
+    .from(messages)
+    .where(and(eq(messages.botId, botId), eq(messages.telegramMessageId, externalMessageId)))
+    .limit(1);
+  return Boolean(row);
 }
 
 const AWAY_FIELD = "_away_at";
@@ -189,7 +208,7 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
       ? { accountId: inbound.channelAccountId, postId: inbound.comment.postId, commentId: inbound.comment.id, platform: inbound.platform ?? null }
       : null;
   const youtubeComment = kind === "comment" && inbound.comment && account.channel === "youtube" ? inbound.comment : null;
-  const hideReason = commentRef || youtubeComment ? moderationReason(readModeration(bot.settings), text ?? "") : null;
+  const hideReason = (commentRef || youtubeComment) && !inbound.catchUp ? moderationReason(readModeration(bot.settings), text ?? "") : null;
   if ((commentRef || youtubeComment) && hideReason) {
     try {
       // YouTube cannot hide a comment outright: holding it for review takes it off the video until the channel approves it.
@@ -280,7 +299,8 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
     }
   }
 
-  if (result.inboundSaved && (text || inbound.callbackData || inbound.contactPhone || kind !== "message")) {
+  const alreadyLogged = inbound.catchUp && inbound.externalMessageId ? await messageLogged(botId, inbound.externalMessageId) : false;
+  if (result.inboundSaved && !alreadyLogged && (text || inbound.callbackData || inbound.contactPhone || kind !== "message")) {
     await saveMessage({
       botId,
       contactId: contact.id,
@@ -326,10 +346,10 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
   const zernioComment = kind === "comment" && Boolean(inbound.comment) && account.channel === "zernio" && Boolean(inbound.channelAccountId);
   const blueskyComment = kind === "comment" && Boolean(inbound.comment) && account.channel === "bluesky";
   if (zernioComment || blueskyComment || youtubeComment) {
-    let publicReply = result.publicReply ?? null;
+    let publicReply = inbound.catchUp ? null : result.publicReply ?? null;
     const commentFlow = result.matchedFlowId ? flows.find((flow) => flow.id === result.matchedFlowId) : null;
     const commentConfig = commentFlow?.definition.trigger;
-    if (commentConfig?.aiPublicReply && aiConfigured(readAiProvider(bot.settings))) {
+    if (publicReply !== null && commentConfig?.aiPublicReply && aiConfigured(readAiProvider(bot.settings))) {
       try {
         publicReply = await writeCommentReply({
           provider: readAiProvider(bot.settings),
@@ -363,7 +383,7 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
       replies = [];
       if (answered.session !== undefined) await persistSession(contact.id, answered.session);
       const matched = result.matchedFlowId ? flows.find((flow) => flow.id === result.matchedFlowId) : null;
-      if (matched?.definition.trigger?.hideAfterReply && commentRef) {
+      if (matched?.definition.trigger?.hideAfterReply && commentRef && !inbound.catchUp) {
         try {
           await hideZernioComment(account.token, commentRef);
         } catch (error) {

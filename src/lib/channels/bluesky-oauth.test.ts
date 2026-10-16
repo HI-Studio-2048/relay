@@ -11,8 +11,10 @@ function makeKey() {
 }
 
 describe("Sign in with Bluesky settings", () => {
-  beforeAll(() => {
+  beforeAll(async () => {
     process.chdir(mkdtempSync(path.join(tmpdir(), "recatch-bsky-oauth-")));
+    // Start the database in setup (30 seconds), not in the first test (20), so a busy run does not time out.
+    await (await import("@/lib/db")).getDb();
   });
   afterAll(() => vi.unstubAllEnvs());
 

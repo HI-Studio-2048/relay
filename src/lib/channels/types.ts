@@ -209,6 +209,8 @@ export type NormalizedInbound = {
   /** Images, GIFs, videos and files the person sent, as the platform's (often short-lived) links. */
   attachments?: InboundAttachment[];
   comment?: InboundComment | null;
+  /** Replaying a comment that was missed: DM only, no public reply, no hiding, no second inbox line. */
+  catchUp?: boolean;
   /** Profile facts the platform sent with this event (follows_you, ig_followers, ig_verified). */
   profileFields?: Record<string, string>;
 };

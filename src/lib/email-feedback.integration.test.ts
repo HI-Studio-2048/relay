@@ -41,8 +41,10 @@ async function deliver(message: SnsMessage) {
 }
 
 describe("SES feedback through SNS", () => {
-  beforeAll(() => {
+  beforeAll(async () => {
     process.chdir(mkdtempSync(path.join(tmpdir(), "recatch-email-feedback-")));
+    // Start the database in setup (30 seconds), not in the first test (20), so a busy run does not time out.
+    await (await import("@/lib/db")).getDb();
     vi.stubEnv("AWS_SES_SNS_TOPIC_ARN", TOPIC);
     vi.stubGlobal(
       "fetch",

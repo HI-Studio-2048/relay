@@ -9,6 +9,7 @@ import { FlowListEditor } from "@/components/flow-canvas/flow-list-editor";
 import { FlowShareButton } from "@/components/flow-canvas/flow-share-dialog";
 import { FlowSimulator } from "@/components/flow-canvas/flow-simulator";
 import { FlowHistory } from "@/components/flow-canvas/flow-history";
+import { MissedComments } from "@/components/flow-canvas/missed-comments";
 import { FlowStatsContext, type NodeStats } from "@/components/flow-canvas/flow-stats-context";
 import type { FlowCanvasHandle } from "@/components/flow-canvas/flow-canvas-editor";
 import type { FlowMeta, InspectorField, InspectorFlowOption } from "@/components/flow-canvas/node-inspector";
@@ -54,6 +55,7 @@ export function FlowWorkspace({
   const router = useRouter();
   const [testing, setTesting] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showMissed, setShowMissed] = useState(false);
   const [stepStats, setStepStats] = useState<Record<string, { sent: number; clicks: number }>>({});
   const [flowStats, setFlowStats] = useState<{ runs: number; people: number; ctr: number; completionRate: number; clicks: number } | null>(null);
 
@@ -250,6 +252,11 @@ export function FlowWorkspace({
           <Button size="sm" variant="ghost" onClick={() => setShowHistory((value) => !value)}>
             History
           </Button>
+          {flow.triggerType === "comment" && channel === "zernio" ? (
+            <Button size="sm" variant="ghost" title="DM people whose comment this flow missed" onClick={() => setShowMissed((value) => !value)}>
+              Missed comments
+            </Button>
+          ) : null}
           <FlowShareButton botId={flow.botId} flowId={flow.id} />
           <Button size="sm" variant="outline" onClick={() => void duplicate()}>
             Duplicate
@@ -285,6 +292,7 @@ export function FlowWorkspace({
       ) : null}
 
       <div className="relative flex min-h-0 flex-1 flex-col">
+      {showMissed ? <MissedComments flowId={flow.id} onClose={() => setShowMissed(false)} /> : null}
       {showHistory ? (
         <FlowHistory
           flowId={flow.id}
