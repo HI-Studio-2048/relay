@@ -1,0 +1,136 @@
+WEBVTT
+
+00:00:00.700 --> 00:00:02.016
+Let's connect a Slack
+
+00:00:02.016 --> 00:00:03.206
+app to Recatch.
+
+00:00:03.506 --> 00:00:05.268
+Step one. Create your
+
+00:00:05.268 --> 00:00:07.448
+account at recatch.app.
+
+00:00:07.518 --> 00:00:09.355
+On the Create your workspace
+
+00:00:09.355 --> 00:00:11.257
+screen, enter your name, your
+
+00:00:11.257 --> 00:00:12.832
+email, and a password of
+
+00:00:12.832 --> 00:00:14.525
+at least 8 characters.
+
+00:00:14.595 --> 00:00:16.078
+Then click Create account.
+
+00:00:16.378 --> 00:00:17.391
+Step two. You land
+
+00:00:17.391 --> 00:00:18.936
+on the Channels screen.
+
+00:00:19.006 --> 00:00:21.353
+Under Connect a channel, click Slack.
+
+00:00:21.423 --> 00:00:22.889
+If you see Add to Slack,
+
+00:00:22.889 --> 00:00:25.149
+that's the one-click option. To paste
+
+00:00:25.149 --> 00:00:27.103
+tokens instead, click Use my own
+
+00:00:27.103 --> 00:00:28.453
+Slack app instead.
+
+00:00:28.753 --> 00:00:32.379
+Step three. At api.slack.com/apps,
+
+00:00:32.379 --> 00:00:34.123
+create an app.
+
+00:00:34.193 --> 00:00:36.503
+Under OAuth and Permissions, add
+
+00:00:36.503 --> 00:00:39.246
+the bot scopes chat:write, im:history,
+
+00:00:39.246 --> 00:00:41.879
+im:read, im:write and users:read.
+
+00:00:41.949 --> 00:00:44.111
+Install it to your workspace, and
+
+00:00:44.111 --> 00:00:46.077
+copy the Bot User OAuth Token,
+
+00:00:46.077 --> 00:00:47.900
+which starts with xoxb-.
+
+00:00:47.970 --> 00:00:49.847
+Then copy the Signing Secret
+
+00:00:49.847 --> 00:00:52.059
+from Basic Information. These are
+
+00:00:52.059 --> 00:00:54.137
+fake examples. Never share your
+
+00:00:54.137 --> 00:00:55.794
+real token or secret.
+
+00:00:56.094 --> 00:00:58.045
+Step four. Paste the Bot User
+
+00:00:58.045 --> 00:01:00.650
+OAuth Token and the Signing secret.
+
+00:01:00.950 --> 00:01:03.005
+Step five. Click Connect app.
+
+00:01:03.305 --> 00:01:05.630
+Recatch now shows a Request URL,
+
+00:01:05.630 --> 00:01:08.132
+under Paste into the Slack app.
+
+00:01:08.432 --> 00:01:10.034
+Step six. Paste it into
+
+00:01:10.034 --> 00:01:12.610
+Event Subscriptions, and subscribe to
+
+00:01:12.610 --> 00:01:14.601
+the bot event message.im.
+
+00:01:14.671 --> 00:01:16.432
+Paste it into Interactivity
+
+00:01:16.432 --> 00:01:17.855
+and Shortcuts too.
+
+00:01:17.925 --> 00:01:19.320
+Under App Home, turn on
+
+00:01:19.320 --> 00:01:20.958
+the Messages tab, and leave
+
+00:01:20.958 --> 00:01:22.179
+Socket Mode off.
+
+00:01:22.479 --> 00:01:24.661
+That's it. Slack is connected.
+
+00:01:24.731 --> 00:01:26.483
+Next, build your first flow,
+
+00:01:26.483 --> 00:01:28.549
+from the lead-capture template or
+
+00:01:28.549 --> 00:01:29.737
+a blank canvas.

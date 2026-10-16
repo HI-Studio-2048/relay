@@ -1,0 +1,109 @@
+WEBVTT
+
+00:00:00.700 --> 00:00:02.069
+Let's connect a Discord
+
+00:00:02.069 --> 00:00:03.212
+bot to Recatch.
+
+00:00:03.512 --> 00:00:05.274
+Step one. Create your
+
+00:00:05.274 --> 00:00:07.453
+account at recatch.app.
+
+00:00:07.523 --> 00:00:09.360
+On the Create your workspace
+
+00:00:09.360 --> 00:00:11.263
+screen, enter your name, your
+
+00:00:11.263 --> 00:00:12.838
+email, and a password of
+
+00:00:12.838 --> 00:00:14.531
+at least 8 characters.
+
+00:00:14.601 --> 00:00:16.084
+Then click Create account.
+
+00:00:16.384 --> 00:00:17.397
+Step two. You land
+
+00:00:17.397 --> 00:00:18.942
+on the Channels screen.
+
+00:00:19.012 --> 00:00:21.337
+Under Connect a channel, click Discord.
+
+00:00:21.407 --> 00:00:22.925
+If you see Add to Discord,
+
+00:00:22.925 --> 00:00:25.087
+that's the one-click option. To paste
+
+00:00:25.087 --> 00:00:26.780
+a token instead, click Use my
+
+00:00:26.780 --> 00:00:28.432
+own Discord bot instead.
+
+00:00:28.732 --> 00:00:31.085
+Step three. In the Discord Developer
+
+00:00:31.085 --> 00:00:33.698
+Portal, create an application, open Bot,
+
+00:00:33.698 --> 00:00:35.190
+and copy the token.
+
+00:00:35.260 --> 00:00:36.723
+People message the bot in a
+
+00:00:36.723 --> 00:00:38.079
+DM, so they need a server
+
+00:00:38.079 --> 00:00:39.305
+in common with it.
+
+00:00:39.375 --> 00:00:41.613
+Invite it with the bot scope,
+
+00:00:41.613 --> 00:00:44.024
+from OAuth2 → URL Generator.
+
+00:00:44.094 --> 00:00:45.952
+This token is a fake example.
+
+00:00:45.952 --> 00:00:48.252
+Never share your real bot token.
+
+00:00:48.552 --> 00:00:50.136
+Step four. Paste the token
+
+00:00:50.136 --> 00:00:51.909
+into the Bot token field.
+
+00:00:52.209 --> 00:00:54.463
+Step five. Click Connect bot.
+
+00:00:54.763 --> 00:00:56.911
+Recatch holds a live connection to
+
+00:00:56.911 --> 00:00:58.744
+Discord with the token, so no
+
+00:00:58.744 --> 00:01:01.016
+webhook or public URL is needed.
+
+00:01:01.316 --> 00:01:03.416
+That's it. Discord is connected.
+
+00:01:03.486 --> 00:01:05.239
+Next, build your first flow,
+
+00:01:05.239 --> 00:01:07.304
+from the lead-capture template or
+
+00:01:07.304 --> 00:01:08.493
+a blank canvas.
