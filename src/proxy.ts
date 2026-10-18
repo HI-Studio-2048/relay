@@ -25,6 +25,7 @@ const PUBLIC_PREFIXES = [
   "/api/bluesky/jwks.json",
   "/api/zernio/webhook",
   "/api/stripe/webhook",
+  "/api/billing/webhook",
   "/api/email/feedback",
   "/api/v1",
   "/go",
@@ -35,7 +36,7 @@ const PUBLIC_PREFIXES = [
 const PUBLIC_GET_PREFIXES = ["/api/media/"];
 
 /** Signed-in visitors skip these and land in their dashboard. */
-const AUTH_PAGES = ["/login", "/signup", "/welcome"];
+const AUTH_PAGES = ["/login", "/welcome"];
 
 function matches(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
@@ -68,7 +69,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.json({ error: "Sign in to continue" }, { status: 401 });
   }
   const login = new URL("/login", request.url);
-  login.searchParams.set("next", pathname);
+  login.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
   return NextResponse.redirect(login);
 }
 

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/client";
+import type { PlanCard } from "@/lib/billing/quote";
 
 type Mode = "login" | "signup" | "forgot" | "reset";
 
@@ -32,16 +33,22 @@ function Field({
   );
 }
 
-function Form({ mode }: { mode: Mode }) {
+function Form({ mode, plans = [], initialPlanId = "" }: { mode: Mode; plans?: PlanCard[]; initialPlanId?: string }) {
   const router = useRouter();
   const params = useSearchParams();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
+  const [planId, setPlanId] = useState(initialPlanId);
+  const selected = plans.find((plan) => plan.id === planId) ?? null;
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.currentTarget)) as Record<string, string>;
+    if (mode === "signup" && !planId) {
+      setError("Choose a plan to continue");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -51,9 +58,26 @@ function Form({ mode }: { mode: Mode }) {
         setBusy(false);
         return;
       }
+      if (mode === "signup") {
+        const result = await api<{ checkoutUrl?: string | null; next?: string | null }>("/api/auth/signup", {
+          method: "POST",
+          body: JSON.stringify({ ...data, planId }),
+        });
+        if (result.checkoutUrl) {
+          const checkout = new URL(result.checkoutUrl);
+          if (checkout.protocol !== "https:" || checkout.hostname !== "checkout.stripe.com") {
+            throw new Error("Checkout didn't return a Stripe payment page");
+          }
+          window.location.assign(checkout.toString());
+          return;
+        }
+        router.replace(result.next || "/billing");
+        router.refresh();
+        return;
+      }
       const body = mode === "reset" ? { token: params.get("token") ?? "", password: data.password } : data;
       await api(`/api/auth/${mode}`, { method: "POST", body: JSON.stringify(body) });
-      router.replace(mode === "signup" ? "/setup" : safeNext(params.get("next")));
+      router.replace(safeNext(params.get("next")));
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -70,7 +94,52 @@ function Form({ mode }: { mode: Mode }) {
   }
 
   return (
-    <form onSubmit={(event) => void submit(event)} className="space-y-4">
+    <form method="post" action="/signup" onSubmit={(event) => void submit(event)} className="space-y-4">
+      {mode === "signup" && plans.length > 0 ? (
+        <fieldset className="space-y-2">
+          <legend className="text-[13px] font-medium text-[#1b1f24]">Plan</legend>
+          {plans.map((plan) => (
+            <label
+              key={plan.id}
+              className={`flex cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 ring-1 ${planId === plan.id ? "bg-[#eef6ff] ring-[#0084ff]" : "ring-[#e5e7eb]"}`}
+            >
+              <input
+                type="radio"
+                name="planId"
+                value={plan.id}
+                checked={planId === plan.id}
+                onChange={() => setPlanId(plan.id)}
+                className="mt-1"
+                required
+              />
+              <span className="min-w-0">
+                <span className="block text-[14px] font-medium text-[#1b1f24]">{plan.name}</span>
+                <span className="block text-[12px] text-[#6b7280]">
+                  {plan.promoApplied ? (
+                    <>
+                      <span className="line-through">{plan.regularLabel}</span> {plan.dueTodayLabel} first month, then {plan.renewalLabel}/month
+                    </>
+                  ) : (
+                    <>{plan.regularLabel}/month</>
+                  )}
+                </span>
+              </span>
+            </label>
+          ))}
+          {selected ? (
+            <p className="rounded-lg bg-[#f4f6f8] px-3 py-2 text-[12px] leading-relaxed text-[#4b5563]">
+              {selected.promoApplied ? (
+                <>
+                  Due today: {selected.dueTodayLabel} for the first month. Renews at {selected.renewalLabel}/month. Checkout is required
+                  before the workspace opens.
+                </>
+              ) : (
+                <>{selected.regularLabel}/month. Checkout is required before the workspace opens.</>
+              )}
+            </p>
+          ) : null}
+        </fieldset>
+      ) : null}
       {mode === "signup" ? <Field id="name" label="Your name" autoComplete="name" placeholder="Alex Rivera" /> : null}
       {mode !== "reset" ? <Field id="email" label="Email" type="email" autoComplete="email" required placeholder="you@company.com" /> : null}
       {mode !== "forgot" ? (
@@ -97,7 +166,7 @@ function Form({ mode }: { mode: Mode }) {
         </p>
       ) : null}
       <Button type="submit" className="h-10 w-full text-[14px]" disabled={busy}>
-        {busy ? "One moment…" : { signup: "Create account", login: "Log in", forgot: "Send reset link", reset: "Save password" }[mode]}
+        {busy ? "One moment…" : { signup: "Continue to checkout", login: "Log in", forgot: "Send reset link", reset: "Save password" }[mode]}
       </Button>
     </form>
   );
@@ -109,7 +178,7 @@ const PERKS = [
   "Lead capture, tags and confirmed broadcasts",
 ];
 
-export function AuthScreen({ mode }: { mode: Mode }) {
+export function AuthScreen({ mode, plans = [], initialPlanId = "" }: { mode: Mode; plans?: PlanCard[]; initialPlanId?: string }) {
   const copy: Record<Mode, { title: string; subtitle: string; switchText: ReactNode }> = {
     login: {
       title: "Welcome back",
@@ -142,8 +211,8 @@ export function AuthScreen({ mode }: { mode: Mode }) {
       ),
     },
     signup: {
-      title: "Create your workspace",
-      subtitle: "Set up Recatch and connect your first channel.",
+      title: "Create your account",
+      subtitle: "Choose a plan, then checkout. The workspace opens when payment finishes.",
       switchText: (
         <>
           Already have an account?{" "}
@@ -165,7 +234,7 @@ export function AuthScreen({ mode }: { mode: Mode }) {
           <p className="mt-2 text-[14px] text-[#6b7280]">{subtitle}</p>
           <div className="mt-8">
             <Suspense>
-              <Form mode={mode} />
+              <Form mode={mode} plans={plans} initialPlanId={initialPlanId} />
             </Suspense>
           </div>
           <p className="mt-6 text-center text-[13px] text-[#6b7280]">{switchText}</p>

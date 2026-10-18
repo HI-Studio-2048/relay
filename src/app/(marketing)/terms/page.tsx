@@ -80,8 +80,9 @@ export default function TermsPage() {
 
       <LegalSection heading="Paid plans">
         <p>
-          If you&apos;re on a paid plan, the price and billing period are shown when you sign up. Fees already paid
-          aren&apos;t refunded unless the law says otherwise.
+          Recatch is paid. There is no free plan and no trial. The price, any first-month offer, and the renewal price
+          are shown before you pay. Checkout has to finish before the workspace opens. The plan renews each month at
+          the regular price until you cancel. Fees already paid aren&apos;t refunded unless the law says otherwise.
         </p>
       </LegalSection>
 

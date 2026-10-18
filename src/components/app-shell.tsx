@@ -243,6 +243,9 @@ function AccountCard({ user }: { user: PublicUser }) {
       <span className="min-w-0 flex-1">
         {user.name ? <span className="block truncate text-[13px] font-medium text-[#1b1f24]">{user.name}</span> : null}
         <span className="block truncate text-[11px] text-[#6b7280]">{user.email}</span>
+        <Link href="/billing" className="block truncate text-[11px] text-[#0084ff] hover:underline">
+          Billing
+        </Link>
       </span>
       <Button
         variant="ghost"

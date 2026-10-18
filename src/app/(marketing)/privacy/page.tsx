@@ -55,8 +55,10 @@ export default function PrivacyPage() {
           <li>Whether you clicked a link the business sent, and any purchase it can attribute to that link.</li>
         </ul>
         <p>
-          We don&apos;t collect payment card details. If a business uses Stripe, payment happens on Stripe and Recatch
-          only receives the amount, currency and which contact it belongs to.
+          We don&apos;t collect payment card details. Subscriptions for Recatch are paid on Stripe, which stores the
+          card. Recatch keeps the plan, the Stripe customer id, and whether the subscription is active. If a business
+          uses Stripe inside a flow, that payment also happens on Stripe and Recatch only receives the amount, currency
+          and which contact it belongs to.
         </p>
       </LegalSection>
 
@@ -84,7 +86,7 @@ export default function PrivacyPage() {
           <li>Anthropic, for the AI features described above, and OpenRouter (with the model provider you pick there) for accounts that connect their own OpenRouter key.</li>
           <li>Zernio, which carries Instagram, Messenger and WhatsApp messages and comments for businesses that connect those accounts.</li>
           <li>Our hosting provider, which runs the servers and database.</li>
-          <li>Stripe, Slack, Discord or Microsoft Teams, only if the business connects them.</li>
+          <li>Stripe, to take Recatch subscription payments, and also when a business connects Stripe, Slack, Discord or Microsoft Teams.</li>
           <li>Google, through the YouTube API Services, for businesses that connect a YouTube channel.</li>
         </ul>
         <p>We may also disclose data when the law requires it.</p>

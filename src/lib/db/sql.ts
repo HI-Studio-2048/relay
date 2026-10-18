@@ -338,6 +338,15 @@ CREATE TABLE IF NOT EXISTS users (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx ON users(email);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS billing_status text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_id text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_subscription_id text;
+-- Accounts created before checkout keep their workspace. New signups set billing_status to none.
+UPDATE users SET billing_status = 'active' WHERE billing_status IS NULL;
+ALTER TABLE users ALTER COLUMN billing_status SET DEFAULT 'none';
+ALTER TABLE users ALTER COLUMN billing_status SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS users_stripe_customer_idx ON users(stripe_customer_id) WHERE stripe_customer_id IS NOT NULL;
 ALTER TABLE bots ADD COLUMN IF NOT EXISTS owner_id text REFERENCES users(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS bots_owner_idx ON bots(owner_id);
 ALTER TABLE team_members ADD COLUMN IF NOT EXISTS owner_id text REFERENCES users(id) ON DELETE CASCADE;

@@ -11,6 +11,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
           <MarketingBrand />
           <nav className="hidden items-center gap-7 text-[14px] text-[#6b7280] md:flex">
             <a href="/welcome#features" className="hover:text-[#1b1f24]">Features</a>
+            <a href="/welcome#plans" className="hover:text-[#1b1f24]">Plans</a>
             <a href="/welcome#channels" className="hover:text-[#1b1f24]">Channels</a>
             <a href="/welcome#how" className="hover:text-[#1b1f24]">How it works</a>
           </nav>
@@ -18,7 +19,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
             <Button variant="ghost" render={<Link href="/login" />}>
               Log in
             </Button>
-            <Button render={<Link href="/signup" />}>
+            <Button render={<Link href="/welcome#plans" />}>
               Get started
             </Button>
           </div>
@@ -30,7 +31,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
           <MarketingBrand />
           <div className="flex gap-6">
             <Link href="/login" className="hover:text-[#1b1f24]">Log in</Link>
-            <Link href="/signup" className="hover:text-[#1b1f24]">Create account</Link>
+            <Link href="/welcome#plans" className="hover:text-[#1b1f24]">Plans</Link>
             <Link href="/privacy" className="hover:text-[#1b1f24]">Privacy</Link>
             <Link href="/terms" className="hover:text-[#1b1f24]">Terms</Link>
             <Link href="/data-deletion" className="hover:text-[#1b1f24]">Delete your data</Link>

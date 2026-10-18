@@ -5,12 +5,14 @@ import { bots, teamMembers, users } from "@/lib/db/schema";
 import { log } from "@/lib/logger";
 import { hashPassword, MIN_PASSWORD_LENGTH, verifyPassword } from "@/lib/auth/password";
 import { USER_HEADER } from "@/lib/auth/session";
+import { workspaceGate } from "@/lib/billing/gate";
+import { getPlan } from "@/lib/billing/quote";
 
 /** Thrown when the caller is signed out (401) or reaches for something they don't own (404). */
 export class AccessError extends Error {
   constructor(
     message: string,
-    readonly status: 401 | 404,
+    readonly status: 401 | 402 | 404,
   ) {
     super(message);
   }
@@ -47,6 +49,7 @@ export function ensureOwnerAccount(): Promise<void> {
           email: normalizeEmail(email),
           name: process.env.RELAY_OWNER_NAME?.trim() ?? "",
           passwordHash: await hashPassword(password),
+          billingStatus: "active",
         })
         .returning();
       log.info("Created workspace owner account");
@@ -58,6 +61,10 @@ export function ensureOwnerAccount(): Promise<void> {
       .returning();
     if (claimed.length) log.info(`Assigned ${claimed.length} existing account(s) to the owner`);
     await db.update(teamMembers).set({ ownerId: owner!.id }).where(isNull(teamMembers.ownerId));
+    // The company owner is not a new signup. Keep the workspace open unless they are on a real subscription that lapsed.
+    if (owner!.billingStatus !== "active" && !owner!.stripeSubscriptionId) {
+      await db.update(users).set({ billingStatus: "active" }).where(eq(users.id, owner!.id));
+    }
   })().catch((error) => {
     globalForAuth.relayOwnerReady = undefined;
     throw error;
@@ -65,9 +72,9 @@ export function ensureOwnerAccount(): Promise<void> {
   return globalForAuth.relayOwnerReady;
 }
 
-export async function createUser(input: { email: string; password: string; name?: string }): Promise<PublicUser> {
+export async function createUser(input: { email: string; password: string; name?: string; planId?: string | null }): Promise<PublicUser> {
   const email = normalizeEmail(input.email);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid email address");
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid email address");
   if (input.password.length < MIN_PASSWORD_LENGTH) {
     throw new Error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
   }
@@ -82,6 +89,8 @@ export async function createUser(input: { email: string; password: string; name?
       email,
       name: input.name?.trim() ?? "",
       passwordHash: await hashPassword(input.password),
+      billingStatus: "none",
+      planId: getPlan(input.planId)?.id ?? null,
     })
     .returning();
   return publicUser(row!);
@@ -106,6 +115,9 @@ export async function currentUserId(): Promise<string | null> {
 export async function requireUserId(): Promise<string> {
   const id = await currentUserId();
   if (!id) throw new AccessError("Sign in to continue", 401);
+  const gate = await workspaceGate(id);
+  if (gate === "missing") throw new AccessError("Sign in to continue", 401);
+  if (gate === "unpaid") throw new AccessError("Finish checkout to open your workspace", 402);
   return id;
 }
 

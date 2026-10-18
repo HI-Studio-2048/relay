@@ -25,6 +25,14 @@ Agencies get an **All accounts** page: every brand side by side (contacts, new t
 
 One process serves the web UI, the webhook, and the worker (`WORKER_MODE=all`).
 
+## Plans and billing
+
+Recatch is paid. There is no free plan and no trial. The plans section on the home page (`/welcome#plans`) shows the regular price, the first-month price when the launch offer applies, and the renewal price. A plan button goes to signup, then Stripe Checkout, then the workspace at `/setup`.
+
+The catalog and the promo live in `src/lib/billing/config.ts`. With the env vars unset, every plan is 50% off for the first month and renews at the normal price. `BILLING_PROMO_ENABLED=false` turns the offer off, and `BILLING_PROMO_PLAN_IDS` limits it to specific plans. Checkout uses `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` (test keys until you are ready to charge cards). Stripe Tax is not enabled; turn it on in the Stripe Dashboard only after a tax registration exists. If the Stripe env vars are missing, the plans page still renders and signup lands on `/billing` with the workspace closed, instead of failing the request.
+
+The webhook is `PUBLIC_URL/api/billing/webhook`. It is what opens and closes the workspace after checkout, renewal, a failed invoice, cancellation, a full refund, a dispute or an early fraud warning. The return page confirms the same Checkout session with Stripe so someone who does come back is not stuck waiting, but a missing return visit still provisions from the webhook.
+
 ## Local development
 
 ```bash
@@ -208,7 +216,7 @@ v1 is a single web service: HTTP + webhook + in-process worker.
 1. Create a Railway project. Add **Postgres** and **Redis**.
 2. Create one service from this repo (or deploy the Dockerfile). Nixpacks: `npm run build` / `npm run start`.
 3. Attach `DATABASE_URL` and `REDIS_URL` from those plugins.
-4. Set `ENCRYPTION_KEY` (32 bytes), `PUBLIC_URL` (the Railway HTTPS domain), and `RELAY_OWNER_EMAIL` / `RELAY_OWNER_PASSWORD` for your own login. Anyone else can sign up at `/signup` and gets their own workspace.
+4. Set `ENCRYPTION_KEY` (32 bytes), `PUBLIC_URL` (the Railway HTTPS domain), and `RELAY_OWNER_EMAIL` / `RELAY_OWNER_PASSWORD` for your own login. Anyone else picks a plan at `/welcome#plans`, creates an account at `/signup`, and pays before the workspace opens. Accounts that already existed keep access.
 5. Health check: `/api/health`.
 6. Generate a domain. Confirm `PUBLIC_URL` matches it, then connect the bot so the webhook URL is public.
 

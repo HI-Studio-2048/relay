@@ -15,8 +15,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { ToneChip, type ToneName } from "@/components/chrome/tone";
+import { PlansSection } from "@/components/marketing/plans";
 import { Button } from "@/components/ui/button";
 import { CHANNEL_IDS, CHANNELS } from "@/lib/channels/types";
+
+/** Prices and the launch promo are read per request, so an env change applies without a rebuild. */
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Recatch · Chat automation for Telegram, Instagram, Messenger and WhatsApp",
@@ -170,8 +174,8 @@ export default function WelcomePage() {
               chat from one shared inbox. No code, on every channel your customers already use.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Button size="lg" className="h-11 px-5 text-[15px]" render={<Link href="/signup" />}>
-                Create your account <ArrowRight className="size-4" />
+              <Button size="lg" className="h-11 px-5 text-[15px]" render={<Link href="/welcome#plans" />}>
+                See plans <ArrowRight className="size-4" />
               </Button>
               <Button size="lg" variant="outline" className="h-11 px-5 text-[15px]" render={<Link href="/login" />}>
                 Log in
@@ -249,6 +253,8 @@ export default function WelcomePage() {
         </div>
       </section>
 
+      <PlansSection />
+
       <section>
         <div className="mx-auto w-full max-w-6xl px-4 py-20 md:px-8">
           <div className="relative overflow-hidden rounded-3xl bg-[#1b1f24] px-6 py-14 text-center md:px-12">
@@ -261,8 +267,8 @@ export default function WelcomePage() {
               <p className="mx-auto mt-4 max-w-xl text-[16px] text-[#c9d1da]">
                 Create a workspace, connect a channel, and publish a flow in minutes.
               </p>
-              <Button size="lg" className="mt-8 h-11 px-5 text-[15px]" render={<Link href="/signup" />}>
-                Get started <ArrowRight className="size-4" />
+              <Button size="lg" className="mt-8 h-11 px-5 text-[15px]" render={<Link href="/welcome#plans" />}>
+                See plans <ArrowRight className="size-4" />
               </Button>
             </div>
           </div>

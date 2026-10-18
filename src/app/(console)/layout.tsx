@@ -4,6 +4,7 @@ import { Fragment } from "react";
 import { AppShell } from "@/components/app-shell";
 import { BotProvider } from "@/components/bot-provider";
 import { currentUser, ensureOwnerAccount } from "@/lib/auth";
+import { workspaceGate } from "@/lib/billing/gate";
 import { listBots } from "@/lib/bots";
 import { currentBot } from "@/lib/current-bot";
 import { getDb } from "@/lib/db";
@@ -17,6 +18,7 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
   const user = await currentUser();
   // A valid cookie for a deleted user: clear it and go back through login.
   if (!user) redirect("/api/auth/logout");
+  if ((await workspaceGate(user.id)) !== "ok") redirect("/billing");
   const [bots, bot] = await Promise.all([listBots(user.id), currentBot()]);
   let inboxCount = 0;
   let confirmCount = 0;

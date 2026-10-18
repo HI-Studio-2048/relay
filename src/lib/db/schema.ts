@@ -23,6 +23,14 @@ export const users = pgTable(
     name: text("name").notNull().default(""),
     /** scrypt$<salt>$<hash>, see lib/auth/password.ts. */
     passwordHash: text("password_hash").notNull(),
+    /**
+     * active: workspace is open (a paid subscription, or an account that existed before checkout).
+     * none: signed up, checkout not finished. past_due and canceled stay out until Stripe says otherwise.
+     */
+    billingStatus: text("billing_status").notNull().default("none"),
+    planId: text("plan_id"),
+    stripeCustomerId: text("stripe_customer_id"),
+    stripeSubscriptionId: text("stripe_subscription_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex("users_email_idx").on(table.email)],

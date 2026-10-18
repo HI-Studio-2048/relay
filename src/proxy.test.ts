@@ -16,6 +16,7 @@ describe("what a signed-out visitor can reach", () => {
     ["SES bounce and complaint notices from SNS", "/api/email/feedback", "POST"],
     ["the forgot password page", "/forgot-password", "GET"],
     ["the reset password page", "/reset-password", "GET"],
+    ["the Recatch billing webhook", "/api/billing/webhook", "POST"],
     ["asking for a reset link", "/api/auth/forgot", "POST"],
     ["setting a new password from a reset link", "/api/auth/reset", "POST"],
   ])("lets through %s", (_what, pathname, method) => {
@@ -31,6 +32,8 @@ describe("what a signed-out visitor can reach", () => {
     "/api/discord/oauth/callback",
     "/api/channels/capabilities",
     "/api/bots",
+    "/api/billing/checkout",
+    "/api/billing/portal",
   ])("answers 401 for %s, because it needs a signed-in user", (pathname) => {
     const response = signedOut(pathname);
     expect(isPassedThrough(response)).toBe(false);
