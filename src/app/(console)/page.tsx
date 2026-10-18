@@ -9,8 +9,11 @@ import { StatusPill } from "@/components/chrome/status-pill";
 import { CanvasCard, ToneChip, type ToneName } from "@/components/chrome/tone";
 import { Button } from "@/components/ui/button";
 import { CHANNELS } from "@/lib/channels/types";
-import { currentBot } from "@/lib/current-bot";
-import { loadActivityHeatmap, loadChecklist, loadDashboard, loadTeamReport } from "@/lib/dashboard";
+import { aiConfigured } from "@/lib/ai";
+import { AgentChat } from "@/components/agent-chat";
+import { OverviewAggregate } from "@/components/overview-aggregate";
+import { consoleScope } from "@/lib/current-bot";
+import { loadActivityHeatmap, loadChecklist, loadDashboard, loadTeamReport, loadWorkspaceOverview } from "@/lib/dashboard";
 import { ActivityHeatmap } from "@/components/activity-heatmap";
 import { formatDuration } from "@/lib/team-report";
 import { WeeklyDigest } from "@/components/weekly-digest";
@@ -68,7 +71,8 @@ function relative(iso: string | null) {
 }
 
 export default async function OverviewPage() {
-  const bot = await currentBot();
+  const scope = await consoleScope();
+  const bot = scope.bot;
   if (!bot) {
     return (
       <div className="space-y-6 py-4">
@@ -82,6 +86,11 @@ export default async function OverviewPage() {
         <ConnectPrompt />
       </div>
     );
+  }
+
+  if (scope.aggregate) {
+    const overview = await loadWorkspaceOverview(scope.bots);
+    return <OverviewAggregate bots={scope.bots} overview={overview} />;
   }
 
   const [data, checklist, team, heatmap] = await Promise.all([
@@ -349,6 +358,14 @@ export default async function OverviewPage() {
           </div>
         </CanvasCard>
       ) : null}
+
+      <section className="space-y-3">
+        <div>
+          <p className="text-[11px] font-semibold tracking-[0.14em] text-[#8b95a1] uppercase">Advanced</p>
+          <h2 className="font-heading text-[15px] text-[#1b1f24]">Workspace agent</h2>
+        </div>
+        <AgentChat initialConfigured={aiConfigured()} />
+      </section>
     </div>
   );
 }

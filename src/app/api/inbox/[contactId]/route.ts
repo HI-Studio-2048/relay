@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
 import { requireRowAccess } from "@/lib/auth/resources";
+import { channelOf } from "@/lib/channels/types";
 import { getDb } from "@/lib/db";
-import { contacts, flows } from "@/lib/db/schema";
+import { bots, contacts, flows } from "@/lib/db/schema";
 import { json, fail, type RouteParams } from "@/lib/http";
 import { isBotPaused, listMessages, loadActiveSession, loadContactRecord } from "@/lib/store";
 import { listScheduled } from "@/lib/agent-reply";
@@ -14,6 +15,9 @@ export async function GET(_request: Request, context: RouteParams<{ contactId: s
     if (!contact) return json({ error: "Contact not found" }, 404);
     const db = await getDb();
     const [row] = await db.select().from(contacts).where(eq(contacts.id, contactId)).limit(1);
+    const [channel] = row
+      ? await db.select({ id: bots.id, name: bots.name, channel: bots.channel }).from(bots).where(eq(bots.id, row.botId)).limit(1)
+      : [];
     const [messages, session, flowRows] = await Promise.all([
       listMessages(contactId),
       loadActiveSession(contactId),
@@ -30,6 +34,7 @@ export async function GET(_request: Request, context: RouteParams<{ contactId: s
       })),
       snoozedUntil: row?.snoozedUntil && new Date(row.snoozedUntil).getTime() > Date.now() ? new Date(row.snoozedUntil).toISOString() : null,
       contact,
+      channelAccount: channel ? { id: channel.id, name: channel.name, channel: channelOf(channel.channel) } : null,
       messages,
       automation: {
         status: session?.status === "paused" || (row && isBotPaused(row)) ? "paused" : session ? session.status : "idle",

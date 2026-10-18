@@ -1,6 +1,7 @@
-import { and, desc, eq, ilike, isNotNull, like, lte, notInArray, notLike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNotNull, like, lte, notInArray, notLike, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import {
+  bots,
   contactAliases,
   contactFieldValues,
   contactTags,
@@ -363,7 +364,13 @@ export async function saveMessage(input: {
   });
 }
 
-export async function listInbox(botId: string) {
+function botIdList(botId: string | string[]) {
+  return (Array.isArray(botId) ? botId : [botId]).filter(Boolean);
+}
+
+export async function listInbox(botId: string | string[]) {
+  const ids = botIdList(botId);
+  if (ids.length === 0) return [];
   const db = await getDb();
   const latest = db
     .select({
@@ -371,7 +378,7 @@ export async function listInbox(botId: string) {
       lastAt: sql<Date>`max(${messages.createdAt})`.as("last_at"),
     })
     .from(messages)
-    .where(eq(messages.botId, botId))
+    .where(inArray(messages.botId, ids))
     .groupBy(messages.contactId)
     .as("latest");
 
@@ -400,6 +407,10 @@ export type InboxThread = {
   needsReply: boolean;
   assignedTo: string | null;
   tags: string[];
+  /** Channel account this conversation belongs to. Replies go out through this bot. */
+  botId: string;
+  botName: string;
+  channel: string;
 };
 
 /** Live Chat list: one row per conversation with its latest message, newest first. */
@@ -427,34 +438,39 @@ export async function wakeSnoozed(contactId: string) {
   await db.update(contacts).set({ snoozedUntil: null }).where(and(eq(contacts.id, contactId), isNotNull(contacts.snoozedUntil)));
 }
 
-export async function listInboxThreads(botId: string): Promise<InboxThread[]> {
+export async function listInboxThreads(botId: string | string[]): Promise<InboxThread[]> {
+  const ids = botIdList(botId);
+  if (ids.length === 0) return [];
   const db = await getDb();
   const latest = await db
     .select()
     .from(messages)
     .where(
       and(
-        eq(messages.botId, botId),
+        inArray(messages.botId, ids),
         sql`${messages.createdAt} = (select max(m2.created_at) from messages m2 where m2.contact_id = ${messages.contactId})`,
       ),
     );
   const byContact = new Map<string, (typeof latest)[number]>();
   for (const message of latest) if (!byContact.has(message.contactId)) byContact.set(message.contactId, message);
   if (byContact.size === 0) return [];
-  const [rows, tagRows] = await Promise.all([
-    db.select().from(contacts).where(eq(contacts.botId, botId)),
+  const [rows, tagRows, botRows] = await Promise.all([
+    db.select().from(contacts).where(inArray(contacts.botId, ids)),
     db
       .select({ contactId: contactTags.contactId, name: tags.name })
       .from(contactTags)
       .innerJoin(tags, eq(tags.id, contactTags.tagId))
-      .where(eq(tags.botId, botId)),
+      .where(inArray(tags.botId, ids)),
+    db.select({ id: bots.id, name: bots.name, channel: bots.channel }).from(bots).where(inArray(bots.id, ids)),
   ]);
   const tagsByContact = new Map<string, string[]>();
   for (const row of tagRows) tagsByContact.set(row.contactId, [...(tagsByContact.get(row.contactId) ?? []), row.name]);
+  const botById = new Map(botRows.map((bot) => [bot.id, bot]));
   return rows
     .filter((row) => byContact.has(row.id))
     .map((row) => {
       const last = byContact.get(row.id)!;
+      const channel = botById.get(row.botId);
       const name = [row.firstName, row.lastName].filter(Boolean).join(" ").trim() || (row.username ? `@${row.username}` : row.telegramUserId);
       return {
         contactId: row.id,
@@ -476,9 +492,19 @@ export async function listInboxThreads(botId: string): Promise<InboxThread[]> {
           last.direction === "inbound" && row.inboxStatus !== "closed" && !(row.snoozedUntil && new Date(row.snoozedUntil).getTime() > Date.now()),
         assignedTo: row.assignedTo ?? null,
         tags: (tagsByContact.get(row.id) ?? []).sort((a, b) => a.localeCompare(b)),
+        botId: row.botId,
+        botName: channel?.name ?? "Channel",
+        channel: channel?.channel ?? "telegram",
       };
     })
     .sort((a, b) => (b.lastAt ?? "").localeCompare(a.lastAt ?? ""));
+}
+
+/** Live Chat across every channel one user owns. Other workspaces are never included. */
+export async function listWorkspaceInbox(ownerId: string): Promise<InboxThread[]> {
+  const db = await getDb();
+  const owned = await db.select({ id: bots.id }).from(bots).where(eq(bots.ownerId, ownerId));
+  return listInboxThreads(owned.map((bot) => bot.id));
 }
 
 export async function listMessages(contactId: string) {

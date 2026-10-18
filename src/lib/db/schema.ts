@@ -204,24 +204,48 @@ export const flowSessions = pgTable("flow_sessions", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const messages = pgTable("messages", {
-  id: text("id").primaryKey(),
-  botId: text("bot_id")
-    .notNull()
-    .references(() => bots.id, { onDelete: "cascade" }),
-  contactId: text("contact_id")
-    .notNull()
-    .references(() => contacts.id, { onDelete: "cascade" }),
-  direction: text("direction").notNull(),
-  source: text("source").notNull(),
-  body: text("body").notNull(),
-  telegramMessageId: text("telegram_message_id"),
-  /** Team member who wrote an agent reply. */
-  author: text("author"),
-  /** Images, GIFs and files on this message (uploads or saved copies of what the person sent). */
-  media: jsonb("media").$type<FlowMedia[]>(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const messages = pgTable(
+  "messages",
+  {
+    id: text("id").primaryKey(),
+    botId: text("bot_id")
+      .notNull()
+      .references(() => bots.id, { onDelete: "cascade" }),
+    contactId: text("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    direction: text("direction").notNull(),
+    source: text("source").notNull(),
+    body: text("body").notNull(),
+    telegramMessageId: text("telegram_message_id"),
+    /** Team member who wrote an agent reply. */
+    author: text("author"),
+    /** Images, GIFs and files on this message (uploads or saved copies of what the person sent). */
+    media: jsonb("media").$type<FlowMedia[]>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("messages_bot_created_idx").on(table.botId, table.createdAt)],
+);
+
+/** One Overview growth-agent transcript per workspace (the owning user). */
+export type AgentMessageMeta = {
+  drafts?: { kind: "flow" | "broadcast"; id: string; name: string; href: string; botName: string }[];
+};
+
+export const agentMessages = pgTable(
+  "agent_messages",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    body: text("body").notNull(),
+    meta: jsonb("meta").$type<AgentMessageMeta>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("agent_messages_owner_idx").on(table.ownerId, table.createdAt)],
+);
 
 export const broadcasts = pgTable("broadcasts", {
   id: text("id").primaryKey(),
