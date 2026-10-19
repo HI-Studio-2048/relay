@@ -1,6 +1,6 @@
 # Integrations log
 
-Where each platform stands in Recatch. Last updated on 2026-10-16. Zernio is used again for Instagram, Messenger and WhatsApp only (one company key, one profile per customer). Every other channel is direct. Four channels are confirmed with real accounts (Telegram, Slack, Discord, Bluesky) and three of them connect with one click through a company-owned app. `main` is the only branch that matters.
+Where each platform stands in Recatch. Last updated on 2026-10-19. Zernio is used again for Instagram, Messenger and WhatsApp only (one company key, one profile per customer). Every other channel is direct. Four channels are confirmed with real accounts (Telegram, Slack, Discord, Bluesky) and three of them connect with one click through a company-owned app. `main` is the only branch that matters.
 
 "Direct" means Recatch talks to the platform's own API with our credentials. There is no hub in between any more. The Channels page lists every channel in `src/lib/channels/catalog.ts` (live ones connect from Setup, the rest are greyed out as "On the way"), so update that file when a channel changes state.
 
@@ -13,7 +13,7 @@ Waiting on someone else (nothing for us to do until they answer):
 | What | Status | Waiting on |
 | --- | --- | --- |
 | Pinterest app, App ID 1621662 | Submitted 2026-10-09, "Trial access pending" (still pending on 2026-10-19) | Pinterest's review |
-| TikTok production review (Login Kit, `user.info.basic`) | Submitted 2026-10-14 with the demo video. The organization's business verification is already done (verified 2026-10-13). | TikTok's review. When approved, a person puts the production client key and secret into Railway |
+| TikTok production review (Login Kit, `user.info.basic`) | Submitted 2026-10-14 with the demo video. The organization's business verification is already done (verified 2026-10-13). Still pending on 2026-10-19. | TikTok's review. When approved, a person puts the production client key and secret into Railway |
 | Meta app "Recatch" (App ID 30154032207530540) | Created 2026-10-16 in dev mode and marked as a Tech Provider (can't be undone). Parked on 2026-10-16 at Business and access verification, which hit the same dead end as before. Customers stay on Zernio. | Us, when verification can go through |
 
 Waiting on a person (we can't do these from the browser):
@@ -34,7 +34,7 @@ Parked on purpose:
 | What | Why |
 | --- | --- |
 | Reddit | The subreddit made for the application was auto-banned by Reddit's spam filter. |
-| Branches `customer-accounts` and `origin-sync-canvas-media` on GitHub | Left for the team to decide. `main` already has newer versions of both. |
+| Six old branches on GitHub | Left for Dan to decide (2026-10-19). Already superseded by `main`: `customer-accounts`, `origin-sync-canvas-media`, `inbox-all-accounts`. Need rework before they could go in: `cursor/affiliate-pages-3fb8` (every affiliate term is "TBD"), `cursor/how-to-connect-videos-5cd1` (the Instagram, Messenger and WhatsApp videos show the old own-Meta-app setup, not Zernio), `cursor/welcome-promo-video-ba33` (the voiceover needs rewriting). None is live. The three fully merged branches were deleted on 2026-10-19. |
 
 ## Working
 
@@ -127,24 +127,33 @@ Everything is under the company admin account (`admin@hiiiiiiiiiii.com`), so the
 
 ## Start here next session
 
-**Pick up here (left on 2026-10-16, evening):**
-- [x] Giveaway comment flow on `@danielphilipwatch` live with `enter`, and the 117 missed commenters DMd through Missed comments. 29 had tapped "Count me in" within minutes.
-- [x] Giveaway DM broken from 2026-10-18 22:33 UTC: an edit put "Yes!" in the "Count me in" button's link field, and Instagram refused every DM ("Button url must be a valid URL"), 23 people between 23:53 UTC on the 18th and 11:34 UTC on the 19th. The first message was restored from History on 2026-10-19 (the broken version is kept in History).
-- [x] Those 23 were hidden from Missed comments, because the engine marks a person "answered" before the DM goes out and a refusal never took it back. Their marks were removed by hand on 2026-10-19, and a refused DM now takes the mark back by itself.
-- [x] Those 23 (plus 2 older misses) sent from Missed comments on 2026-10-19, about 13:14 UTC.
-- [ ] Stripe: create the webhook and set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in Railway (test keys first). Until then nobody new can get in. See Billing, Stripe.
-- [ ] Plan limits (what Starter and Pro leave out) are not decided yet.
-- [x] Real photos and GIFs sent to `@danielphilipwatch` show in Live Chat. Confirmed 2026-10-19.
-- [ ] Consider a stale-save check in the flow editor (refuse a save when the flow changed since the tab loaded). It bit once on 2026-10-16.
-- [ ] October 31st: winners. Contacts filtered by `giveaway-oct-31`.
-- [x] Instagram through Zernio: connect saves in Recatch and the Channels page lists `@danielphilipwatch`. Confirmed 2026-10-15.
-- [x] Instagram DM and comment land in Live Chat. Confirmed 2026-10-15.
-- [x] YouTube rebuilt as a comments channel, tested live, re-submitted to Google with a new video on 2026-10-16. Verified by Google on 2026-10-19 (branding and data access both verified in the Verification Center).
-- [ ] YouTube: check Audience says "In production", not Testing, so anyone can sign in. Ask for more API quota before a dozen channels connect.
-- Gotchas from the live YouTube test: a held comment still shows to its own author, so check Studio's "Held for review" tab or an incognito window. "Once per person per post" means a second "guide" from the same person on the same video is ignored. Sending from Live Chat pauses the automation for that person. A comment takes up to 2 minutes to arrive (the poll interval).
+**Pick up here (left on 2026-10-19, afternoon):**
+
+Open, for a person:
+- [ ] Stripe: create the webhook in Stripe to `https://recatch.app/api/billing/webhook` (events in `.env.example`), then set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in Railway, test keys first. Until then nobody new can sign up. See Billing, Stripe.
+- [ ] `ANTHROPIC_API_KEY` in Railway, for the growth agent and the AI features of accounts without their own OpenRouter key.
+- [ ] October 31st: giveaway winners. Contacts filtered by the tag `giveaway-oct-31`.
+- [ ] Renew the business registration certificate before 2026-12-16 (TikTok and Meta verification rely on it).
+- [ ] Plan limits (what Starter and Pro leave out): Dan's call. Every plan gets everything until then.
+
+Open, parked on purpose (the user said leave them for now):
 - [ ] Connect a WhatsApp number through Zernio, separately. It connects differently from Instagram.
-- [x] Email bounces: SNS topic, SES feedback, `AWS_SES_SNS_TOPIC_ARN` and the HTTPS subscription are all set up, and Recatch confirmed the subscription on 2026-10-15. Tested end to end on 2026-10-19: a send to `bounce@simulator.amazonses.com` reached `/api/email/feedback` three seconds later and landed in `email_suppressions` as a bounce (that row is the test, leave it).
 - [ ] Bluesky comments, live test: set up a comment automation on a post by `@hiiiiiiiiiii2048.bsky.social` (signed in as `lilrannee@gmail.com`, which owns that account), reply from `@ezzawan.bsky.social`, and check the public reply in the thread and the DM. Both accounts already poll notifications without errors.
+- [ ] YouTube quota: ask Google for more before a dozen channels connect.
+
+Done on 2026-10-19:
+- [x] YouTube verified by Google (branding and data access), and the consent screen is In production, so anyone can connect.
+- [x] Reviewed and fixed the teammate's five commits from 2026-10-18/19 (Stripe paywall, All channels, growth agent). See Billing, Stripe, and the growth agent paragraph.
+- [x] Giveaway DM broken from 2026-10-18 22:33 UTC: an edit put "Yes!" in the "Count me in" button's link field, and Instagram refused every DM ("Button url must be a valid URL"), 23 people between 23:53 UTC on the 18th and 11:34 UTC on the 19th. The first message was restored from History (the broken version is kept there).
+- [x] Those 23 were hidden from Missed comments, because the engine marks a person "answered" before the DM goes out and a refusal never took it back. Marks removed by hand, and a refused DM now takes the mark back by itself. All 23 (plus 2 older misses) were sent from Missed comments at about 13:14 UTC, none refused.
+- [x] Flow editor stale-save check: a tab that is behind the saved flow gets a 409 and a Reload banner instead of overwriting it.
+- [x] Real photos and GIFs sent to `@danielphilipwatch` show in Live Chat.
+- [x] Email bounces tested end to end: a send to `bounce@simulator.amazonses.com` reached `/api/email/feedback` three seconds later and landed in `email_suppressions` (that row is the test, leave it).
+- [x] `railway.toml` removed before Config as Code ends on 2026-12-01. The builder and healthcheck live on the service, and the first deploy without it passed its healthcheck.
+
+Earlier, still useful:
+- Gotchas from the live YouTube test: a held comment still shows to its own author, so check Studio's "Held for review" tab or an incognito window. "Once per person per post" means a second "guide" from the same person on the same video is ignored. Sending from Live Chat pauses the automation for that person. A comment takes up to 2 minutes to arrive (the poll interval).
+- Instagram through Zernio has been live since 2026-10-15 (`@danielphilipwatch`: connect, DMs, comments, the giveaway).
 
 1. `git pull`, then `npm test` and `npx tsc --noEmit`. Vitest allows 20 seconds per test and 30 for setup, because the integration suites load large libraries and start a database when many run at once. If one still times out, rerun it by itself before assuming something broke.
 2. Meta direct is parked at Business and access verification (the account check is done and the app exists). Don't restart it unless asked.
@@ -154,6 +163,9 @@ Everything is under the company admin account (`admin@hiiiiiiiiiii.com`), so the
 6. The person works on Windows. Any command you ask them to run must be for PowerShell (say so, and say the folder), never bash or Unix-only tools.
 7. To see what actually happened live: `railway logs --service recatch --http --since 1h` lists every request with its status and timing (the app itself does not log requests). To see what Zernio holds, query `/v1/profiles` and `/v1/accounts?profileId=` from inside the container with `railway ssh --service recatch -- node -e "..."`, reading the key from `process.env`, so it never prints.
 8. After every push, run `railway deployment list --service recatch`. A failed build leaves the old one serving, and three failed deploys in a row once went unnoticed because the signed-out 401 looked the same. The usual cause is the lock file (see CLAUDE.md).
+9. If the Railway CLI says "Run `railway link`", relink with `railway link --project f59f9253-d69f-425f-8d00-698eb7b2a2f2 --environment production --service recatch`. After a redeploy, `railway logs` only shows the new deployment; pass an older deployment id to read its logs.
+10. Check `git log` for commits from others before starting. Teammates push straight to `main` (sometimes through an AI agent) without updating these docs or setting the variables their code needs. Compare `railway variables --service recatch --kv` names with `.env.example`.
+11. Never push while someone is sending from Missed comments or a broadcast: the deploy restarts the server and cuts the send off.
 
 ## Resume checklist
 
@@ -163,7 +175,7 @@ In the order that unlocks the most:
 0b. **Meta through Zernio.** Instagram confirmed live on 2026-10-15 (connect, DMs and comments). Next is WhatsApp, which connects differently. Read Zernio's terms on reselling.
 1. **Meta, direct.** Parked. The app exists since 2026-10-16 and is a Tech Provider (see Meta for Developers), but Business and access verification is stuck. Resume there. In dev mode the direct Instagram, Messenger and WhatsApp adapters already work with our own accounts as testers (WhatsApp gives a free test number). Record the screencast App Review wants, then do Business Verification with the company documents and App Review for `instagram_manage_messages`, `pages_messaging` and the WhatsApp permissions. Meta is the biggest win: it covers four networks.
 2. **Telegram webhook.** Done on 2026-10-14: a health check moved `@relay_hi_bot` to `https://recatch.app/api/telegram/webhook/...`.
-3. **YouTube.** Sent back on 2026-10-16 because the video couldn't show a use for the scope. Rebuilt the same day as a comments channel on `youtube.force-ssl`, tested live, re-submitted, and verified by Google on 2026-10-19. Now publish the consent screen to production and ask for more quota before a dozen channels are connected (each polls about 720 units a day).
+3. **YouTube.** Done: verified by Google on 2026-10-19 and the consent screen is In production. Left: ask for more quota before a dozen channels are connected (each polls about 720 units a day).
 4. **TikTok.** Submitted for production review on 2026-10-14, and business verification is done. When approved, set the production `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET` in Railway (a person does this with a piped command), then sign in once with a non-sandbox account to confirm. Do not swap the keys before approval, because the sandbox keys are the ones that work today.
 5. **Pinterest.** When Trial access arrives, build the Pinterest connection (sign-in, publish, read boards) so there is something to show, then request Standard access.
 6. **LinkedIn.** Create the company Page, then apply to the Community Management API.
