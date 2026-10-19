@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { billingStatusFromStripe, hasWorkspaceAccess } from "@/lib/billing/access";
-import { billingConfig } from "@/lib/billing/config";
+import { automaticTaxEnabled, billingConfig } from "@/lib/billing/config";
+import { invoiceIsPaid, invoiceSubscriptionId } from "@/lib/billing/invoice";
 import { formatMoney, listQuotes, promoApplies, quotePlan } from "@/lib/billing/quote";
 import { encodeStripeForm } from "@/lib/billing/stripe-api";
 import { allowAttempt } from "@/lib/rate-limit";
@@ -60,6 +61,52 @@ describe("workspace access", () => {
     expect(billingStatusFromStripe("trialing")).toBe("none");
     expect(billingStatusFromStripe("past_due")).toBe("past_due");
     expect(billingStatusFromStripe("canceled")).toBe("canceled");
+  });
+});
+
+describe("invoice subscription on API 2026-09-30.endive", () => {
+  const current = {
+    id: "in_1Renewal",
+    object: "invoice",
+    status: "paid",
+    status_transitions: { finalized_at: 1710000000, paid_at: 1710000010, marked_uncollectible_at: null, voided_at: null },
+    billing_reason: "subscription_cycle",
+    parent: {
+      type: "subscription_details",
+      quote_details: null,
+      subscription_details: {
+        metadata: { plan_id: "pro", user_id: "user_1" },
+        subscription: "sub_ada",
+      },
+    },
+  };
+
+  it("reads the subscription from parent.subscription_details and treats status paid as paid", () => {
+    expect(invoiceSubscriptionId(current)).toBe("sub_ada");
+    expect(invoiceIsPaid(current)).toBe(true);
+    expect(invoiceIsPaid({ ...current, status: "open", paid: true })).toBe(false);
+    expect(invoiceSubscriptionId({ ...current, parent: { type: "subscription_details", subscription_details: { subscription: { id: "sub_expanded" } } } })).toBe("sub_expanded");
+  });
+
+  it("falls back to the legacy subscription and paid fields when the current ones are absent", () => {
+    expect(invoiceSubscriptionId({ subscription: "sub_legacy" })).toBe("sub_legacy");
+    expect(invoiceSubscriptionId({ subscription: "sub_legacy", parent: { type: "quote_details", quote_details: { quote: "qt_1" } } })).toBe("sub_legacy");
+    expect(invoiceIsPaid({ paid: true })).toBe(true);
+    expect(invoiceIsPaid({ status_transitions: { paid_at: 1710000010 } })).toBe(true);
+    expect(invoiceIsPaid({ status: "open" })).toBe(false);
+    expect(invoiceSubscriptionId({ parent: { type: "quote_details" } })).toBeNull();
+  });
+});
+
+describe("automatic tax flag", () => {
+  it("stays off unless STRIPE_AUTOMATIC_TAX is true", () => {
+    vi.stubEnv("STRIPE_AUTOMATIC_TAX", "");
+    expect(automaticTaxEnabled()).toBe(false);
+    vi.stubEnv("STRIPE_AUTOMATIC_TAX", "true");
+    expect(automaticTaxEnabled()).toBe(true);
+    vi.stubEnv("STRIPE_AUTOMATIC_TAX", "false");
+    expect(automaticTaxEnabled()).toBe(false);
+    vi.unstubAllEnvs();
   });
 });
 

@@ -1,10 +1,12 @@
-import { paymentsConfigured } from "@/lib/billing/config";
+import { paymentsConfigured, automaticTaxEnabled } from "@/lib/billing/config";
 import { BillingError } from "@/lib/billing/errors";
 import { quotePlan } from "@/lib/billing/quote";
 import { isStripeHost, stripeGetOptional, stripeId, stripeRequest, type StripeObject } from "@/lib/billing/stripe-api";
 import { rememberStripeCustomer, saveBilling } from "@/lib/billing/account";
+import { recordBillingPayment } from "@/lib/billing/payments";
 import { billingStatusFromStripe } from "@/lib/billing/access";
 import { publicUrl } from "@/lib/env";
+import { log } from "@/lib/logger";
 
 const productIds = new Map<string, string>();
 const priceIds = new Map<string, string>();
@@ -74,11 +76,15 @@ async function ensurePrice(planId: string, name: string, cents: number): Promise
   return id;
 }
 
-/** Coupon duration `once`: the percent applies to the first invoice, then Stripe renews at the full price. */
-async function ensureCoupon(percent: number): Promise<string> {
-  const id = couponId(percent);
-  const existing = await stripeGetOptional(`/coupons/${encodeURIComponent(id)}`);
-  if (existing) return id;
+/** The shared launch coupon. Reused only when it is 50% off and duration `once`. */
+const LAUNCH_COUPON_ID = "recatch_launch_50_once";
+
+function couponIsPercentOnce(coupon: StripeObject, percent: number): boolean {
+  const percentOff = typeof coupon.percent_off === "number" ? coupon.percent_off : Number(coupon.percent_off);
+  return percentOff === percent && coupon.duration === "once" && coupon.valid !== false;
+}
+
+async function createCoupon(id: string, percent: number): Promise<string> {
   const body = new URLSearchParams();
   body.set("id", id);
   body.set("percent_off", String(percent));
@@ -87,6 +93,25 @@ async function ensureCoupon(percent: number): Promise<string> {
   body.set("metadata[recatch]", "launch");
   await stripeRequest("POST", "/coupons", body, `recatch-coupon-${id}`);
   return id;
+}
+
+/**
+ * Coupon duration `once`: the percent applies to the first invoice, then Stripe renews at the full price.
+ * A 50% offer reuses `recatch_launch_50_once` when that coupon is already 50% off once.
+ * Any other percent keeps the previous id (`recatch_launch_{percent}_once`), creating it if missing.
+ */
+async function ensureCoupon(percent: number): Promise<string> {
+  const id = couponId(percent);
+  const existing = await stripeGetOptional(`/coupons/${encodeURIComponent(id)}`);
+  if (existing) {
+    // The shared launch coupon is reused only when it is still 50% off once.
+    // A different percent keeps the previous behavior and uses the coupon stored at its id.
+    if (id === LAUNCH_COUPON_ID && !couponIsPercentOnce(existing, 50)) {
+      throw new BillingError("The launch coupon isn't 50% off the first month", 502);
+    }
+    return id;
+  }
+  return createCoupon(id, percent);
 }
 
 async function ensureCustomer(input: { userId: string; email: string; name: string; customerId: string | null }): Promise<string> {
@@ -123,6 +148,15 @@ export async function startCheckout(input: { userId: string; email: string; name
   body.set("subscription_data[metadata][user_id]", input.userId);
   body.set("subscription_data[metadata][plan_id]", quote.plan.id);
   body.set("integration_identifier", `recatch_plans_${randomSuffix()}`);
+  // Dynamic payment methods (no payment_method_types): required on 2026-09-30.endive, and what
+  // Adaptive Pricing uses to show a local currency while the Price stays USD.
+  body.set("billing_address_collection", "required");
+  body.set("tax_id_collection[enabled]", "true");
+  body.set("locale", "auto");
+  // Checkout is always created for an existing Customer, so it can save the address and legal name.
+  body.set("customer_update[address]", "auto");
+  body.set("customer_update[name]", "auto");
+  if (automaticTaxEnabled()) body.set("automatic_tax[enabled]", "true");
   if (quote.promoApplied) {
     const coupon = await ensureCoupon(quote.percentOff);
     body.set("discounts[0][coupon]", coupon);
@@ -163,7 +197,7 @@ export async function confirmCheckoutSession(userId: string, sessionId: string):
   if (session.payment_status === "unpaid") {
     return { access: false, message: "The payment hasn't cleared yet. If you just paid, wait a moment and refresh this page." };
   }
-  if (session.payment_status !== "paid" && session.payment_status !== "no_payment_required") {
+  if (session.payment_status !== "paid") {
     return { access: false, message: "The payment hasn't finished." };
   }
   const subscription = asObject(session.subscription);
@@ -181,6 +215,18 @@ export async function confirmCheckoutSession(userId: string, sessionId: string):
     stripeCustomerId: customerId,
     stripeSubscriptionId: subscriptionId,
   });
+  if (saved.access) {
+    const amount = session.amount_total;
+    await recordBillingPayment({
+      userId,
+      invoiceId: stripeId(session.invoice),
+      checkoutSessionId: sessionId,
+      subscriptionId,
+      amountCents: typeof amount === "number" && Number.isInteger(amount) && amount >= 0 ? amount : null,
+      currency: typeof session.currency === "string" ? session.currency.toLowerCase().slice(0, 12) : null,
+      billingReason: "subscription_create",
+    }).catch((error) => log.warn("Could not record the checkout payment", error instanceof Error ? error.message : error));
+  }
   return saved.access
     ? { access: true, message: "Payment confirmed." }
     : { access: false, message: "The payment hasn't finished opening the workspace yet." };

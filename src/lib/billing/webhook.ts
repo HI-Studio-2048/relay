@@ -1,5 +1,7 @@
 import { billingStatusFromStripe } from "@/lib/billing/access";
 import { findBillingUser, saveBilling } from "@/lib/billing/account";
+import { invoiceIsPaid, invoiceSubscriptionId, invoiceSubscriptionMetadata } from "@/lib/billing/invoice";
+import { recordBillingPayment } from "@/lib/billing/payments";
 import { stripeId, stripeRequest, type StripeObject } from "@/lib/billing/stripe-api";
 import { log } from "@/lib/logger";
 
@@ -21,6 +23,15 @@ function metadata(source: StripeObject): StripeObject {
   return source.metadata && typeof source.metadata === "object" ? (source.metadata as StripeObject) : {};
 }
 
+function minorAmount(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+function currencyOf(source: StripeObject): string | null {
+  const code = text(source.currency);
+  return code ? code.toLowerCase().slice(0, 12) : null;
+}
+
 async function userFor(source: StripeObject, extraUserId?: string | null): Promise<string | null> {
   const meta = metadata(source);
   return findBillingUser({
@@ -40,8 +51,13 @@ async function customerFromCharge(chargeId: string | null): Promise<string | nul
 }
 
 /**
- * Subscription state lives here, not on the browser's return page. A paid Checkout opens the
- * workspace; a failed invoice, a cancellation, a full refund, a dispute or an early fraud warning closes it.
+ * Subscription state lives here, not on the browser's return page. A Checkout session opens the
+ * workspace only once Stripe reports `payment_status=paid` (including `async_payment_succeeded`).
+ * `unpaid` and `no_payment_required` leave it closed. A failed invoice, a cancellation, a full
+ * refund, a dispute or an early fraud warning closes it.
+ *
+ * The plan comes from Checkout metadata (`plan_id`) and the price lookup key. Charged amounts
+ * are stored on the payment row only: tax and Adaptive Pricing change them.
  */
 export async function handleBillingEvent(event: StripeEvent): Promise<{ ok: true; ignored?: boolean }> {
   const object = objectOf(event);
@@ -49,19 +65,30 @@ export async function handleBillingEvent(event: StripeEvent): Promise<{ ok: true
 
   if (type === "checkout.session.completed" || type === "checkout.session.async_payment_succeeded") {
     if (text(object.mode) && object.mode !== "subscription") return { ok: true, ignored: true };
-    if (object.payment_status === "unpaid") return { ok: true, ignored: true };
-    if (object.payment_status !== "paid" && object.payment_status !== "no_payment_required") return { ok: true, ignored: true };
+    // Bank debits stay `unpaid` until async_payment_succeeded. A 100% discount is
+    // `no_payment_required` and is not a payment, so it does not open the workspace.
+    if (object.payment_status !== "paid") return { ok: true, ignored: true };
     const userId = await userFor(object);
     if (!userId) return { ok: true, ignored: true };
     const subscription = object.subscription && typeof object.subscription === "object" ? (object.subscription as StripeObject) : null;
     const stripeStatus = text(subscription?.status) ?? "active";
     const planId = text(metadata(object).plan_id) ?? (subscription ? text(metadata(subscription).plan_id) : null);
+    const subscriptionId = stripeId(object.subscription);
     await saveBilling({
       userId,
       billingStatus: subscription && stripeStatus !== "active" ? billingStatusFromStripe(stripeStatus) : "active",
       planId,
       stripeCustomerId: stripeId(object.customer),
-      stripeSubscriptionId: stripeId(object.subscription),
+      stripeSubscriptionId: subscriptionId,
+    });
+    await recordBillingPayment({
+      userId,
+      invoiceId: stripeId(object.invoice),
+      checkoutSessionId: text(object.id),
+      subscriptionId,
+      amountCents: minorAmount(object.amount_total),
+      currency: currencyOf(object),
+      billingReason: "subscription_create",
     });
     return { ok: true };
   }
@@ -87,19 +114,31 @@ export async function handleBillingEvent(event: StripeEvent): Promise<{ ok: true
   }
 
   if (type === "invoice.paid" || type === "invoice.payment_failed") {
-    if (!stripeId(object.subscription)) return { ok: true, ignored: true };
-    const userId = await userFor(object);
+    const subscriptionId = invoiceSubscriptionId(object);
+    if (!subscriptionId) return { ok: true, ignored: true };
+    const subMeta = invoiceSubscriptionMetadata(object);
+    const userId = await userFor(object, text(subMeta.user_id));
     if (!userId) return { ok: true, ignored: true };
     if (type === "invoice.payment_failed") {
       await suspend(userId);
       return { ok: true };
     }
-    if (object.status !== "paid" && object.paid !== true) return { ok: true, ignored: true };
+    if (!invoiceIsPaid(object)) return { ok: true, ignored: true };
     await saveBilling({
       userId,
       billingStatus: "active",
+      planId: text(metadata(object).plan_id) ?? text(subMeta.plan_id),
       stripeCustomerId: stripeId(object.customer),
-      stripeSubscriptionId: stripeId(object.subscription),
+      stripeSubscriptionId: subscriptionId,
+    });
+    await recordBillingPayment({
+      userId,
+      invoiceId: text(object.id),
+      checkoutSessionId: null,
+      subscriptionId,
+      amountCents: minorAmount(object.amount_paid),
+      currency: currencyOf(object),
+      billingReason: text(object.billing_reason) ?? "subscription_cycle",
     });
     return { ok: true };
   }

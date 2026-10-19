@@ -37,6 +37,32 @@ export const users = pgTable(
 );
 
 /**
+ * One row per Recatch subscription charge. The Checkout session and the first
+ * invoice share `invoice_id` (both are `subscription_create`), so that payment
+ * is stored once. Renewals are later invoice ids.
+ */
+export const billingPayments = pgTable(
+  "billing_payments",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    invoiceId: text("invoice_id"),
+    checkoutSessionId: text("checkout_session_id"),
+    subscriptionId: text("subscription_id"),
+    amountCents: integer("amount_cents"),
+    currency: text("currency"),
+    billingReason: text("billing_reason").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("billing_payments_invoice_idx").on(table.invoiceId),
+    uniqueIndex("billing_payments_session_idx").on(table.checkoutSessionId),
+  ],
+);
+
+/**
  * A connected channel account. Historically a Telegram bot; `channel` now selects the adapter.
  * `telegramUsername` doubles as the account handle (page name, IG username, WhatsApp display number)
  * and `tokenEncrypted` holds the Meta access token for non-Telegram channels.

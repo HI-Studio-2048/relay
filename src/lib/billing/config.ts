@@ -109,3 +109,11 @@ export function billingConfig(): { currency: "usd"; plans: PlanDefinition[]; pro
 export function paymentsConfigured(): boolean {
   return Boolean(process.env.STRIPE_SECRET_KEY?.trim() && process.env.PUBLIC_URL?.trim());
 }
+
+/**
+ * Stripe Tax on Checkout. Off until the account has a registration: enabling it
+ * with none makes Checkout fail. Address and tax ID collection stay on either way.
+ */
+export function automaticTaxEnabled(): boolean {
+  return envOn("STRIPE_AUTOMATIC_TAX", false);
+}

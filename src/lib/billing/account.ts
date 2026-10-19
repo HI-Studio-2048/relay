@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { hasWorkspaceAccess } from "@/lib/billing/access";
 import { getPlan } from "@/lib/billing/quote";
 import { getDb } from "@/lib/db";
@@ -83,19 +83,32 @@ export async function saveBilling(input: {
     .limit(1);
   if (!current) return { access: false };
   const planId = input.planId && getPlan(input.planId) ? input.planId : current.planId;
+  const next = {
+    planId,
+    stripeCustomerId: input.stripeCustomerId || current.stripeCustomerId,
+    stripeSubscriptionId: input.stripeSubscriptionId || current.stripeSubscriptionId,
+  };
+  // The first paid event and a retried webhook can land together. Only the update
+  // that actually flips the row into `active` sends the welcome email.
+  if (input.billingStatus === "active" && current.billingStatus !== "active") {
+    const flipped = await db
+      .update(users)
+      .set({ billingStatus: "active", ...next })
+      .where(and(eq(users.id, input.userId), ne(users.billingStatus, "active")))
+      .returning();
+    if (flipped.length === 0) {
+      await db.update(users).set(next).where(eq(users.id, input.userId));
+      return { access: true };
+    }
+    if (emailConfigured()) {
+      void sendEmail({ to: current.email, subject: "Your Recatch workspace is ready", ...workspaceReadyMail(current.name) });
+    }
+    return { access: true };
+  }
   await db
     .update(users)
-    .set({
-      billingStatus: input.billingStatus,
-      planId,
-      stripeCustomerId: input.stripeCustomerId || current.stripeCustomerId,
-      stripeSubscriptionId: input.stripeSubscriptionId || current.stripeSubscriptionId,
-    })
+    .set({ billingStatus: input.billingStatus, ...next })
     .where(eq(users.id, input.userId));
-  const becameActive = current.billingStatus !== "active" && input.billingStatus === "active";
-  if (becameActive && emailConfigured()) {
-    void sendEmail({ to: current.email, subject: "Your Recatch workspace is ready", ...workspaceReadyMail(current.name) });
-  }
   return { access: hasWorkspaceAccess(input.billingStatus) };
 }
 

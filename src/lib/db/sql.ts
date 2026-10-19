@@ -347,6 +347,21 @@ UPDATE users SET billing_status = 'active' WHERE billing_status IS NULL;
 ALTER TABLE users ALTER COLUMN billing_status SET DEFAULT 'none';
 ALTER TABLE users ALTER COLUMN billing_status SET NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS users_stripe_customer_idx ON users(stripe_customer_id) WHERE stripe_customer_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS billing_payments (
+  id text PRIMARY KEY,
+  user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  invoice_id text,
+  checkout_session_id text,
+  subscription_id text,
+  amount_cents integer,
+  currency text,
+  billing_reason text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS billing_payments_invoice_idx ON billing_payments(invoice_id) WHERE invoice_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS billing_payments_session_idx ON billing_payments(checkout_session_id) WHERE checkout_session_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS billing_payments_first_idx ON billing_payments(user_id, subscription_id) WHERE billing_reason = 'subscription_create' AND subscription_id IS NOT NULL;
 ALTER TABLE bots ADD COLUMN IF NOT EXISTS owner_id text REFERENCES users(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS bots_owner_idx ON bots(owner_id);
 ALTER TABLE team_members ADD COLUMN IF NOT EXISTS owner_id text REFERENCES users(id) ON DELETE CASCADE;
