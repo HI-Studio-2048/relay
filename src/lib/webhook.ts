@@ -23,7 +23,7 @@ import { applyAutoTags } from "@/lib/auto-tags";
 import { hideZernioComment, replyToZernioComment, sendZernioPrivateReply } from "@/lib/channels/zernio";
 import { replyToBlueskyComment } from "@/lib/channels/bluesky";
 import { holdYouTubeComment, replyToYouTubeComment } from "@/lib/channels/youtube";
-import { moderationReason, readModeration } from "@/lib/social-triggers";
+import { moderationReason, readModeration, unmarkAnswered } from "@/lib/social-triggers";
 import { deliverReplies, loadBotFieldValues } from "@/lib/flow-dispatch";
 import { interpolateTemplate } from "@/lib/flow-effects";
 import { classifyMedia, outboundPreview, saveRemoteMedia, toFlowMedia } from "@/lib/media";
@@ -398,6 +398,12 @@ async function processInbound(bot: BotRow, account: ChannelAccount, inbound: Nor
       const answered = await answerComment(botId, account, contact, inbound, publicReply, replies, session);
       replies = [];
       if (answered.session !== undefined) await persistSession(contact.id, answered.session);
+      // The engine marks "answered on this post" before anything is sent. If Instagram refused the DM,
+      // take the mark back, or Missed comments treats them as answered and they never get it (2026-10-19).
+      if (answered.refused && result.matchedFlowId) {
+        contact = unmarkAnswered(contact, result.matchedFlowId, inbound.comment?.postId ?? null);
+        await persistContact(botId, contact, { skipRules: true });
+      }
       const matched = result.matchedFlowId ? flows.find((flow) => flow.id === result.matchedFlowId) : null;
       if (matched?.definition.trigger?.hideAfterReply && commentRef && !inbound.catchUp) {
         try {
@@ -492,7 +498,7 @@ async function answerComment(
   publicReply: string | null,
   replies: OutboundReply[],
   previous: FlowSessionState | null,
-): Promise<{ session: FlowSessionState | null | undefined }> {
+): Promise<{ session: FlowSessionState | null | undefined; refused?: boolean }> {
   const ref = {
     accountId: inbound.channelAccountId!,
     postId: inbound.comment!.postId,
@@ -548,7 +554,7 @@ async function answerComment(
     }
   } catch (error) {
     log.warn("Private reply failed", error instanceof Error ? error.message : error);
-    return { session: previous };
+    return { session: previous, refused: true };
   }
   return { session };
 }

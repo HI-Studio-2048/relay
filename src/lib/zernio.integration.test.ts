@@ -337,6 +337,14 @@ describe("Meta accounts through the company Zernio key", () => {
     expect(sentBodies.at(-1)).toMatchObject({ path: "/api/v1/inbox/comments/post-1/c-1/private-reply" });
     // A second comment elsewhere whose DM Instagram refuses.
     await comment("c-gone", "post-2");
+    // The refused one isn't counted as answered, so Missed comments can still offer it.
+    // The first post stays answered, so a repeat comment there doesn't DM twice.
+    const { contacts } = await import("@/lib/db/schema");
+    const { loadContactRecord } = await import("@/lib/store");
+    const [giver] = await db.select().from(contacts).where(eq(contacts.telegramUserId, "a-3:u-give"));
+    const marks = JSON.parse((await loadContactRecord(giver!.id))?.customFields._cm ?? "[]");
+    expect(marks).toContain("giveaway:post-1");
+    expect(marks).not.toContain("giveaway:post-2");
 
     await processChannelUpdate(row!.id, {
       event: "message.received",

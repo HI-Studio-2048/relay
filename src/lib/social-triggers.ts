@@ -133,6 +133,14 @@ export function markAnswered(contact: ContactRecord, flowId: string, postId: str
   return { ...contact, customFields: { ...contact.customFields, [COMMENT_MARKERS_FIELD]: JSON.stringify(markers) } };
 }
 
+/** Undo `markAnswered`, for a comment whose DM never went out. */
+export function unmarkAnswered(contact: ContactRecord, flowId: string, postId: string | null | undefined): ContactRecord {
+  const key = commentOnceKey(flowId, postId);
+  const markers = readMarkers(contact);
+  if (!markers.includes(key)) return contact;
+  return { ...contact, customFields: { ...contact.customFields, [COMMENT_MARKERS_FIELD]: JSON.stringify(markers.filter((item) => item !== key)) } };
+}
+
 export function pickPublicReply(config: SocialTriggerConfig | undefined, random = Math.random()): string | null {
   const options = (config?.publicReplies ?? []).map((reply) => reply.trim()).filter(Boolean);
   if (options.length === 0) return null;

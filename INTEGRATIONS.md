@@ -129,8 +129,9 @@ Everything is under the company admin account (`admin@hiiiiiiiiiii.com`), so the
 
 **Pick up here (left on 2026-10-16, evening):**
 - [x] Giveaway comment flow on `@danielphilipwatch` live with `enter`, and the 117 missed commenters DMd through Missed comments. 29 had tapped "Count me in" within minutes.
-- [x] Giveaway DM broken from 2026-10-18 22:33 UTC: an edit put "Yes!" in the "Count me in" button's link field, and Instagram refused every DM ("Button url must be a valid URL"), 18 of them by the morning of 2026-10-19. The first message was restored from History on 2026-10-19 (the broken version is kept in History).
-- [ ] Send those 18 their DM from the flow's Missed comments panel before about 2026-10-26 (Instagram's 7 days). A person presses Send.
+- [x] Giveaway DM broken from 2026-10-18 22:33 UTC: an edit put "Yes!" in the "Count me in" button's link field, and Instagram refused every DM ("Button url must be a valid URL"), 23 people between 23:53 UTC on the 18th and 11:34 UTC on the 19th. The first message was restored from History on 2026-10-19 (the broken version is kept in History).
+- [x] Those 23 were hidden from Missed comments, because the engine marks a person "answered" before the DM goes out and a refusal never took it back. Their marks were removed by hand on 2026-10-19, and a refused DM now takes the mark back by itself.
+- [ ] Send those 23 their DM from the flow's Missed comments panel before about 2026-10-25 (Instagram's 7 days from the earliest). A person presses Send.
 - [ ] Stripe: create the webhook and set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in Railway (test keys first). Until then nobody new can get in. See Billing, Stripe.
 - [ ] Plan limits (what Starter and Pro leave out) are not decided yet.
 - [ ] Send a real photo or GIF to `@danielphilipwatch` and check it shows in Live Chat. Built and tested only against a fake Zernio; it depends on Zernio including the attachment `url`.
