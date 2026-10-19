@@ -34,6 +34,25 @@ function client() {
   return globalForAi.relayAnthropic;
 }
 
+/**
+ * One tool-using turn for the Overview growth agent. Uses the server Anthropic key only:
+ * a per-account OpenRouter key stays on that account's own AI assistant.
+ */
+export async function createAgentCompletion(input: {
+  system: string;
+  messages: Anthropic.MessageParam[];
+  tools: Anthropic.Tool[];
+}) {
+  if (!aiConfigured()) throw new AiUnavailableError("The Overview agent is off: set ANTHROPIC_API_KEY on the server");
+  return client().messages.create({
+    model: AI_MODEL,
+    max_tokens: 4096,
+    system: input.system,
+    messages: input.messages,
+    tools: input.tools,
+  });
+}
+
 /** Per-account AI settings, stored on bots.settings.ai. */
 export type BotAiSettings = {
   /** Who the assistant is and how it sounds. */

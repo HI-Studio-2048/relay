@@ -399,4 +399,17 @@ CREATE TABLE IF NOT EXISTS media_files (
   bytes bytea NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Unified inbox filters messages by the workspace's channels.
+CREATE INDEX IF NOT EXISTS messages_bot_created_idx ON messages(bot_id, created_at);
+
+CREATE TABLE IF NOT EXISTS agent_messages (
+  id text PRIMARY KEY,
+  owner_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role text NOT NULL,
+  body text NOT NULL,
+  meta jsonb NOT NULL DEFAULT '{}',
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS agent_messages_owner_idx ON agent_messages(owner_id, created_at);
 `;

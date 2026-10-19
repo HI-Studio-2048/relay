@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { useBot } from "@/components/bot-provider";
 import { ContactAvatar } from "@/components/chrome/avatar";
 import { isMediaFile, uploadMediaFile } from "@/components/flow-canvas/media-picker";
-import { PlatformBadge } from "@/components/chrome/platform-badge";
+import { ChannelBadge, PlatformBadge } from "@/components/chrome/platform-badge";
 import { useTeam } from "@/components/use-team";
 import { MEDIA_ACCEPT, MEDIA_KIND_LABEL } from "@/lib/media-kinds";
 import { messagingWindow } from "@/lib/messaging-window";
@@ -15,7 +15,10 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/lib/client";
 import { displayName } from "@/lib/lead-capture";
 import { cn } from "@/lib/utils";
+import type { ChannelId } from "@/lib/channels/types";
 import type { ContactRecord, FlowMedia } from "@/lib/types";
+
+export type ThreadChannel = { id: string; name: string; channel: ChannelId };
 
 type Message = {
   id: string;
@@ -228,14 +231,20 @@ export function ThreadView({
   contactId,
   initialContact,
   initialMessages,
+  channelAccount,
 }: {
   contactId: string;
   initialContact: ContactRecord;
   initialMessages: Message[];
+  /** The channel this conversation belongs to. Replies and saved replies use this, not the sidebar. */
+  channelAccount: ThreadChannel | null;
 }) {
   const { botId, bot } = useBot();
+  const [account, setAccount] = useState<ThreadChannel | null>(channelAccount);
+  const replyBotId = account?.id || botId;
+  const replyChannel = account?.channel ?? bot?.channel;
   // YouTube replies are public comments, which take text only.
-  const canAttach = bot?.channel !== "youtube";
+  const canAttach = replyChannel !== "youtube";
   const [contact, setContact] = useState(initialContact);
   const [messages, setMessages] = useState(initialMessages);
   const [text, setText] = useState("");
@@ -290,6 +299,7 @@ export function ThreadView({
       messages: Message[];
       automation?: Automation;
       flows?: FlowOption[];
+      channelAccount?: ThreadChannel | null;
       assignedTo?: string | null;
       snoozedUntil?: string | null;
       scheduled?: { id: string; body: string; sendAt: string; author: string | null; failed?: string | null }[];
@@ -298,6 +308,7 @@ export function ThreadView({
     setSnoozedUntil(data.snoozedUntil ?? null);
     setContact(data.contact);
     setAssignedTo(data.assignedTo ?? null);
+    if (data.channelAccount) setAccount(data.channelAccount);
     setMessages(data.messages);
     setNotes((current) => (current === (contact.notes ?? "") ? data.contact.notes ?? "" : current));
     if (data.automation) setAutomation(data.automation);
@@ -319,16 +330,16 @@ export function ThreadView({
   }, [contactId]);
 
   useEffect(() => {
-    if (!botId) return;
+    if (!replyBotId) return;
     const timer = setTimeout(
       () =>
-        void api<{ replies: SavedReply[] }>(`/api/saved-replies?botId=${botId}`)
+        void api<{ replies: SavedReply[] }>(`/api/saved-replies?botId=${replyBotId}`)
           .then((data) => setSaved(data.replies))
           .catch(() => undefined),
       0,
     );
     return () => clearTimeout(timer);
-  }, [botId]);
+  }, [replyBotId]);
 
   useEffect(() => {
     // Scroll only the message list, never the page around it.
@@ -527,13 +538,13 @@ export function ThreadView({
   };
 
   const saveAsReply = async () => {
-    if (!botId || !text.trim()) return;
+    if (!replyBotId || !text.trim()) return;
     const title = window.prompt("Name this saved reply", text.trim().split(/\s+/).slice(0, 4).join(" "));
     if (!title?.trim()) return;
     try {
       const data = await api<{ reply: SavedReply }>("/api/saved-replies", {
         method: "POST",
-        body: JSON.stringify({ botId, title, body: text }),
+        body: JSON.stringify({ botId: replyBotId, title, body: text }),
       });
       setSaved((current) => [...current, data.reply].sort((a, b) => a.title.localeCompare(b.title)));
       toast.success("Saved — type / to use it");
@@ -569,7 +580,7 @@ export function ThreadView({
   const name = displayName(contact);
   const lastInbound = [...messages].reverse().find((message) => message.direction === "inbound")?.createdAt ?? null;
   // eslint-disable-next-line react-hooks/purity -- the window is a live countdown; re-rendered on every poll
-  const dmWindow = messagingWindow(contact.platform, bot?.channel, lastInbound, Date.now());
+  const dmWindow = messagingWindow(contact.platform, replyChannel, lastInbound, Date.now());
   const visibleFields = Object.entries(contact.customFields).filter(([key]) => !key.startsWith("_"));
   let lastDay = "";
 
@@ -584,6 +595,7 @@ export function ThreadView({
           <div className="min-w-[8rem] flex-1">
             <p className="truncate text-[14px] font-semibold text-[#1b1f24]">{name}</p>
             <p className="flex items-center gap-1.5 truncate text-[11px] text-[#6b7280]">
+              {account ? <ChannelBadge channel={account.channel} name={account.name} /> : null}
               <PlatformBadge platform={contact.platform} />
               {contact.username ? `@${contact.username}` : null}
               {automation.status === "paused" ? (

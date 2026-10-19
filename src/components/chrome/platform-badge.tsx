@@ -1,3 +1,4 @@
+import { CHANNELS, channelOf } from "@/lib/channels/types";
 import { cn } from "@/lib/utils";
 
 /** Network names and brand colors. */
@@ -36,6 +37,21 @@ export function PlatformDot({ platform, className }: { platform: string | null |
       className={cn("inline-block size-2 shrink-0 rounded-full", className)}
       style={{ background: platformColor(platform) }}
     />
+  );
+}
+
+/** Account name on a unified inbox row, colored by the channel it belongs to. */
+export function ChannelBadge({ channel, name }: { channel: string; name: string }) {
+  const meta = CHANNELS[channelOf(channel)];
+  return (
+    <span
+      className="inline-flex max-w-full items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+      style={{ background: `${meta.color}1a`, color: meta.color }}
+      title={meta.label}
+    >
+      <span className="size-1.5 shrink-0 rounded-full" style={{ background: meta.color }} />
+      <span className="truncate">{name}</span>
+    </span>
   );
 }
 

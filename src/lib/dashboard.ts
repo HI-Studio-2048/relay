@@ -91,10 +91,112 @@ export async function loadDashboard(botId: string, days = 30) {
     conversions: goalTotals.reduce((sum, row) => sum + Number(row.count), 0),
     /** Per currency, e.g. "¥5,000 · $19.99" (never added across currencies); empty when none. */
     revenue: formatRevenue(goalTotals.map((row) => ({ currency: row.currency, value: Number(row.value) })), "en-US"),
+    goalTotals: goalTotals.map((row) => ({ currency: row.currency, count: Number(row.count), value: Number(row.value) })),
   };
 }
 
 export type Dashboard = Awaited<ReturnType<typeof loadDashboard>>;
+
+export type ChannelSnapshot = {
+  botId: string;
+  name: string;
+  channel: string;
+  status: string;
+  totalContacts: number;
+  newThisWeek: number;
+  needsReply: number;
+  openThreads: number;
+  messages: number;
+  conversions: number;
+  revenue: string;
+};
+
+export type WorkspaceOverview = {
+  totals: Dashboard;
+  channels: ChannelSnapshot[];
+};
+
+function sumSeries(parts: Dashboard["series"][]): Dashboard["series"] {
+  const longest = parts.reduce((best, series) => (series.length > best.length ? series : best), [] as Dashboard["series"]);
+  return longest.map((point, index) => ({
+    day: point.day,
+    count: parts.reduce((total, series) => total + (series[index]?.day === point.day ? series[index]!.count : 0), 0),
+  }));
+}
+
+/** Add one-channel dashboards into workspace totals plus a row per channel. */
+export function mergeDashboards(parts: { bot: { id: string; name: string; channel: string; status: string }; data: Dashboard }[]): WorkspaceOverview {
+  const series = sumSeries(parts.map((part) => part.data.series));
+  const platforms = new Map<string | null, number>();
+  const goals: { currency: string | null; value: number }[] = [];
+  const week = { inbound: 0, outbound: 0, human: 0, ai: 0, automated: 0 };
+  let totalContacts = 0;
+  let unsubscribed = 0;
+  let needsReply = 0;
+  let openThreads = 0;
+  let conversions = 0;
+  const recent = parts.flatMap((part) => part.data.recentThreads);
+  const topFlows = parts
+    .flatMap((part) => part.data.topFlows.map((flow) => ({ ...flow, botId: part.bot.id, botName: part.bot.name, channel: part.bot.channel })))
+    .sort((a, b) => b.stats.runs - a.stats.runs)
+    .slice(0, 5);
+
+  for (const part of parts) {
+    totalContacts += part.data.totalContacts;
+    unsubscribed += part.data.unsubscribed;
+    needsReply += part.data.needsReply;
+    openThreads += part.data.openThreads;
+    conversions += part.data.conversions;
+    week.inbound += part.data.week.inbound;
+    week.outbound += part.data.week.outbound;
+    week.human += part.data.week.human;
+    week.ai += part.data.week.ai;
+    week.automated += part.data.week.automated;
+    for (const row of part.data.platforms) platforms.set(row.platform, (platforms.get(row.platform) ?? 0) + row.count);
+    goals.push(...part.data.goalTotals.map((row) => ({ currency: row.currency, value: row.value })));
+  }
+
+  const totals: Dashboard = {
+    series,
+    newInPeriod: series.reduce((total, point) => total + point.count, 0),
+    newThisWeek: series.slice(-7).reduce((total, point) => total + point.count, 0),
+    newPreviousWeek: series.slice(-14, -7).reduce((total, point) => total + point.count, 0),
+    totalContacts,
+    unsubscribed,
+    platforms: [...platforms.entries()].map(([platform, count]) => ({ platform, count })).sort((a, b) => b.count - a.count),
+    week,
+    needsReply,
+    openThreads,
+    recentThreads: recent.sort((a, b) => (b.lastAt ?? "").localeCompare(a.lastAt ?? "")).slice(0, 6),
+    topFlows,
+    conversions,
+    revenue: formatRevenue(goals, "en-US"),
+    goalTotals: parts.flatMap((part) => part.data.goalTotals),
+  };
+
+  return {
+    totals,
+    channels: parts.map((part) => ({
+      botId: part.bot.id,
+      name: part.bot.name,
+      channel: part.bot.channel,
+      status: part.bot.status,
+      totalContacts: part.data.totalContacts,
+      newThisWeek: part.data.newThisWeek,
+      needsReply: part.data.needsReply,
+      openThreads: part.data.openThreads,
+      messages: part.data.week.inbound + part.data.week.outbound,
+      conversions: part.data.conversions,
+      revenue: part.data.revenue,
+    })),
+  };
+}
+
+/** Overview numbers for every channel in a workspace. Each channel is loaded on its own, then added. */
+export async function loadWorkspaceOverview(bots: { id: string; name: string; channel: string; status: string }[]) {
+  const parts = await Promise.all(bots.map(async (bot) => ({ bot, data: await loadDashboard(bot.id) })));
+  return mergeDashboards(parts);
+}
 
 /** Live Chat team performance over the last `days`. */
 export async function loadTeamReport(botId: string, days = 30) {

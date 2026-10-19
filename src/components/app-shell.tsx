@@ -26,6 +26,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useBot } from "@/components/bot-provider";
+import { ALL_CHANNELS } from "@/lib/scope";
 import { CommandPalette } from "@/components/command-palette";
 import { ShortcutsHelp } from "@/components/shortcuts-help";
 import { RelayLogo } from "@/components/chrome/relay-logo";
@@ -173,7 +174,7 @@ function SidebarNav({
 
 function BotDock({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { bots, bot, setBotId } = useBot();
+  const { bots, bot, aggregate, setBotId } = useBot();
   const settingsActive = pathname.startsWith("/setup");
 
   return (
@@ -190,29 +191,33 @@ function BotDock({ onNavigate }: { onNavigate?: () => void }) {
       {bot ? (
         <CanvasCard className="p-3">
           <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-[13px] font-medium text-[#1b1f24]">{bot.name}</p>
-            <StatusPill status={bot.status} />
+            <p className="truncate text-[13px] font-medium text-[#1b1f24]">{aggregate ? "All channels" : bot.name}</p>
+            {aggregate ? null : <StatusPill status={bot.status} />}
           </div>
           <p className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-[#6b7280]">
             <span
               className="inline-block size-2 shrink-0 rounded-full"
-              style={{ background: CHANNELS[bot.channel ?? "telegram"].color }}
+              style={{ background: aggregate ? "#0084ff" : CHANNELS[bot.channel ?? "telegram"].color }}
             />
-            {CHANNELS[bot.channel ?? "telegram"].label}
-            {bot.telegramUsername ? ` · ${bot.channel === "whatsapp" ? "" : "@"}${bot.telegramUsername}` : ""}
+            {aggregate
+              ? `${bots.length} connected`
+              : `${CHANNELS[bot.channel ?? "telegram"].label}${bot.telegramUsername ? ` · ${bot.channel === "whatsapp" ? "" : "@"}${bot.telegramUsername}` : ""}`}
           </p>
-          {bots.length > 1 ? (
-            <select
-              className="mt-2 w-full rounded-lg border border-[#e5e7eb] bg-white px-2 py-1.5 text-[13px]"
-              value={bot.id}
-              onChange={(event) => setBotId(event.target.value)}
-            >
-              {bots.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {CHANNELS[item.channel ?? "telegram"].label} · {item.name}
-                </option>
-              ))}
-            </select>
+          <select
+            aria-label="Channel"
+            className="mt-2 w-full rounded-lg border border-[#e5e7eb] bg-white px-2 py-1.5 text-[13px]"
+            value={aggregate ? ALL_CHANNELS : bot.id}
+            onChange={(event) => setBotId(event.target.value)}
+          >
+            <option value={ALL_CHANNELS}>All channels</option>
+            {bots.map((item) => (
+              <option key={item.id} value={item.id}>
+                {CHANNELS[item.channel ?? "telegram"].label} · {item.name}
+              </option>
+            ))}
+          </select>
+          {aggregate && bots.length > 1 ? (
+            <p className="mt-1.5 text-[11px] text-[#6b7280]">Overview and Live Chat show every channel. Other pages stay on {bot.name}.</p>
           ) : null}
         </CanvasCard>
       ) : (
@@ -299,7 +304,7 @@ export function AppShell({
   confirmCount?: number;
 }) {
   const pathname = usePathname();
-  const { bot } = useBot();
+  const { bot, aggregate } = useBot();
   const [open, setOpen] = useState(false);
   const flowCanvas = /^\/flows\/[^/]+$/.test(pathname);
   // Live Chat fills the viewport like the canvas, but keeps the top bar.
@@ -331,7 +336,7 @@ export function AppShell({
             <span className="truncate font-heading text-sm text-[#1b1f24]">{title}</span>
           </div>
           <div className="flex items-center gap-2">
-            {bot ? <StatusPill status={bot.status} /> : null}
+            {aggregate ? <span className="text-[12px] text-[#6b7280]">All channels</span> : bot ? <StatusPill status={bot.status} /> : null}
             <Button
               variant="outline"
               size="icon"
@@ -349,7 +354,7 @@ export function AppShell({
           <header className="relay-topbar hidden items-center justify-between border-b border-[#e5e7eb] bg-white px-6 py-3 md:flex">
             <div>
               <p className="text-[11px] font-semibold tracking-[0.14em] text-[#8b95a1] uppercase">
-                {user.name ? `${user.name}’s workspace` : "Workspace"} · {bot ? CHANNELS[bot.channel ?? "telegram"].label : "Recatch"}
+                {user.name ? `${user.name}’s workspace` : "Workspace"} · {aggregate ? "All channels" : bot ? CHANNELS[bot.channel ?? "telegram"].label : "Recatch"}
               </p>
               <p className="font-heading text-[15px] tracking-tight text-[#1b1f24]">{title}</p>
             </div>
@@ -362,7 +367,11 @@ export function AppShell({
               Search
               <kbd className="ml-auto rounded border border-[#e5e7eb] bg-white px-1.5 text-[10px]">⌘K</kbd>
             </button>
-            {bot ? (
+            {aggregate ? (
+              <div className="flex items-center gap-2 rounded-full bg-[#f4f6f8] px-2.5 py-1 ring-1 ring-[#e5e7eb]">
+                <span className="max-w-40 truncate text-[12px] text-[#1b1f24]">All channels</span>
+              </div>
+            ) : bot ? (
               <div className="flex items-center gap-2 rounded-full bg-[#f4f6f8] px-2.5 py-1 ring-1 ring-[#e5e7eb]">
                 <span className="max-w-40 truncate text-[12px] text-[#1b1f24]">
                   {bot.telegramUsername ? `@${bot.telegramUsername}` : bot.name}

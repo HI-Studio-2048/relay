@@ -6,7 +6,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlarmClock, Bell, BellOff, Search } from "lucide-react";
 import { useBot } from "@/components/bot-provider";
 import { ContactAvatar } from "@/components/chrome/avatar";
-import { PlatformBadge, platformLabel } from "@/components/chrome/platform-badge";
+import { ChannelBadge, PlatformBadge, platformLabel } from "@/components/chrome/platform-badge";
+import { ALL_CHANNELS } from "@/lib/scope";
 import { useTeam } from "@/components/use-team";
 import { api } from "@/lib/client";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,9 @@ type Thread = {
   needsReply: boolean;
   assignedTo: string | null;
   tags: string[];
+  botId?: string;
+  botName?: string;
+  channel?: string;
 };
 
 type Filter = "open" | "unanswered" | "mine" | "unassigned" | "snoozed" | "closed" | "all";
@@ -73,15 +77,23 @@ function relativeTime(iso: string | null) {
   return new Date(iso).toLocaleDateString();
 }
 
-export function ConversationList() {
-  const { botId } = useBot();
+export function ConversationList({ initialThreads = null }: { initialThreads?: Thread[] | null }) {
+  const { botId, aggregate } = useBot();
   const pathname = usePathname();
   const activeId = pathname.startsWith("/inbox/") ? pathname.split("/")[2] : null;
-  const [threads, setThreads] = useState<Thread[] | null>(null);
+  const [threads, setThreads] = useState<Thread[] | null>(initialThreads);
   const [filter, setFilter] = useState<Filter>("open");
   const [query, setQuery] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [platformFilter, setPlatformFilter] = useState("");
+  const [channelFilter, setChannelFilter] = useState("");
+  const channels = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const thread of threads ?? []) {
+      if (thread.botId && thread.botName) seen.set(thread.botId, thread.botName);
+    }
+    return [...seen.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [threads]);
   const allPlatforms = useMemo(
     () => [...new Set((threads ?? []).map((thread) => thread.platform).filter((value): value is string => Boolean(value)))].sort(),
     [threads],
@@ -97,7 +109,7 @@ export function ConversationList() {
     });
 
   // A new filter, tag or search starts a fresh selection, so bulk actions never touch hidden chats.
-  const viewKey = `${filter}|${tagFilter}|${platformFilter}|${query}`;
+  const viewKey = `${filter}|${tagFilter}|${platformFilter}|${channelFilter}|${query}`;
   const [selectionKey, setSelectionKey] = useState(viewKey);
   if (selectionKey !== viewKey) {
     setSelectionKey(viewKey);
@@ -159,10 +171,10 @@ export function ConversationList() {
   }
 
   useEffect(() => {
-    if (!botId) return;
+    if (!aggregate && !botId) return;
     let cancelled = false;
     const load = () =>
-      api<{ threads: Thread[] }>(`/api/inbox?botId=${botId}`)
+      api<{ threads: Thread[] }>(aggregate ? `/api/inbox?scope=${ALL_CHANNELS}` : `/api/inbox?botId=${botId}`)
         .then((data) => {
           if (cancelled) return;
           const previous = seen.current;
@@ -190,7 +202,7 @@ export function ConversationList() {
       clearTimeout(first);
       clearInterval(timer);
     };
-  }, [botId, router]);
+  }, [aggregate, botId, router]);
 
   const counts = useMemo(() => {
     const list = threads ?? [];
@@ -213,6 +225,7 @@ export function ConversationList() {
       if (filter === "snoozed" && thread.status !== "snoozed") return false;
       if (tagFilter && !(thread.tags ?? []).includes(tagFilter)) return false;
       if (platformFilter && thread.platform !== platformFilter) return false;
+      if (channelFilter && thread.botId !== channelFilter) return false;
       if (filter === "unanswered" && !thread.needsReply) return false;
       if (filter === "mine" && !(thread.status === "open" && me && thread.assignedTo === me)) return false;
       if (filter === "unassigned" && !(thread.status === "open" && !thread.assignedTo)) return false;
@@ -223,7 +236,7 @@ export function ConversationList() {
         thread.lastBody.toLowerCase().includes(needle)
       );
     });
-  }, [threads, filter, query, me, tagFilter, platformFilter]);
+  }, [threads, filter, query, me, tagFilter, platformFilter, channelFilter]);
 
   useEffect(() => {
     const waiting = counts.unanswered;
@@ -302,8 +315,23 @@ export function ConversationList() {
             {notify ? <Bell className="size-3.5" /> : <BellOff className="size-3.5" />}
           </button>
         </div>
-        {allTags.length > 0 || allPlatforms.length > 1 ? (
+        {allTags.length > 0 || allPlatforms.length > 1 || channels.length > 1 ? (
           <div className="flex gap-2">
+            {channels.length > 1 ? (
+              <select
+                aria-label="Filter by channel"
+                value={channelFilter}
+                onChange={(event) => setChannelFilter(event.target.value)}
+                className="min-w-0 flex-1 rounded-lg border border-[#e5e7eb] bg-white px-2 py-1 text-[12px] text-[#1b1f24]"
+              >
+                <option value="">All channels</option>
+                {channels.map((channel) => (
+                  <option key={channel.id} value={channel.id}>
+                    {channel.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
             {allPlatforms.length > 1 ? (
               <select
                 aria-label="Filter by network"
@@ -426,6 +454,7 @@ export function ConversationList() {
                   {thread.needsReply ? <span className="size-2 shrink-0 rounded-full bg-[#0084ff]" /> : null}
                 </div>
                 <div className="mt-1 flex items-center gap-1.5">
+                  {thread.botName ? <ChannelBadge channel={thread.channel ?? thread.platform ?? "telegram"} name={thread.botName} /> : null}
                   {thread.platform ? <PlatformBadge platform={thread.platform} /> : null}
                   {(thread.tags ?? []).slice(0, 2).map((tag) => (
                     <span key={tag} className="max-w-20 truncate rounded-full bg-[#f5f3ff] px-1.5 py-0.5 text-[10px] text-[#6d28d9]">
