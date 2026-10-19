@@ -1,9 +1,9 @@
 import { cookies } from "next/headers";
 import { currentUserId } from "@/lib/auth";
 import { listBots } from "@/lib/bots";
-import { BOT_COOKIE, FOCUS_COOKIE, resolveScope } from "@/lib/scope";
+import { BOT_COOKIE, FOCUS_COOKIE, VIEW_COOKIE, resolveScope } from "@/lib/scope";
 
-export { ALL_CHANNELS, BOT_COOKIE, FOCUS_COOKIE } from "@/lib/scope";
+export { ALL_CHANNELS, BOT_COOKIE, FOCUS_COOKIE, VIEW_COOKIE } from "@/lib/scope";
 
 /**
  * What the console is showing. The sidebar can be one channel or All channels (the default).
@@ -15,7 +15,7 @@ export async function consoleScope() {
   if (!userId) return { aggregate: false, bot: null, bots: [] as Awaited<ReturnType<typeof listBots>> };
   const bots = await listBots(userId);
   const store = await cookies();
-  const choice = resolveScope(bots, store.get(BOT_COOKIE)?.value, store.get(FOCUS_COOKIE)?.value);
+  const choice = resolveScope(bots, store.get(VIEW_COOKIE)?.value, store.get(FOCUS_COOKIE)?.value, store.get(BOT_COOKIE)?.value);
   return { ...choice, bots };
 }
 

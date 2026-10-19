@@ -12,15 +12,20 @@ describe("resolveScope", () => {
     expect(resolveScope(bots, ALL_CHANNELS, "ig")).toEqual({ aggregate: true, bot: bots[1] });
   });
 
-  it("keeps a chosen channel", () => {
-    expect(resolveScope(bots, "ig", "tg")).toEqual({ aggregate: false, bot: bots[1] });
+  it("ignores the old single-channel cookie until the new switcher is used", () => {
+    expect(resolveScope(bots, undefined, undefined, "ig")).toEqual({ aggregate: true, bot: bots[1] });
+    expect(resolveScope(bots, undefined, "tg", "ig")).toEqual({ aggregate: true, bot: bots[0] });
+  });
+
+  it("keeps a channel only when the switcher cookie names it", () => {
+    expect(resolveScope(bots, "ig", "tg", "tg")).toEqual({ aggregate: false, bot: bots[1] });
   });
 
   it("treats an unknown channel id as All channels", () => {
-    expect(resolveScope(bots, "gone", "ig")).toEqual({ aggregate: true, bot: bots[1] });
+    expect(resolveScope(bots, "gone", "ig", "tg")).toEqual({ aggregate: true, bot: bots[1] });
   });
 
   it("is empty when the workspace has no channels", () => {
-    expect(resolveScope([], "tg", "tg")).toEqual({ aggregate: false, bot: null });
+    expect(resolveScope([], "tg", "tg", "tg")).toEqual({ aggregate: false, bot: null });
   });
 });

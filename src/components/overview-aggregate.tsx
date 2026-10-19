@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowDownRight, ArrowUpRight, Bot, Inbox, LayoutDashboard, MessagesSquare, TriangleAlert, Trophy, Users, Workflow } from "lucide-react";
 import { DailyColumns, PlatformBars } from "@/components/charts";
 import { AgentChat } from "@/components/agent-chat";
+import { ChannelSwitcher } from "@/components/channel-switcher";
 import { aiConfigured } from "@/lib/ai";
 import { ContactAvatar } from "@/components/chrome/avatar";
 import { PageHeader } from "@/components/chrome/page-header";
@@ -77,6 +78,7 @@ export function OverviewAggregate({ bots, overview }: { bots: BotSummary[]; over
         tone="start"
         title="Overview"
         description={`All channels · ${bots.length} connected`}
+        actions={<ChannelSwitcher />}
       />
 
       {attention.length > 0 ? (
@@ -152,6 +154,14 @@ export function OverviewAggregate({ bots, overview }: { bots: BotSummary[]; over
           </table>
         </div>
       </CanvasCard>
+
+      <section className="space-y-3">
+        <div>
+          <p className="text-[11px] font-semibold tracking-[0.14em] text-[#8b95a1] uppercase">Advanced</p>
+          <h2 className="font-heading text-[15px] text-[#1b1f24]">Workspace agent</h2>
+        </div>
+        <AgentChat initialConfigured={aiConfigured()} />
+      </section>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <CanvasCard className="min-w-0 space-y-3 p-4 lg:col-span-2">
@@ -239,14 +249,6 @@ export function OverviewAggregate({ bots, overview }: { bots: BotSummary[]; over
           )}
         </CanvasCard>
       </div>
-
-      <section className="space-y-3">
-        <div>
-          <p className="text-[11px] font-semibold tracking-[0.14em] text-[#8b95a1] uppercase">Advanced</p>
-          <h2 className="font-heading text-[15px] text-[#1b1f24]">Workspace agent</h2>
-        </div>
-        <AgentChat initialConfigured={aiConfigured()} />
-      </section>
     </div>
   );
 }

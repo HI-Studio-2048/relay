@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { CHANNELS } from "@/lib/channels/types";
 import { aiConfigured } from "@/lib/ai";
 import { AgentChat } from "@/components/agent-chat";
+import { ChannelSwitcher } from "@/components/channel-switcher";
 import { OverviewAggregate } from "@/components/overview-aggregate";
 import { consoleScope } from "@/lib/current-bot";
 import { loadActivityHeatmap, loadChecklist, loadDashboard, loadTeamReport, loadWorkspaceOverview } from "@/lib/dashboard";
@@ -111,7 +112,12 @@ export default async function OverviewPage() {
         tone="start"
         title="Overview"
         description={`${bot.name} · ${CHANNELS[bot.channel].label}`}
-        actions={<StatusPill status={bot.status} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <ChannelSwitcher />
+            <StatusPill status={bot.status} />
+          </div>
+        }
       />
 
       {bot.lastHealthError ? (

@@ -26,6 +26,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useBot } from "@/components/bot-provider";
+import { ChannelSwitcher } from "@/components/channel-switcher";
 import { ALL_CHANNELS } from "@/lib/scope";
 import { CommandPalette } from "@/components/command-palette";
 import { ShortcutsHelp } from "@/components/shortcuts-help";
@@ -336,7 +337,13 @@ export function AppShell({
             <span className="truncate font-heading text-sm text-[#1b1f24]">{title}</span>
           </div>
           <div className="flex items-center gap-2">
-            {aggregate ? <span className="text-[12px] text-[#6b7280]">All channels</span> : bot ? <StatusPill status={bot.status} /> : null}
+            {pathname === "/" || pathname.startsWith("/inbox") ? (
+              <ChannelSwitcher compact className="max-w-[46vw]" />
+            ) : aggregate ? (
+              <span className="text-[12px] text-[#6b7280]">All channels</span>
+            ) : bot ? (
+              <StatusPill status={bot.status} />
+            ) : null}
             <Button
               variant="outline"
               size="icon"
@@ -367,7 +374,9 @@ export function AppShell({
               Search
               <kbd className="ml-auto rounded border border-[#e5e7eb] bg-white px-1.5 text-[10px]">⌘K</kbd>
             </button>
-            {aggregate ? (
+            {pathname === "/" || pathname.startsWith("/inbox") ? (
+              <ChannelSwitcher />
+            ) : aggregate ? (
               <div className="flex items-center gap-2 rounded-full bg-[#f4f6f8] px-2.5 py-1 ring-1 ring-[#e5e7eb]">
                 <span className="max-w-40 truncate text-[12px] text-[#1b1f24]">All channels</span>
               </div>

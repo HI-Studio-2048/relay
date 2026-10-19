@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlarmClock, Bell, BellOff, Search } from "lucide-react";
 import { useBot } from "@/components/bot-provider";
+import { ChannelSwitcher } from "@/components/channel-switcher";
 import { ContactAvatar } from "@/components/chrome/avatar";
 import { ChannelBadge, PlatformBadge, platformLabel } from "@/components/chrome/platform-badge";
 import { ALL_CHANNELS } from "@/lib/scope";
@@ -278,6 +279,7 @@ export function ConversationList({ initialThreads = null }: { initialThreads?: T
       )}
     >
       <div className="space-y-2.5 border-b border-[#e5e7eb] p-3">
+        <ChannelSwitcher full className="w-full" />
         {team.length > 0 ? (
           <label className="flex items-center gap-2 text-[12px] text-[#6b7280]">
             You are
