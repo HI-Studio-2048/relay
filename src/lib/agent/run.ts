@@ -1,5 +1,5 @@
-import type Anthropic from "@anthropic-ai/sdk";
-import { createAgentCompletion } from "@/lib/ai";
+import { createAgentCompletion, type AgentMessage, type AgentToolCall } from "@/lib/ai";
+import type { AiProvider } from "@/lib/ai-provider";
 import { AGENT_TOOLS, runAgentTool, type DraftLink } from "@/lib/agent/tools";
 
 const SYSTEM = [
@@ -21,62 +21,20 @@ export type AgentEvent =
   | { type: "delta"; text: string }
   | { type: "draft"; draft: DraftLink };
 
-type NeutralMessage =
-  | { role: "user"; content: string }
-  | { role: "assistant"; content: string; toolCalls: { id: string; name: string; input: unknown }[] }
-  | { role: "tool"; id: string; content: string };
-
-export type AgentComplete = (input: { system: string; messages: NeutralMessage[] }) => Promise<{
+export type AgentComplete = (input: { system: string; messages: AgentMessage[] }) => Promise<{
   text: string;
-  toolCalls: { id: string; name: string; input: unknown }[];
+  toolCalls: AgentToolCall[];
 }>;
 
-function toAnthropic(messages: NeutralMessage[]): Anthropic.MessageParam[] {
-  const out: Anthropic.MessageParam[] = [];
-  for (const message of messages) {
-    if (message.role === "user") {
-      out.push({ role: "user", content: message.content });
-      continue;
-    }
-    if (message.role === "assistant") {
-      const content: Anthropic.ContentBlockParam[] = [];
-      if (message.content.trim()) content.push({ type: "text", text: message.content });
-      for (const call of message.toolCalls) {
-        const input = call.input && typeof call.input === "object" ? (call.input as Record<string, unknown>) : {};
-        content.push({ type: "tool_use", id: call.id, name: call.name, input });
-      }
-      out.push({ role: "assistant", content: content.length ? content : [{ type: "text", text: "" }] });
-      continue;
-    }
-    const block: Anthropic.ToolResultBlockParam = { type: "tool_result", tool_use_id: message.id, content: message.content };
-    const previous = out[out.length - 1];
-    if (previous && previous.role === "user" && Array.isArray(previous.content)) {
-      previous.content.push(block);
-    } else {
-      out.push({ role: "user", content: [block] });
-    }
-  }
-  return out;
-}
+const TOOL_SPECS = AGENT_TOOLS.map((tool) => ({
+  name: tool.name,
+  description: tool.description,
+  input_schema: tool.input_schema as Record<string, unknown>,
+}));
 
-export async function anthropicAgentComplete(input: { system: string; messages: NeutralMessage[] }): Promise<{
-  text: string;
-  toolCalls: { id: string; name: string; input: unknown }[];
-}> {
-  const response = await createAgentCompletion({
-    system: input.system,
-    messages: toAnthropic(input.messages),
-    tools: AGENT_TOOLS.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.input_schema as Anthropic.Tool.InputSchema })),
-  });
-  const text = response.content
-    .filter((block): block is Anthropic.TextBlock => block.type === "text")
-    .map((block) => block.text)
-    .join("\n")
-    .trim();
-  const toolCalls = response.content
-    .filter((block): block is Anthropic.ToolUseBlock => block.type === "tool_use")
-    .map((block) => ({ id: block.id, name: block.name, input: block.input }));
-  return { text, toolCalls };
+/** The real model call. `provider` is the login's OpenRouter key, or undefined for the server key. */
+export function modelAgentComplete(provider?: AiProvider): AgentComplete {
+  return (input) => createAgentCompletion({ system: input.system, messages: input.messages, tools: TOOL_SPECS, provider });
 }
 
 function chunkText(text: string) {
@@ -95,14 +53,16 @@ export async function runWorkspaceAgent(input: {
   history: { role: string; body: string }[];
   message: string;
   onEvent?: (event: AgentEvent) => void;
+  /** The login's OpenRouter key (see agent/provider.ts). Undefined uses the server's Anthropic key. */
+  provider?: AiProvider;
   complete?: AgentComplete;
 }) {
-  const complete = input.complete ?? anthropicAgentComplete;
-  const messages: NeutralMessage[] = [
+  const complete = input.complete ?? modelAgentComplete(input.provider);
+  const messages: AgentMessage[] = [
     ...input.history
       .filter((item) => item.role === "user" || item.role === "assistant")
       .slice(-20)
-      .map((item): NeutralMessage =>
+      .map((item): AgentMessage =>
         item.role === "user"
           ? { role: "user", content: item.body }
           : { role: "assistant", content: item.body, toolCalls: [] },

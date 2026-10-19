@@ -25,7 +25,9 @@ export const users = pgTable(
     passwordHash: text("password_hash").notNull(),
     /**
      * active: workspace is open (a paid subscription, or an account that existed before checkout).
-     * none: signed up, checkout not finished. past_due and canceled stay out until Stripe says otherwise.
+     * past_due: a renewal failed and Stripe is retrying, still open. unpaid and canceled: closed, and
+     * the account's automations are paused too. none: signed up, checkout not finished.
+     * See lib/billing/access.ts.
      */
     billingStatus: text("billing_status").notNull().default("none"),
     planId: text("plan_id"),

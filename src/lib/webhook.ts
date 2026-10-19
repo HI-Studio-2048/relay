@@ -9,6 +9,7 @@ import {
   type ChannelAccount,
   type NormalizedInbound,
 } from "@/lib/channels";
+import { assertBotNotPaused, botBillingPaused } from "@/lib/billing/paused";
 import { getDb } from "@/lib/db";
 import { bots, messages } from "@/lib/db/schema";
 import { aiConfigured, classifyIntent, readAiSettings, writeCommentReply } from "@/lib/ai";
@@ -56,12 +57,26 @@ import { stepButtons, type ContactRecord, type FlowMedia, type FlowSessionState,
 
 type BotRow = typeof bots.$inferSelect;
 
+const pausedNoticeAt = new Map<string, number>();
+
+/** One log line an hour per paused account, so a busy page doesn't flood the logs. */
+function noteSkippedWhilePaused(botId: string) {
+  const last = pausedNoticeAt.get(botId) ?? 0;
+  if (Date.now() - last < 60 * 60 * 1000) return;
+  pausedNoticeAt.set(botId, Date.now());
+  log.warn("Inbound ignored, the account's plan has lapsed", botId);
+}
+
 /** Entry point for every channel: parse the platform payload, then run each event through the engine. */
 export async function processChannelUpdate(botId: string, payload: unknown) {
   const db = await getDb();
   const [bot] = await db.select().from(bots).where(eq(bots.id, botId)).limit(1);
   if (!bot) {
     log.warn("Webhook for unknown bot");
+    return;
+  }
+  if (await botBillingPaused(bot.id)) {
+    noteSkippedWhilePaused(bot.id);
     return;
   }
   const account = accountFromRow(bot);
@@ -79,6 +94,7 @@ export async function processCatchUpComments(botId: string, inbounds: Normalized
   const db = await getDb();
   const [bot] = await db.select().from(bots).where(eq(bots.id, botId)).limit(1);
   if (!bot) throw new Error("Account not found");
+  await assertBotNotPaused(bot.id);
   const account = accountFromRow(bot);
   for (const inbound of inbounds) await processInbound(bot, account, { ...inbound, catchUp: true });
 }

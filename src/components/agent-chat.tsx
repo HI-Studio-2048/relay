@@ -42,7 +42,9 @@ function DraftLinks({ drafts }: { drafts: DraftLink[] }) {
 
 /** Overview growth agent. Drafts only: the user turns flows on and confirms broadcasts. */
 export function AgentChat({ initialConfigured = null }: { initialConfigured?: boolean | null }) {
-  const [configured, setConfigured] = useState<boolean | null>(initialConfigured);
+  // The server only knows about its own key when it renders this. An OpenRouter key saved on one of
+  // the login's accounts also counts, so a false here waits for /api/agent to answer.
+  const [configured, setConfigured] = useState<boolean | null>(initialConfigured === true ? true : null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [drafts, setDrafts] = useState<DraftLink[]>([]);
   const [text, setText] = useState("");
@@ -77,7 +79,9 @@ export function AgentChat({ initialConfigured = null }: { initialConfigured?: bo
     setBusy(true);
     setStatus("Thinking…");
     const localId = `local-${Date.now()}`;
-    setMessages((current) => [...current, { id: localId, role: "user", body: message }, { id: `${localId}-reply`, role: "assistant", body: "" }]);
+    const replyId = `${localId}-reply`;
+    setMessages((current) => [...current, { id: localId, role: "user", body: message }, { id: replyId, role: "assistant", body: "" }]);
+    let accepted = false;
     try {
       const response = await fetch("/api/agent/chat", {
         method: "POST",
@@ -88,6 +92,7 @@ export function AgentChat({ initialConfigured = null }: { initialConfigured?: bo
         const data = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error || "The agent could not answer");
       }
+      accepted = true;
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -96,7 +101,7 @@ export function AgentChat({ initialConfigured = null }: { initialConfigured?: bo
         if (event.type === "delta") {
           setStatus("");
           setMessages((current) =>
-            current.map((item) => (item.id === `${localId}-reply` ? { ...item, body: item.body + event.text } : item)),
+            current.map((item) => (item.id === replyId ? { ...item, body: item.body + event.text } : item)),
           );
         }
         if (event.type === "draft") setDrafts((current) => [...current, event.draft]);
@@ -116,6 +121,14 @@ export function AgentChat({ initialConfigured = null }: { initialConfigured?: bo
       }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "The agent could not answer");
+      if (accepted) {
+        // The question was saved; only drop the empty answer bubble.
+        setMessages((current) => current.filter((item) => item.id !== replyId || item.body));
+      } else {
+        // Refused before anything was saved (rate limit, not set up): take it back out and keep the text.
+        setMessages((current) => current.filter((item) => item.id !== localId && item.id !== replyId));
+        setText(message);
+      }
     } finally {
       setBusy(false);
       setStatus("");
@@ -131,13 +144,17 @@ export function AgentChat({ initialConfigured = null }: { initialConfigured?: bo
             Growth agent
           </p>
           <p className="mt-1 max-w-2xl text-[12px] text-[#6b7280]">
-            Ask it to draft a flow or look across every channel. It saves drafts only — you turn a flow on and confirm a broadcast yourself.
+            Ask it to draft a flow or look across every channel. It only saves drafts. Turning a flow on or confirming a broadcast stays with you.
           </p>
         </div>
       </div>
       {configured === false ? (
         <p className="rounded-xl bg-[#f8fafc] px-3 py-2 text-[13px] text-[#1b1f24] ring-1 ring-[#e5e7eb]">
-          The growth agent is not configured. Set <span className="font-medium">ANTHROPIC_API_KEY</span> on the server, then reload this page.
+          The growth agent needs a model key. Save an OpenRouter key on the{" "}
+          <Link href="/ai" className="font-medium text-[#0084ff] hover:underline">
+            AI assistant
+          </Link>{" "}
+          page, then reload this one.
         </p>
       ) : (
         <>

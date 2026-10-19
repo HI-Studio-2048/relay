@@ -65,7 +65,7 @@ function envOn(name: string, fallback: boolean): boolean {
   return fallback;
 }
 
-/** 1–99. Anything else keeps the default so a typo cannot make the first month free. */
+/** 1 to 99. Anything else keeps the default so a typo cannot make the first month free. */
 function promoPercent(): number {
   const raw = process.env.BILLING_PROMO_PERCENT_OFF?.trim();
   if (!raw) return 50;

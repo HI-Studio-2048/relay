@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { assertBotNotPaused, BillingPausedError } from "@/lib/billing/paused";
 import { getDb } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
 import { ApiAuthError, authenticateApiKey } from "@/lib/developer";
@@ -10,9 +11,11 @@ export class ApiNotFoundError extends Error {}
 export async function apiHandler(request: Request, handler: (botId: string) => Promise<Response>) {
   try {
     const { botId } = await authenticateApiKey(request);
+    await assertBotNotPaused(botId);
     return await handler(botId);
   } catch (error) {
     if (error instanceof ApiAuthError) return json({ error: error.message }, 401);
+    if (error instanceof BillingPausedError) return json({ error: error.message }, 402);
     if (error instanceof ApiNotFoundError) return json({ error: error.message }, 404);
     return fail(error);
   }

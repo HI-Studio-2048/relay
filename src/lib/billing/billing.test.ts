@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { billingStatusFromStripe, hasWorkspaceAccess } from "@/lib/billing/access";
+import { automationPaused, billingStatusFromStripe, hasWorkspaceAccess } from "@/lib/billing/access";
 import { automaticTaxEnabled, billingConfig } from "@/lib/billing/config";
 import { invoiceIsPaid, invoiceSubscriptionId } from "@/lib/billing/invoice";
 import { formatMoney, listQuotes, promoApplies, quotePlan } from "@/lib/billing/quote";
@@ -51,16 +51,27 @@ describe("plan quotes", () => {
 });
 
 describe("workspace access", () => {
-  it("opens only an active subscription", () => {
+  it("opens an active subscription, and keeps a failed renewal open while Stripe retries", () => {
     expect(hasWorkspaceAccess("active")).toBe(true);
+    expect(hasWorkspaceAccess("past_due")).toBe(true);
     expect(hasWorkspaceAccess("none")).toBe(false);
-    expect(hasWorkspaceAccess("past_due")).toBe(false);
+    expect(hasWorkspaceAccess("unpaid")).toBe(false);
     expect(hasWorkspaceAccess("canceled")).toBe(false);
     expect(hasWorkspaceAccess(null)).toBe(false);
     expect(billingStatusFromStripe("active")).toBe("active");
     expect(billingStatusFromStripe("trialing")).toBe("none");
     expect(billingStatusFromStripe("past_due")).toBe("past_due");
+    expect(billingStatusFromStripe("unpaid")).toBe("unpaid");
     expect(billingStatusFromStripe("canceled")).toBe("canceled");
+  });
+
+  it("pauses automations only for an account that lost its plan", () => {
+    expect(automationPaused("unpaid")).toBe(true);
+    expect(automationPaused("canceled")).toBe(true);
+    expect(automationPaused("past_due")).toBe(false);
+    expect(automationPaused("active")).toBe(false);
+    // Never paid: can't get past the login to connect anything, and test accounts start here.
+    expect(automationPaused("none")).toBe(false);
   });
 });
 

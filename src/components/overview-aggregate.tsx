@@ -224,7 +224,7 @@ export function OverviewAggregate({ bots, overview }: { bots: BotSummary[]; over
             </Link>
           </div>
           {data.recentThreads.length === 0 ? (
-            <p className="py-4 text-[13px] text-[#6b7280]">Nothing yet — conversations appear as people message or comment.</p>
+            <p className="py-4 text-[13px] text-[#6b7280]">Nothing yet. Conversations show up here once people message or comment.</p>
           ) : (
             <ul>
               {data.recentThreads.map((thread) => (

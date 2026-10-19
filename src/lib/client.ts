@@ -12,5 +12,3 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
   return data;
 }
-
-export const BOT_STORAGE_KEY = "relay.botId";

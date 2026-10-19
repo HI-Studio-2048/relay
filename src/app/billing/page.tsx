@@ -42,8 +42,22 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
         ) : null}
         {account.billingStatus === "past_due" ? (
           <p className="mt-4 rounded-lg bg-[#fff7ed] px-3 py-2 text-[13px] text-[#9a3412]">
-            The last payment did not go through, so the workspace is paused until billing is up to date.
+            The last payment did not go through. Stripe will try the card again over the next few days, and the
+            workspace stays open meanwhile. Update the card so nothing gets paused.
           </p>
+        ) : null}
+        {account.billingStatus === "unpaid" || account.billingStatus === "canceled" ? (
+          <div className="mt-4 rounded-lg bg-[#fff7ed] px-3 py-2 text-[13px] text-[#9a3412]">
+            <p>
+              {account.billingStatus === "unpaid" ? "The payment could not be collected" : "The plan has ended"}, so the
+              workspace is paused. Flows, AI replies, broadcasts and the API are stopped until a plan is active again.
+            </p>
+            {account.stripeCustomerId && ready ? (
+              <div className="mt-3">
+                <PortalButton />
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         {open ? (

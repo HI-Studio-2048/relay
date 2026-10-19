@@ -127,12 +127,34 @@ async function ensureCustomer(input: { userId: string; email: string; name: stri
   return id;
 }
 
+function listOf(value: StripeObject): StripeObject[] {
+  return Array.isArray(value.data) ? (value.data as StripeObject[]) : [];
+}
+
+/**
+ * One checkout at a time per customer. Signup opens one and the Billing page can open another,
+ * and paying both would bill twice. A live subscription refuses a new checkout, and any checkout
+ * still open (another tab, an earlier plan choice) is expired so only the newest can be paid.
+ */
+async function clearEarlierCheckouts(customerId: string) {
+  const subscriptions = await stripeRequest("GET", `/subscriptions?${new URLSearchParams({ customer: customerId, status: "all", limit: "20" }).toString()}`);
+  const live = listOf(subscriptions).some((subscription) => ["active", "past_due", "trialing"].includes(String(subscription.status)));
+  if (live) throw new BillingError("This account already has a plan. Manage it from the Billing page.", 409);
+  const sessions = await stripeRequest("GET", `/checkout/sessions?${new URLSearchParams({ customer: customerId, status: "open", limit: "20" }).toString()}`);
+  for (const session of listOf(sessions)) {
+    const id = stripeId(session);
+    if (!id || !/^cs_[A-Za-z0-9_]+$/.test(id)) continue;
+    await stripeRequest("POST", `/checkout/sessions/${encodeURIComponent(id)}/expire`, new URLSearchParams());
+  }
+}
+
 export async function startCheckout(input: { userId: string; email: string; name: string; planId: string; customerId: string | null }): Promise<string> {
   if (!paymentsConfigured()) throw new BillingError("Checkout isn't available yet", 503);
   const quote = quotePlan(input.planId);
   if (!quote) throw new BillingError("Choose a plan to continue", 400);
   const origin = publicUrl();
   if (!origin) throw new BillingError("Checkout isn't available yet", 503);
+  if (input.customerId) await clearEarlierCheckouts(input.customerId);
   const customer = await ensureCustomer(input);
   const price = await ensurePrice(quote.plan.id, quote.plan.name, quote.regularCents);
   const body = new URLSearchParams();

@@ -28,6 +28,12 @@ describe("signup and billing", () => {
     vi.stubEnv("PUBLIC_URL", "https://recatch.test");
   });
 
+  // Start the database here, not inside the first test: a busy full run timed it out there.
+  beforeAll(async () => {
+    const { getDb } = await import("@/lib/db");
+    await getDb();
+  });
+
   afterAll(() => {
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
@@ -167,7 +173,7 @@ describe("signup and billing", () => {
 
     const failedAsync = await session("unpaid", { type: "checkout.session.async_payment_failed", id: "cs_cara_async" });
     expect(failedAsync.status).toBe(200);
-    expect((await billingOf("cara@example.test"))?.billingStatus).toBe("past_due");
+    expect((await billingOf("cara@example.test"))?.billingStatus).toBe("unpaid");
 
     // Charged amount is a presentment currency, not the USD plan price. The plan stays on metadata.
     const paidAsync = await deliver({
@@ -337,7 +343,7 @@ describe("signup and billing", () => {
       }),
     );
     expect(response.status).toBe(200);
-    expect((await billingOf("ada@example.test"))?.billingStatus).toBe("past_due");
+    expect((await billingOf("ada@example.test"))?.billingStatus).toBe("unpaid");
   });
 
   it("starts Stripe Checkout for a new account and applies the first-month coupon", async () => {
@@ -408,6 +414,9 @@ describe("signup and billing", () => {
         const method = init?.method ?? "GET";
         const body = init?.body ? String(init.body) : "";
         if (method === "POST") posts.push(url);
+        if (method === "GET" && url.includes("/v1/subscriptions?")) return stripeJson({ data: [{ id: "sub_old", status: "canceled" }] });
+        if (method === "GET" && url.includes("/v1/checkout/sessions?")) return stripeJson({ data: [{ id: "cs_earlier" }] });
+        if (method === "POST" && url.endsWith("/v1/checkout/sessions/cs_earlier/expire")) return stripeJson({ id: "cs_earlier", status: "expired" });
         if (method === "GET" && url.includes("/v1/prices")) return stripeJson({ data: [{ id: "price_pro" }] });
         if (method === "GET" && url.includes("/v1/products/search")) return stripeJson({ data: [{ id: "prod_pro" }] });
         if (method === "POST" && url.endsWith("/v1/prices")) return stripeJson({ id: "price_pro" });
@@ -436,6 +445,93 @@ describe("signup and billing", () => {
     });
     expect(url).toBe("https://checkout.stripe.com/c/pay/cs_test_456");
     expect(posts.some((url) => url.endsWith("/v1/coupons"))).toBe(false);
+    // The checkout left open in another tab is expired, so only the new one can be paid.
+    expect(posts.some((url) => url.endsWith("/v1/checkout/sessions/cs_earlier/expire"))).toBe(true);
+  });
+
+  it("refuses a second checkout while a subscription is live", async () => {
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_fake");
+    const posts: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (!url.includes("api.stripe.com")) return realFetch(input, init);
+        const method = init?.method ?? "GET";
+        if (method === "POST") posts.push(url);
+        if (method === "GET" && url.includes("/v1/subscriptions?")) return stripeJson({ data: [{ id: "sub_live", status: "active" }] });
+        return stripeJson({ error: { message: `unexpected ${method} ${url}` } }, 500);
+      }),
+    );
+    const row = await billingOf("bea@example.test");
+    const { startCheckout } = await import("@/lib/billing/checkout");
+    await expect(
+      startCheckout({ userId: row!.id, email: row!.email, name: row!.name, planId: "pro", customerId: row!.stripeCustomerId }),
+    ).rejects.toThrow("already has a plan");
+    expect(posts).toEqual([]);
+  });
+
+  it("ignores late and foreign subscription events, keeps a failed renewal open, and pauses on unpaid", async () => {
+    vi.stubEnv("STRIPE_WEBHOOK_SECRET", "whsec_test");
+    vi.stubEnv("STRIPE_SECRET_KEY", "");
+    const { POST: signup } = await import("@/app/api/auth/signup/route");
+    await signup(
+      new Request("https://recatch.test/api/auth/signup", {
+        method: "POST",
+        body: JSON.stringify({ name: "Finn", email: "finn@example.test", password: "longpassword", planId: "pro" }),
+        headers: { "content-type": "application/json", "x-forwarded-for": "203.0.113.40" },
+      }),
+    );
+    const finn = await billingOf("finn@example.test");
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    let n = 0;
+    const deliver = (type: string, object: Record<string, unknown>) => {
+      const raw = JSON.stringify({ id: `evt_finn_${++n}`, type, data: { object } });
+      return POST(new Request("https://recatch.test/api/billing/webhook", { method: "POST", body: raw, headers: { "stripe-signature": sign(raw, "whsec_test") } }));
+    };
+    const meta = { user_id: finn!.id, plan_id: "pro" };
+    const invoiceParent = { type: "subscription_details", subscription_details: { subscription: "sub_finn", metadata: meta } };
+
+    await deliver("checkout.session.completed", { id: "cs_finn", mode: "subscription", payment_status: "paid", customer: "cus_finn", subscription: "sub_finn", client_reference_id: finn!.id, metadata: meta });
+    expect((await billingOf("finn@example.test"))?.billingStatus).toBe("active");
+
+    // subscription.created can arrive after the paid Checkout, still saying `incomplete`.
+    await deliver("customer.subscription.created", { id: "sub_finn", status: "incomplete", customer: "cus_finn", metadata: meta });
+    expect((await billingOf("finn@example.test"))?.billingStatus).toBe("active");
+
+    // A duplicate subscription being cancelled must not close the one that is paid for.
+    await deliver("customer.subscription.deleted", { id: "sub_finn_dup", status: "canceled", customer: "cus_finn", metadata: meta });
+    expect((await billingOf("finn@example.test"))?.billingStatus).toBe("active");
+    expect((await billingOf("finn@example.test"))?.stripeSubscriptionId).toBe("sub_finn");
+
+    // A failed renewal keeps the workspace open while Stripe retries.
+    await deliver("invoice.payment_failed", { id: "in_finn_fail", customer: "cus_finn", status: "open", parent: invoiceParent });
+    expect((await billingOf("finn@example.test"))?.billingStatus).toBe("past_due");
+    const { workspaceGate } = await import("@/lib/billing/gate");
+    expect(await workspaceGate(finn!.id)).toBe("ok");
+
+    // Give Finn a channel account so the pause can be seen on it.
+    const { getDb } = await import("@/lib/db");
+    const { bots } = await import("@/lib/db/schema");
+    const db = await getDb();
+    const botId = "bot_finn";
+    await db.insert(bots).values({ id: botId, ownerId: finn!.id, channel: "telegram", name: "Finn", tokenEncrypted: "x", webhookSecret: "finn-secret" } as typeof bots.$inferInsert);
+    const { botBillingPaused, forgetBillingPauses, BillingPausedError } = await import("@/lib/billing/paused");
+    forgetBillingPauses();
+    expect(await botBillingPaused(botId)).toBe(false);
+
+    // Stripe gives up: workspace closed and automations paused.
+    await deliver("customer.subscription.updated", { id: "sub_finn", status: "unpaid", customer: "cus_finn", metadata: meta });
+    expect((await billingOf("finn@example.test"))?.billingStatus).toBe("unpaid");
+    expect(await workspaceGate(finn!.id)).toBe("unpaid");
+    expect(await botBillingPaused(botId)).toBe(true);
+    const { sendChannelReply } = await import("@/lib/channels");
+    await expect(sendChannelReply({ id: botId, channel: "telegram", token: "x" } as never, "123", { text: "hi" } as never)).rejects.toBeInstanceOf(BillingPausedError);
+
+    // Paying again switches everything back on straight away.
+    await deliver("invoice.paid", { id: "in_finn_paid", customer: "cus_finn", status: "paid", amount_paid: 9900, currency: "usd", billing_reason: "subscription_cycle", parent: invoiceParent });
+    expect((await billingOf("finn@example.test"))?.billingStatus).toBe("active");
+    expect(await botBillingPaused(botId)).toBe(false);
   });
 
   it("keeps the return page closed until Stripe reports the session paid", async () => {

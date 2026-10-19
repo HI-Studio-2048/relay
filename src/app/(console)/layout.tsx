@@ -38,8 +38,10 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
     <BotProvider initialBots={bots} initialBotId={bot?.id ?? null} initialScope={scope.aggregate ? ALL_CHANNELS : bot?.id ?? null}>
       <AppShell user={user} inboxCount={inboxCount} confirmCount={confirmCount}>
         {/* Pages copy their server data into state, so switching accounts has to remount them.
-            Without this the Flows list kept showing the old account while New flow saved to the new one. */}
-        <Fragment key={scope.aggregate ? ALL_CHANNELS : bot?.id ?? "none"}>{children}</Fragment>
+            Without this the Flows list kept showing the old account while New flow saved to the new one.
+            The key carries the account even in All channels, because single-account pages still
+            switch accounts while Overview and Live Chat stay merged. */}
+        <Fragment key={`${scope.aggregate ? ALL_CHANNELS : "one"}:${bot?.id ?? "none"}`}>{children}</Fragment>
       </AppShell>
     </BotProvider>
   );

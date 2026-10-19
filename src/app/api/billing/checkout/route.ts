@@ -1,3 +1,4 @@
+import { hasWorkspaceAccess } from "@/lib/billing/access";
 import { loadAccountBilling } from "@/lib/billing/account";
 import { startCheckout } from "@/lib/billing/checkout";
 import { paymentsConfigured } from "@/lib/billing/config";
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
     }
     const account = await loadAccountBilling(userId);
     if (!account) return json({ error: "Sign in to continue" }, 401);
-    if (account.billingStatus === "active" && account.stripeSubscriptionId) {
+    if (hasWorkspaceAccess(account.billingStatus) && account.stripeSubscriptionId) {
       return json({ error: "This account already has a plan" }, 409);
     }
     const url = await startCheckout({

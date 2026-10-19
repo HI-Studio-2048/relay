@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import * as z from "zod/v4";
-import { openRouterParse, OpenRouterError, type AiProvider } from "@/lib/ai-provider";
+import { openRouterParse, openRouterToolTurn, OpenRouterError, type AiProvider, type OpenRouterMessage } from "@/lib/ai-provider";
 import { log } from "@/lib/logger";
 import type { ContactRecord } from "@/lib/types";
 
@@ -34,23 +34,105 @@ function client() {
   return globalForAi.relayAnthropic;
 }
 
+/** Provider-neutral agent conversation, converted to Anthropic or OpenAI-style messages per call. */
+export type AgentToolCall = { id: string; name: string; input: unknown };
+export type AgentMessage =
+  | { role: "user"; content: string }
+  | { role: "assistant"; content: string; toolCalls: AgentToolCall[] }
+  | { role: "tool"; id: string; content: string };
+export type AgentToolSpec = { name: string; description: string; input_schema: Record<string, unknown> };
+
+function toAnthropic(messages: AgentMessage[]): Anthropic.MessageParam[] {
+  const out: Anthropic.MessageParam[] = [];
+  for (const message of messages) {
+    if (message.role === "user") {
+      out.push({ role: "user", content: message.content });
+      continue;
+    }
+    if (message.role === "assistant") {
+      const content: Anthropic.ContentBlockParam[] = [];
+      if (message.content.trim()) content.push({ type: "text", text: message.content });
+      for (const call of message.toolCalls) {
+        const input = call.input && typeof call.input === "object" ? (call.input as Record<string, unknown>) : {};
+        content.push({ type: "tool_use", id: call.id, name: call.name, input });
+      }
+      out.push({ role: "assistant", content: content.length ? content : [{ type: "text", text: "" }] });
+      continue;
+    }
+    const block: Anthropic.ToolResultBlockParam = { type: "tool_result", tool_use_id: message.id, content: message.content };
+    const previous = out[out.length - 1];
+    if (previous && previous.role === "user" && Array.isArray(previous.content)) {
+      previous.content.push(block);
+    } else {
+      out.push({ role: "user", content: [block] });
+    }
+  }
+  return out;
+}
+
+function toOpenRouter(system: string, messages: AgentMessage[]): OpenRouterMessage[] {
+  const out: OpenRouterMessage[] = [{ role: "system", content: system }];
+  for (const message of messages) {
+    if (message.role === "user") out.push({ role: "user", content: message.content });
+    else if (message.role === "tool") out.push({ role: "tool", tool_call_id: message.id, content: message.content });
+    else if (message.toolCalls.length === 0) out.push({ role: "assistant", content: message.content });
+    else {
+      out.push({
+        role: "assistant",
+        content: message.content.trim() ? message.content : null,
+        tool_calls: message.toolCalls.map((call) => ({
+          id: call.id,
+          type: "function",
+          function: { name: call.name, arguments: JSON.stringify(call.input ?? {}) },
+        })),
+      });
+    }
+  }
+  return out;
+}
+
 /**
- * One tool-using turn for the Overview growth agent. Uses the server Anthropic key only:
- * a per-account OpenRouter key stays on that account's own AI assistant.
+ * One tool-using turn for the Overview growth agent. With `provider` (an OpenRouter key saved on one
+ * of the login's accounts, see agent/provider.ts) the call goes to OpenRouter and bills that key;
+ * without it, the server's Anthropic key.
  */
 export async function createAgentCompletion(input: {
   system: string;
-  messages: Anthropic.MessageParam[];
-  tools: Anthropic.Tool[];
-}) {
-  if (!aiConfigured()) throw new AiUnavailableError("The Overview agent is off: set ANTHROPIC_API_KEY on the server");
-  return client().messages.create({
+  messages: AgentMessage[];
+  tools: AgentToolSpec[];
+  provider?: AiProvider;
+}): Promise<{ text: string; toolCalls: AgentToolCall[] }> {
+  if (input.provider) {
+    try {
+      return await openRouterToolTurn(input.provider, {
+        messages: toOpenRouter(input.system, input.messages),
+        tools: input.tools.map((tool) => ({ type: "function", function: { name: tool.name, description: tool.description, parameters: tool.input_schema } })),
+        maxTokens: 4096,
+      });
+    } catch (error) {
+      if (error instanceof OpenRouterError) throw new AiUnavailableError(error.message);
+      throw error;
+    }
+  }
+  if (!aiConfigured()) {
+    throw new AiUnavailableError("The growth agent is off. Save an OpenRouter key on the AI assistant page, or set ANTHROPIC_API_KEY on the server.");
+  }
+  const response = await client().messages.create({
     model: AI_MODEL,
     max_tokens: 4096,
     system: input.system,
-    messages: input.messages,
-    tools: input.tools,
+    messages: toAnthropic(input.messages),
+    tools: input.tools.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.input_schema as Anthropic.Tool.InputSchema })),
   });
+  const text = response.content
+    .filter((block): block is Anthropic.TextBlock => block.type === "text")
+    .map((block) => block.text)
+    .join("\n")
+    .trim();
+  const toolCalls = response.content
+    .filter((block): block is Anthropic.ToolUseBlock => block.type === "tool_use")
+    .map((block) => ({ id: block.id, name: block.name, input: block.input }));
+  return { text, toolCalls };
 }
 
 /** Per-account AI settings, stored on bots.settings.ai. */

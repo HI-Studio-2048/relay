@@ -1,4 +1,5 @@
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
+import { botBillingPaused } from "@/lib/billing/paused";
 import { isBroadcastable } from "@/lib/broadcast";
 import { accountFromRow, channelTarget, sendChannelReply } from "@/lib/channels";
 import { getDb } from "@/lib/db";
@@ -48,6 +49,8 @@ async function sendBroadcast(broadcastId: string) {
 
   const [bot] = await db.select().from(bots).where(eq(bots.id, broadcast.botId)).limit(1);
   if (!bot) return;
+  // Left queued rather than failed, so nothing is lost if the plan comes back.
+  if (await botBillingPaused(bot.id)) return;
   const account = accountFromRow(bot);
 
   await db

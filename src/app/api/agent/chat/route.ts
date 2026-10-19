@@ -1,21 +1,30 @@
 import { AiUnavailableError, aiConfigured } from "@/lib/ai";
 import { appendAgentMessage, listAgentHistory } from "@/lib/agent/history";
+import { workspaceAiProvider } from "@/lib/agent/provider";
 import { runWorkspaceAgent } from "@/lib/agent/run";
 import { requireUserId } from "@/lib/auth";
 import { fail, json, readJson } from "@/lib/http";
+import { allowAttempt } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+/** Each message can run up to six model calls, so cap messages per login per hour. */
+const MESSAGES_PER_HOUR = 30;
 
 /** Stream one growth-agent turn. Tools only read this workspace and save drafts. */
 export async function POST(request: Request) {
   try {
     const ownerId = await requireUserId();
-    if (!aiConfigured()) {
-      return json({ error: "The growth agent is not configured. Set ANTHROPIC_API_KEY on the server." }, 503);
+    const provider = await workspaceAiProvider(ownerId);
+    if (!aiConfigured(provider)) {
+      return json({ error: "The growth agent is not set up. Save an OpenRouter key on the AI assistant page first." }, 503);
     }
     const body = await readJson<{ message?: string }>(request);
     const message = body.message?.trim().slice(0, 4000) ?? "";
     if (!message) return json({ error: "Message is required" }, 400);
+    if (!(await allowAttempt(`agent-chat:${ownerId}`, MESSAGES_PER_HOUR, 60 * 60))) {
+      return json({ error: `That's ${MESSAGES_PER_HOUR} messages to the growth agent this hour, which is the limit. Try again in a bit.` }, 429);
+    }
     await appendAgentMessage({ ownerId, role: "user", body: message });
     const history = await listAgentHistory(ownerId);
     const encoder = new TextEncoder();
@@ -27,6 +36,7 @@ export async function POST(request: Request) {
             ownerId,
             history: history.slice(0, -1),
             message,
+            provider,
             onEvent: send,
           });
           await appendAgentMessage({

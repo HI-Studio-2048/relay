@@ -1,3 +1,4 @@
+import { assertBotNotPaused } from "@/lib/billing/paused";
 import { cardsAsReplies } from "@/lib/channels/cards";
 import { decryptSecret } from "@/lib/crypto";
 import type { bots } from "@/lib/db/schema";
@@ -56,6 +57,9 @@ export async function sendChannelReply(
   recipient: string | ChannelTarget,
   reply: OutboundReply,
 ): Promise<SentMessage> {
+  // Last line of defence for an account that lost its plan: broadcasts, follow-ups and anything
+  // else that sends stop here even if the caller forgot to check.
+  await assertBotNotPaused(account.id);
   const target = toTarget(recipient);
   const to = target.externalUserId;
   if (reply.cards?.length && account.channel !== "instagram" && account.channel !== "messenger") {

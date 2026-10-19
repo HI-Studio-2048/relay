@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import { PinnedBot } from "@/components/bot-provider";
 import { FlowWorkspace } from "@/components/flow-canvas/flow-workspace";
 import { FlowSharePanel } from "@/components/chrome/flow-share-panel";
 import { ownsBot } from "@/lib/auth/resources";
@@ -27,30 +28,32 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
   const channel = channelOf(botRows[0]?.channel);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-      <div className="order-2 flex min-h-0 min-w-0 flex-1 flex-col lg:order-1">
-        <FlowWorkspace
-          initialFlow={{
-            id: flow.id,
-            botId: flow.botId,
-            name: flow.name,
-            triggerType: flow.triggerType as TriggerType,
-            triggerValue: flow.triggerValue,
-            isActive: flow.isActive,
-            definition: flow.definition as FlowDefinition,
-          }}
-          customFields={fieldRows.map((field) => ({ key: field.key, label: field.label }))}
-          tagNames={tagRows.map((tag) => tag.name)}
-          otherFlows={flowRows
-            .filter((item) => item.id !== flow.id)
-            .map((item) => ({ id: item.id, name: item.name }))}
-          channel={channel}
-        />
+    <PinnedBot botId={flow.botId}>
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div className="order-2 flex min-h-0 min-w-0 flex-1 flex-col lg:order-1">
+          <FlowWorkspace
+            initialFlow={{
+              id: flow.id,
+              botId: flow.botId,
+              name: flow.name,
+              triggerType: flow.triggerType as TriggerType,
+              triggerValue: flow.triggerValue,
+              isActive: flow.isActive,
+              definition: flow.definition as FlowDefinition,
+            }}
+            customFields={fieldRows.map((field) => ({ key: field.key, label: field.label }))}
+            tagNames={tagRows.map((tag) => tag.name)}
+            otherFlows={flowRows
+              .filter((item) => item.id !== flow.id)
+              .map((item) => ({ id: item.id, name: item.name }))}
+            channel={channel}
+          />
+        </div>
+        {/* The header's Share button covers smaller screens; the panel only gets a column when there is room. */}
+        <div className="order-1 hidden min-h-0 lg:order-2 lg:h-full 2xl:block">
+          <FlowSharePanel botId={flow.botId} flowId={flow.id} flowName={flow.name} links={links} />
+        </div>
       </div>
-      {/* The header's Share button covers smaller screens; the panel only gets a column when there is room. */}
-      <div className="order-1 hidden min-h-0 lg:order-2 lg:h-full 2xl:block">
-        <FlowSharePanel botId={flow.botId} flowId={flow.id} flowName={flow.name} links={links} />
-      </div>
-    </div>
+    </PinnedBot>
   );
 }

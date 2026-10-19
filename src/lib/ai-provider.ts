@@ -106,6 +106,68 @@ function extractJson(text: string) {
 
 type ChatBody = { choices?: { message?: { content?: string | null }; finish_reason?: string }[] };
 
+/** OpenAI-style chat message, the shape OpenRouter takes for tool calling. */
+export type OpenRouterMessage =
+  | { role: "system" | "user"; content: string }
+  | { role: "assistant"; content: string | null; tool_calls?: { id: string; type: "function"; function: { name: string; arguments: string } }[] }
+  | { role: "tool"; tool_call_id: string; content: string };
+
+export type OpenRouterTool = { type: "function"; function: { name: string; description: string; parameters: unknown } };
+
+type ToolChatBody = {
+  choices?: {
+    message?: {
+      content?: string | null;
+      tool_calls?: { id?: string; function?: { name?: string; arguments?: string } }[];
+    };
+  }[];
+};
+
+/**
+ * One tool-calling turn through OpenRouter (OpenAI-compatible). Returns the text and the tool calls
+ * the model asked for, with arguments parsed. Arguments that are not valid JSON come back as {} so
+ * the tool reports a validation error to the model instead of the whole turn failing.
+ */
+export async function openRouterToolTurn(
+  provider: AiProvider,
+  input: { messages: OpenRouterMessage[]; tools: OpenRouterTool[]; maxTokens: number },
+): Promise<{ text: string; toolCalls: { id: string; name: string; input: unknown }[] }> {
+  const response = await fetch(`${OPENROUTER_API}/chat/completions`, {
+    method: "POST",
+    headers: headers(provider.apiKey),
+    signal: AbortSignal.timeout(90_000),
+    body: JSON.stringify({
+      model: provider.model,
+      max_tokens: Math.min(input.maxTokens, 8000),
+      messages: input.messages,
+      tools: input.tools,
+    }),
+  }).catch(() => {
+    throw new OpenRouterError("Could not reach OpenRouter");
+  });
+  const text = await response.text();
+  if (!response.ok) throw new OpenRouterError(explain(response.status, text), response.status);
+  let message: NonNullable<NonNullable<ToolChatBody["choices"]>[number]["message"]> | undefined;
+  try {
+    message = (JSON.parse(text) as ToolChatBody).choices?.[0]?.message;
+  } catch {
+    throw new OpenRouterError("OpenRouter sent back something unreadable");
+  }
+  if (!message) throw new OpenRouterError("The model returned an empty answer. Try another model.");
+  const toolCalls = (message.tool_calls ?? [])
+    .filter((call) => typeof call.function?.name === "string" && call.function.name)
+    .map((call, index) => {
+      let args: unknown = {};
+      try {
+        args = call.function?.arguments ? JSON.parse(call.function.arguments) : {};
+      } catch {
+        args = {};
+      }
+      return { id: call.id || `call_${index}`, name: call.function!.name!, input: args };
+    });
+  return { text: (message.content ?? "").trim(), toolCalls };
+}
+
 /** One structured completion through OpenRouter. Models differ in schema support, so a 400 retries as plain JSON. */
 export async function openRouterParse<T extends z.ZodType>(
   provider: AiProvider,

@@ -1,5 +1,6 @@
 import { and, eq, ne } from "drizzle-orm";
-import { hasWorkspaceAccess } from "@/lib/billing/access";
+import { hasWorkspaceAccess, type BillingStatus } from "@/lib/billing/access";
+import { forgetBillingPauses } from "@/lib/billing/paused";
 import { getPlan } from "@/lib/billing/quote";
 import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
@@ -60,10 +61,11 @@ function workspaceReadyMail(name: string) {
 /**
  * Write the subscription we heard about from Stripe. The welcome email goes out once,
  * on the transition into `active`, so a retried webhook does not mail twice.
+ * Leaving `billingStatus` out keeps the current one and only updates the ids and plan.
  */
 export async function saveBilling(input: {
   userId: string;
-  billingStatus: "active" | "past_due" | "canceled" | "none";
+  billingStatus?: BillingStatus;
   planId?: string | null;
   stripeCustomerId?: string | null;
   stripeSubscriptionId?: string | null;
@@ -82,6 +84,8 @@ export async function saveBilling(input: {
     .where(eq(users.id, input.userId))
     .limit(1);
   if (!current) return { access: false };
+  // Automations read the status through a short cache. A payment should switch them back on at once.
+  forgetBillingPauses();
   const planId = input.planId && getPlan(input.planId) ? input.planId : current.planId;
   const next = {
     planId,
@@ -105,11 +109,12 @@ export async function saveBilling(input: {
     }
     return { access: true };
   }
+  const billingStatus = input.billingStatus ?? current.billingStatus;
   await db
     .update(users)
-    .set({ billingStatus: input.billingStatus, ...next })
+    .set({ billingStatus, ...next })
     .where(eq(users.id, input.userId));
-  return { access: hasWorkspaceAccess(input.billingStatus) };
+  return { access: hasWorkspaceAccess(billingStatus) };
 }
 
 export async function rememberStripeCustomer(userId: string, customerId: string) {

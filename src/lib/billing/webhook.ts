@@ -1,5 +1,5 @@
-import { billingStatusFromStripe } from "@/lib/billing/access";
-import { findBillingUser, saveBilling } from "@/lib/billing/account";
+import { billingStatusFromStripe, hasWorkspaceAccess } from "@/lib/billing/access";
+import { findBillingUser, loadAccountBilling, saveBilling } from "@/lib/billing/account";
 import { invoiceIsPaid, invoiceSubscriptionId, invoiceSubscriptionMetadata } from "@/lib/billing/invoice";
 import { recordBillingPayment } from "@/lib/billing/payments";
 import { stripeId, stripeRequest, type StripeObject } from "@/lib/billing/stripe-api";
@@ -40,8 +40,23 @@ async function userFor(source: StripeObject, extraUserId?: string | null): Promi
   });
 }
 
+/** Stripe gave up, or money came back (refund, dispute, fraud warning). Closes the workspace and pauses automations. */
 async function suspend(userId: string) {
-  await saveBilling({ userId, billingStatus: "past_due" });
+  await saveBilling({ userId, billingStatus: "unpaid" });
+}
+
+/**
+ * True when the event is about a subscription other than the one on file while that one still
+ * gives access: an old subscription, or a second one from a double checkout. Those events must
+ * not change the account (a cancelled duplicate would otherwise close a paid workspace).
+ */
+async function foreignSubscription(userId: string, subscriptionId: string | null): Promise<boolean> {
+  if (!subscriptionId) return false;
+  const account = await loadAccountBilling(userId);
+  if (!account?.stripeSubscriptionId || account.stripeSubscriptionId === subscriptionId) return false;
+  if (!hasWorkspaceAccess(account.billingStatus)) return false;
+  log.warn("Stripe event for a subscription that isn't the account's current one", subscriptionId);
+  return true;
 }
 
 async function customerFromCharge(chargeId: string | null): Promise<string | null> {
@@ -53,7 +68,8 @@ async function customerFromCharge(chargeId: string | null): Promise<string | nul
 /**
  * Subscription state lives here, not on the browser's return page. A Checkout session opens the
  * workspace only once Stripe reports `payment_status=paid` (including `async_payment_succeeded`).
- * `unpaid` and `no_payment_required` leave it closed. A failed invoice, a cancellation, a full
+ * `unpaid` and `no_payment_required` leave it closed. A failed renewal only marks it `past_due`
+ * (still open) while Stripe retries the card. Stripe giving up (`unpaid`), a cancellation, a full
  * refund, a dispute or an early fraud warning closes it.
  *
  * The plan comes from Checkout metadata (`plan_id`) and the price lookup key. Charged amounts
@@ -74,6 +90,11 @@ export async function handleBillingEvent(event: StripeEvent): Promise<{ ok: true
     const stripeStatus = text(subscription?.status) ?? "active";
     const planId = text(metadata(object).plan_id) ?? (subscription ? text(metadata(subscription).plan_id) : null);
     const subscriptionId = stripeId(object.subscription);
+    if (await foreignSubscription(userId, subscriptionId)) {
+      // A second paid Checkout. Keep the first subscription and leave the duplicate for a refund.
+      log.warn("A second subscription was paid for one account, refund one of them in Stripe", userId);
+      return { ok: true, ignored: true };
+    }
     await saveBilling({
       userId,
       billingStatus: subscription && stripeStatus !== "active" ? billingStatusFromStripe(stripeStatus) : "active",
@@ -102,10 +123,13 @@ export async function handleBillingEvent(event: StripeEvent): Promise<{ ok: true
   if (type === "customer.subscription.created" || type === "customer.subscription.updated" || type === "customer.subscription.deleted") {
     const userId = await userFor(object);
     if (!userId) return { ok: true, ignored: true };
+    if (await foreignSubscription(userId, text(object.id))) return { ok: true, ignored: true };
     const status = type === "customer.subscription.deleted" ? "canceled" : billingStatusFromStripe(text(object.status));
     await saveBilling({
       userId,
-      billingStatus: status,
+      // `incomplete` and friends say nothing about access. Stripe can deliver `subscription.created`
+      // (still incomplete) after the paid Checkout, and it must not close a workspace just paid for.
+      billingStatus: status === "none" ? undefined : status,
       planId: text(metadata(object).plan_id),
       stripeCustomerId: stripeId(object.customer),
       stripeSubscriptionId: text(object.id),
@@ -119,8 +143,13 @@ export async function handleBillingEvent(event: StripeEvent): Promise<{ ok: true
     const subMeta = invoiceSubscriptionMetadata(object);
     const userId = await userFor(object, text(subMeta.user_id));
     if (!userId) return { ok: true, ignored: true };
+    if (await foreignSubscription(userId, subscriptionId)) return { ok: true, ignored: true };
     if (type === "invoice.payment_failed") {
-      await suspend(userId);
+      // Stripe retries a failed renewal for days. The workspace stays open meanwhile, and closes
+      // when the subscription itself turns `unpaid` or `canceled`.
+      const account = await loadAccountBilling(userId);
+      if (!account || !hasWorkspaceAccess(account.billingStatus)) return { ok: true, ignored: true };
+      await saveBilling({ userId, billingStatus: "past_due" });
       return { ok: true };
     }
     if (!invoiceIsPaid(object)) return { ok: true, ignored: true };

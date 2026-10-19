@@ -79,7 +79,7 @@ Local-only `POST /api/dev/seed` (disabled in production) creates a demo bot, a l
 | `TELEGRAM_SENDS_PER_SECOND` | no | Default 20, capped at 25 |
 | `PORT` | Railway | Next.js reads this automatically |
 | `MEDIA_DIR` | no | Only for reading uploads saved on disk before they moved into the database. Default `.data/media` |
-| `ANTHROPIC_API_KEY` | optional | Server-wide AI (Claude) for accounts that have not saved their own key, and for the Overview growth agent. Accounts can instead paste an OpenRouter key on the AI assistant page; that key does not power the Overview agent. Without this variable the agent shows “not configured” |
+| `ANTHROPIC_API_KEY` | optional | Server-wide AI (Claude) for accounts that have not saved their own key. Accounts can instead paste an OpenRouter key on the AI assistant page, and the Overview growth agent uses that key too when one of the login's accounts has it. With neither, the agent shows “not configured” |
 | `AWS_SES_ACCESS_KEY_ID`, `AWS_SES_SECRET_ACCESS_KEY`, `AWS_SES_REGION`, `EMAIL_FROM` | for email | Amazon SES for password reset, welcome and hand-off emails. All four or email stays off. `EMAIL_FROM` must be verified in SES. Optional: `EMAIL_REPLY_TO`, `AWS_SES_SESSION_TOKEN` |
 | `AWS_SES_SNS_TOPIC_ARN` | no | The SNS topic SES publishes bounces and complaints to. Subscribe `https://<your domain>/api/email/feedback` to it (HTTPS); Recatch confirms the subscription and stops mailing addresses that hard-bounce or complain |
 | `ADMIN_TELEGRAM_CHAT_ID` | no | Also send team alerts to a Telegram chat (Slack / Discord / Teams alerts are set per account in Settings) |
@@ -181,9 +181,9 @@ Either set `ANTHROPIC_API_KEY` on the server, or let each account paste its own 
 - **Auto-reply** answers messages no flow or keyword matched.
 - **Live Chat** ✨ drafts three replies and summarizes intent and sentiment.
 - **Build with AI** turns a sentence into an inactive draft flow.
-- **Overview → Advanced** is a workspace growth agent. It reads every channel you own (contacts, tags, lead fields, flow stats) and can save a **draft** flow or a **draft** broadcast. It cannot turn a flow on, send a broadcast, or message anyone — those still need a click in the app. It uses `ANTHROPIC_API_KEY` on the server. If that variable is missing, the card says the agent is not configured. Chat history is stored per login.
+- **Overview → Advanced** is a workspace growth agent. It reads every channel you own (contacts, tags, lead fields, flow stats) and can save a **draft** flow or a **draft** broadcast. It cannot turn a flow on, send a broadcast, or message anyone. Those still need a click in the app. It runs on an OpenRouter key when one of the login's own accounts has saved one (the most recently updated account with a key wins), so that customer pays for it; otherwise on `ANTHROPIC_API_KEY`. With neither, the card says the agent is not configured. Chat history is stored per login, and each login gets 30 agent messages an hour.
 
-Requests use `claude-opus-5-5` with structured outputs, prompt caching and server-side refusal fallbacks. The Overview agent uses the same model with tool calls.
+Requests use `claude-opus-5-5` with structured outputs, prompt caching and server-side refusal fallbacks. The Overview agent uses the same model with tool calls, or the account's OpenRouter model when it runs on that key (the model has to support tool calling).
 
 ## API & webhooks
 

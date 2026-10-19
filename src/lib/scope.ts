@@ -16,6 +16,15 @@ export const FOCUS_COOKIE = "relay.focusBotId";
  */
 export const VIEW_COOKIE = "relay.channelView";
 
+/**
+ * Only Overview and Live Chat can merge every channel. Every other console page reads
+ * and writes one account (`ScopeChoice.bot`), so the switcher there names that account
+ * and never says All channels.
+ */
+export function isAggregatePath(pathname: string) {
+  return pathname === "/" || pathname === "/inbox" || pathname.startsWith("/inbox/");
+}
+
 export type ScopeChoice<T extends { id: string }> = {
   /** Overview and Live Chat combine every channel the workspace owns. */
   aggregate: boolean;
@@ -26,7 +35,7 @@ export type ScopeChoice<T extends { id: string }> = {
 /**
  * `view` is `relay.channelView`. It is empty until someone picks All channels or one
  * channel in the switcher. A stored `relay.botId` is only a fallback for editor pages
- * when `relay.focusBotId` is missing — it does not narrow Overview or Live Chat.
+ * when `relay.focusBotId` is missing. It does not narrow Overview or Live Chat.
  */
 export function resolveScope<T extends { id: string }>(
   bots: T[],
@@ -42,4 +51,21 @@ export function resolveScope<T extends { id: string }>(
     if (selected) return { aggregate: false, bot: selected };
   }
   return { aggregate: true, bot: focus };
+}
+
+/**
+ * What a pick in the switcher changes. With `keepView` (a pick on a single-account page)
+ * the account those pages use moves, and Overview and Live Chat stay on All channels if
+ * that is where they were. If they were narrowed to one channel, they follow the pick, or
+ * `resolveScope` would keep handing out the old channel. The server writes these cookies
+ * and `BotProvider` applies the same result to its own state, so both land on one account.
+ */
+export function applySelection(
+  current: { aggregate: boolean },
+  choice: string,
+  keepView: boolean,
+): { aggregate: boolean; view?: string; focus?: string } {
+  if (choice === ALL_CHANNELS) return { aggregate: true, view: ALL_CHANNELS };
+  if (keepView && current.aggregate) return { aggregate: true, focus: choice };
+  return { aggregate: false, view: choice, focus: choice };
 }

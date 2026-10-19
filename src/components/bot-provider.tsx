@@ -3,8 +3,8 @@
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ChannelId } from "@/lib/channels/types";
-import { BOT_STORAGE_KEY, api } from "@/lib/client";
-import { ALL_CHANNELS } from "@/lib/scope";
+import { api } from "@/lib/client";
+import { ALL_CHANNELS, applySelection } from "@/lib/scope";
 
 export type PublicBot = {
   id: string;
@@ -33,7 +33,11 @@ type BotContextValue = {
   scope: string;
   aggregate: boolean;
   loading: boolean;
-  setBotId: (id: string) => void;
+  /**
+   * Pick `all` or a channel. `keepView` is for single-account pages: it moves the account they
+   * edit and leaves Overview and Live Chat on All channels (see `applySelection`).
+   */
+  setBotId: (id: string, options?: { keepView?: boolean }) => void;
   refresh: () => Promise<void>;
 };
 
@@ -74,23 +78,18 @@ export function BotProvider({
   }, [refresh]);
 
   const setBotId = useCallback(
-    (id: string) => {
-      try {
-        localStorage.setItem(BOT_STORAGE_KEY, id);
-      } catch {
-        // Private mode can reject storage; the cookie is what server pages read.
-      }
-      if (id === ALL_CHANNELS) setScopeState(ALL_CHANNELS);
-      else {
-        setScopeState(id);
-        setBotIdState(id);
-      }
+    (id: string, options?: { keepView?: boolean }) => {
+      const keepView = options?.keepView === true;
+      // Same rule the select route uses to write the cookies, so this state and the server agree.
+      const next = applySelection({ aggregate: scope === ALL_CHANNELS }, id, keepView);
+      setScopeState(next.aggregate ? ALL_CHANNELS : id);
+      if (next.focus) setBotIdState(next.focus);
       // Server pages read the cookie, so switching accounts re-renders inbox, contacts, and flows for it.
-      void api("/api/bots/select", { method: "POST", body: JSON.stringify({ botId: id }) })
+      void api("/api/bots/select", { method: "POST", body: JSON.stringify({ botId: id, keepView }) })
         .then(() => router.refresh())
         .catch(() => undefined);
     },
-    [router],
+    [router, scope],
   );
 
   const value = useMemo(
@@ -114,4 +113,24 @@ export function useBot() {
   const value = useContext(BotContext);
   if (!value) throw new Error("useBot must be used within BotProvider");
   return value;
+}
+
+/**
+ * Pins the context to one account for a page that belongs to it, like the flow editor,
+ * whatever the switcher last picked. Without it the simulator and AI rewrite would read
+ * the switcher's account while the canvas saves to the flow's own.
+ */
+export function PinnedBot({ botId, children }: { botId: string; children: React.ReactNode }) {
+  const parent = useBot();
+  const { botId: picked, bots, setBotId } = parent;
+  // Move the switcher (and the cookie server pages read) to this account, so the sidebar and
+  // the next page agree with what is on screen. Overview links open flows from any account.
+  useEffect(() => {
+    if (picked !== botId && bots.some((item) => item.id === botId)) setBotId(botId, { keepView: true });
+  }, [picked, botId, bots, setBotId]);
+  const value = useMemo(
+    () => ({ ...parent, bot: parent.bots.find((item) => item.id === botId) ?? null, botId, scope: botId, aggregate: false }),
+    [parent, botId],
+  );
+  return <BotContext.Provider value={value}>{children}</BotContext.Provider>;
 }

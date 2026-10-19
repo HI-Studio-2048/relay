@@ -24,7 +24,7 @@ const sketch: GeneratedFlow = {
     { id: "s4", type: "question", text: "Phone?", buttons: [], field: "phone", tag: "", minutes: 0, next: "s5" },
     { id: "s5", type: "question", text: "Company?", buttons: [], field: "company", tag: "", minutes: 0, next: "s6" },
     { id: "s6", type: "tag", text: "", buttons: [], field: "", tag: "lead", minutes: 0, next: "s7" },
-    { id: "s7", type: "end", text: "Thanks — this is a draft until you turn it on.", buttons: [], field: "", tag: "", minutes: 0, next: "" },
+    { id: "s7", type: "end", text: "Thanks, this is a draft until you turn it on.", buttons: [], field: "", tag: "", minutes: 0, next: "" },
   ],
 };
 
