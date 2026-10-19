@@ -274,6 +274,8 @@ export type FlowEditorRecord = {
   isActive: boolean;
   priority?: number;
   definition: FlowDefinition;
+  /** The flow's updated_at as an ISO string: the version the editor's saves are based on. */
+  updatedAt?: string;
 };
 
 export type ContactRecord = {

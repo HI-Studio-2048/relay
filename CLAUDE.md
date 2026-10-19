@@ -44,7 +44,8 @@ Environment variables live in Railway and never in the repo or in chat. `.env.ex
 - Console pages copy their server data into state (`useState(props)`), so switching accounts would leave the old account's data on screen. `src/app/(console)/layout.tsx` keys the page area on the selected account so every page remounts. Before that fix, the Flows list showed one account while New flow saved to another.
 - Uploads and received media live in Postgres (`media_files`), not on disk: the container disk is wiped on every deploy, and production had lost every upload. `src/lib/media.ts` still reads old files from `MEDIA_DIR` if a volume ever kept any.
 - A push restarts the server when the deploy switches over, which cuts off any long request in flight (a Missed comments send, for one). Don't push while someone is sending.
-- The flow editor saves whatever its tab loaded. A tab opened before a change (yours, or a fix made in the database) overwrites it on save. Tell people to reload first.
+- The flow editor sends the flow's `updated_at` it loaded (`baseUpdatedAt`) with every save, and the route refuses a stale one with 409 (`src/lib/flow-version.ts`), so a tab opened before a change can no longer overwrite it. Callers that send no version (`/api/v1`, the agent, imports) are not checked. A fix made by hand in the database must bump `updated_at`, or open tabs won't notice it.
+- Railway settings (builder, healthcheck) live on the service itself. `railway.toml` was removed on 2026-10-19 because Config as Code ends on 2026-12-01, and the start command is Railpack's default `npm run start`. Railway's TypeScript config (`.railway/railway.ts`) would need the `railway` npm package and isn't used.
 - Changing live data by hand: do it through `railway ssh` with the `postgres` package, in a transaction, and for a flow put the old row in `flow_versions` first so it can be restored from the editor's History.
 
 ## Where things are

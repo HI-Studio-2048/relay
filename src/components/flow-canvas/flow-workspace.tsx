@@ -14,7 +14,7 @@ import { FlowStatsContext, type NodeStats } from "@/components/flow-canvas/flow-
 import type { FlowCanvasHandle } from "@/components/flow-canvas/flow-canvas-editor";
 import type { FlowMeta, InspectorField, InspectorFlowOption } from "@/components/flow-canvas/node-inspector";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/client";
+import { ApiError, api } from "@/lib/client";
 import { exportFlow } from "@/lib/flow-import";
 import { CHANNELS, type ChannelId } from "@/lib/channels/types";
 import type { CanvasValidation } from "@/lib/flow-canvas";
@@ -56,6 +56,8 @@ export function FlowWorkspace({
   const [testing, setTesting] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showMissed, setShowMissed] = useState(false);
+  // Set when a save was refused because the flow changed elsewhere since this tab loaded it.
+  const [stale, setStale] = useState(false);
   const [stepStats, setStepStats] = useState<Record<string, { sent: number; clicks: number }>>({});
   const [flowStats, setFlowStats] = useState<{ runs: number; people: number; ctr: number; completionRate: number; clicks: number } | null>(null);
 
@@ -112,13 +114,21 @@ export function FlowWorkspace({
     }
     setSaving(true);
     try {
+      const { updatedAt, ...fields } = next;
+      // Send the version this tab is based on; the server refuses (409) if the flow changed since.
       const data = await api<{ flow: FlowEditorRecord }>(`/api/flows/${next.id}`, {
         method: "PATCH",
-        body: JSON.stringify(next),
+        body: JSON.stringify({ ...fields, baseUpdatedAt: updatedAt }),
       });
+      // Adopt the new version so the next save from this tab goes through.
       setFlow({ ...data.flow, botId: next.botId });
       toast.success("Flow saved");
     } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        setStale(true);
+        toast.error(error.message);
+        return;
+      }
       toast.error(error instanceof Error ? error.message : "Save failed");
     } finally {
       setSaving(false);
@@ -291,11 +301,28 @@ export function FlowWorkspace({
         </div>
       ) : null}
 
+      {stale ? (
+        <div role="alert" className="flex flex-col gap-2 border-b border-amber-300 bg-amber-50 px-4 py-2.5 text-[13px] text-amber-900 sm:flex-row sm:items-center sm:justify-between dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
+          <p>
+            This flow was changed somewhere else since you opened it. Reload to get the latest version, then make your change again.
+            Nothing from this tab was saved, and reloading drops the edits you made here, so copy anything you want to keep first.
+          </p>
+          <Button size="sm" variant="outline" className="shrink-0" onClick={() => window.location.reload()}>
+            Reload
+          </Button>
+        </div>
+      ) : null}
+
       <div className="relative flex min-h-0 flex-1 flex-col">
       {showMissed ? <MissedComments flowId={flow.id} onClose={() => setShowMissed(false)} /> : null}
       {showHistory ? (
         <FlowHistory
           flowId={flow.id}
+          baseUpdatedAt={flow.updatedAt}
+          onStale={() => {
+            setStale(true);
+            setShowHistory(false);
+          }}
           onClose={() => setShowHistory(false)}
           onRestored={(restored) => {
             setFlow({ ...restored, botId: flow.botId });

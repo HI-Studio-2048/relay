@@ -5,6 +5,7 @@ import { FlowWorkspace } from "@/components/flow-canvas/flow-workspace";
 import { FlowSharePanel } from "@/components/chrome/flow-share-panel";
 import { ownsBot } from "@/lib/auth/resources";
 import { getDb } from "@/lib/db";
+import { flowVersionOf } from "@/lib/flow-version";
 import { channelOf } from "@/lib/channels/types";
 import { bots, customFields, flows, tags } from "@/lib/db/schema";
 import { listGrowthLinksForFlow } from "@/lib/growth-links";
@@ -40,6 +41,7 @@ export default async function FlowEditorPage({ params }: { params: Promise<{ id:
               triggerValue: flow.triggerValue,
               isActive: flow.isActive,
               definition: flow.definition as FlowDefinition,
+              updatedAt: flowVersionOf(flow.updatedAt),
             }}
             customFields={fieldRows.map((field) => ({ key: field.key, label: field.label }))}
             tagNames={tagRows.map((tag) => tag.name)}

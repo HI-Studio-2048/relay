@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { History, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { api } from "@/lib/client";
+import { ApiError, api } from "@/lib/client";
 import type { FlowEditorRecord } from "@/lib/types";
 
 type Version = { id: string; name: string; triggerType: string; triggerValue: string | null; author: string | null; createdAt: string; steps: number };
@@ -12,11 +12,16 @@ type Version = { id: string; name: string; triggerType: string; triggerValue: st
 /** Saved versions of a flow (the state before each save), newest first, with restore. */
 export function FlowHistory({
   flowId,
+  baseUpdatedAt,
   onRestored,
+  onStale,
   onClose,
 }: {
   flowId: string;
+  /** The version the editor is on. A restore is refused (409) if the flow changed elsewhere since. */
+  baseUpdatedAt?: string;
   onRestored: (flow: FlowEditorRecord) => void;
+  onStale: () => void;
   onClose: () => void;
 }) {
   const [versions, setVersions] = useState<Version[] | null>(null);
@@ -37,10 +42,18 @@ export function FlowHistory({
     if (!window.confirm(`Restore the version from ${new Date(version.createdAt).toLocaleString()}? The current flow is kept in history.`)) return;
     setBusy(true);
     try {
-      const data = await api<{ flow: FlowEditorRecord }>(`/api/flows/${flowId}/versions/${version.id}`, { method: "POST" });
+      const data = await api<{ flow: FlowEditorRecord }>(`/api/flows/${flowId}/versions/${version.id}`, {
+        method: "POST",
+        body: JSON.stringify({ baseUpdatedAt }),
+      });
       toast.success("Version restored");
       onRestored(data.flow);
     } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        toast.error(error.message);
+        onStale();
+        return;
+      }
       toast.error(error instanceof Error ? error.message : "Could not restore");
     } finally {
       setBusy(false);
