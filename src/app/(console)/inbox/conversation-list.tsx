@@ -187,7 +187,7 @@ export function ConversationList({ initialThreads = null }: { initialThreads?: T
           );
           if (!notifyRef.current || typeof Notification === "undefined") return;
           for (const thread of fresh.slice(0, 3)) {
-            const note = new Notification(thread.name, { body: thread.lastBody, tag: thread.contactId, icon: "/icon.svg" });
+            const note = new Notification(thread.name, { body: thread.lastBody, tag: thread.contactId, icon: "/brand/recatch-icon.png" });
             note.onclick = () => {
               window.focus();
               router.push(`/inbox/${thread.contactId}`);

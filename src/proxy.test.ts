@@ -7,6 +7,8 @@ const isPassedThrough = (response: Response) => response.headers.get("x-middlewa
 
 describe("what a signed-out visitor can reach", () => {
   it.each([
+    ["the favicon, which reviewers fetch", "/icon.png", "GET"],
+    ["the logo", "/brand/recatch-icon.png", "GET"],
     ["Bluesky's client metadata file, which Bluesky's servers fetch", "/api/bluesky/client-metadata.json", "GET"],
     ["Bluesky's public key list", "/api/bluesky/jwks.json", "GET"],
     ["the shared Slack events URL", "/api/slack/events", "POST"],

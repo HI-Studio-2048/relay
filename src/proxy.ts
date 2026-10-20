@@ -6,6 +6,10 @@ import { SESSION_COOKIE, USER_HEADER, verifySessionToken } from "@/lib/auth/sess
  * clients, each of which does its own auth (signatures, verify tokens, API keys).
  */
 const PUBLIC_PREFIXES = [
+  // The favicon and logo, which platform reviewers and link previews fetch while signed out.
+  "/icon.png",
+  "/apple-icon.png",
+  "/brand",
   "/welcome",
   "/login",
   "/signup",
