@@ -5,11 +5,27 @@ import { statsByFlow } from "@/lib/analytics";
 import { validateFlowDefinition } from "@/lib/agent/validate-flow";
 import { getDb } from "@/lib/db";
 import { bots, broadcasts, contactTags, contacts, customFields, flows, tags } from "@/lib/db/schema";
-import { loadWorkspaceOverview } from "@/lib/dashboard";
+import { loadChecklist, loadWorkspaceOverview } from "@/lib/dashboard";
+import { FLOW_TEMPLATES, findTemplate } from "@/lib/flow-templates";
 import type { TriggerType } from "@/lib/types";
 
 const TRIGGERS = new Set<TriggerType>(["start", "keyword", "keyword_contains", "comment", "story_reply", "story_mention", "default"]);
 const STEP_TYPES = new Set(["message", "question", "tag", "delay", "ai", "end"]);
+
+/** Networks whose comments can start a flow, and the ones with stories. */
+const COMMENT_CHANNELS = new Set(["zernio", "instagram", "messenger", "youtube", "bluesky"]);
+const STORY_CHANNELS = new Set(["zernio", "instagram"]);
+
+/** Why a trigger cannot work on this channel, or null when it can. */
+function triggerProblem(channel: string, triggerType: string) {
+  if (triggerType === "comment" && !COMMENT_CHANNELS.has(channel)) {
+    return "Comment triggers only work on Instagram, Facebook, YouTube and Bluesky accounts. Use one of those channels, or a DM keyword trigger instead.";
+  }
+  if ((triggerType === "story_reply" || triggerType === "story_mention") && !STORY_CHANNELS.has(channel)) {
+    return "Story triggers only work on Instagram accounts.";
+  }
+  return null;
+}
 
 export type DraftLink = {
   kind: "flow" | "broadcast";
@@ -38,6 +54,7 @@ type SketchStep = {
 type Sketch = {
   botId?: string;
   flowId?: string;
+  templateId?: string;
   name?: string;
   triggerType?: string;
   keywords?: string;
@@ -110,6 +127,8 @@ export async function createDraftFlow(ownerId: string, input: unknown): Promise<
   const sketch = asSketch(input);
   const bot = await ownedBot(ownerId, sketch.botId);
   if (!bot) return { output: { error: "Channel not found in this workspace" } };
+  const problem = triggerProblem(bot.channel, sketch.triggerType ?? "");
+  if (problem) return { output: { error: problem } };
   const compiled = compileSketch(sketch);
   if ("error" in compiled) return { output: { error: compiled.error } };
   const db = await getDb();
@@ -137,7 +156,7 @@ export async function updateDraftFlow(ownerId: string, input: unknown): Promise<
   if (!sketch.flowId) return { output: { error: "flowId is required" } };
   const db = await getDb();
   const [row] = await db
-    .select({ flow: flows, botName: bots.name, ownerId: bots.ownerId })
+    .select({ flow: flows, botName: bots.name, channel: bots.channel, ownerId: bots.ownerId })
     .from(flows)
     .innerJoin(bots, eq(bots.id, flows.botId))
     .where(and(eq(flows.id, sketch.flowId), eq(bots.ownerId, ownerId)))
@@ -146,6 +165,8 @@ export async function updateDraftFlow(ownerId: string, input: unknown): Promise<
   if (row.flow.isActive) {
     return { output: { error: "This flow is already on. The agent only edits drafts. Ask the user to change a live flow in the editor." } };
   }
+  const problem = triggerProblem(row.channel, sketch.triggerType ?? "");
+  if (problem) return { output: { error: problem } };
   const compiled = compileSketch({ ...sketch, name: sketch.name || row.flow.name });
   if ("error" in compiled) return { output: { error: compiled.error } };
   await db
@@ -378,6 +399,88 @@ async function searchContacts(ownerId: string, input: unknown): Promise<ToolResu
   };
 }
 
+/** Install a template as a draft that is off, optionally with the user's own keyword. */
+export async function createFunnelFromTemplate(ownerId: string, input: unknown): Promise<ToolResult> {
+  const sketch = asSketch(input);
+  const bot = await ownedBot(ownerId, sketch.botId);
+  if (!bot) return { output: { error: "Channel not found in this workspace" } };
+  const template = sketch.templateId ? findTemplate(sketch.templateId) : null;
+  if (!template) return { output: { error: "Unknown templateId. Call list_funnel_templates and use one of its ids." } };
+  const problem = triggerProblem(bot.channel, template.triggerType);
+  if (problem) return { output: { error: problem } };
+  const keyword = sketch.keywords?.trim().slice(0, 120);
+  const takesKeyword = template.triggerType === "keyword" || template.triggerType === "keyword_contains" || template.triggerType === "comment";
+  const triggerValue = takesKeyword && keyword ? keyword : template.triggerValue;
+  const name = sketch.name?.trim().slice(0, 120) || template.name;
+  const db = await getDb();
+  const id = crypto.randomUUID();
+  await db.insert(flows).values({
+    id,
+    botId: bot.id,
+    name,
+    triggerType: template.triggerType,
+    triggerValue,
+    isActive: false,
+    priority: 0,
+    definition: structuredClone(template.definition),
+  });
+  const draft: DraftLink = { kind: "flow", id, name, href: `/flows/${id}`, botName: bot.name };
+  return {
+    output: {
+      ...draft,
+      isActive: false,
+      template: template.name,
+      keyword: triggerValue,
+      note: "Saved from the template as a draft that is off. Links like https://example.com are placeholders to replace in the editor. The user must open it and turn it on. Do not claim it is live.",
+    },
+    draft,
+  };
+}
+
+async function listFunnelTemplates(): Promise<ToolResult> {
+  return {
+    output: {
+      templates: FLOW_TEMPLATES.map((template) => ({
+        id: template.id,
+        name: template.name,
+        description: template.description,
+        category: template.category,
+        networks: template.channels,
+        trigger: template.triggerType,
+        keyword: template.triggerValue,
+      })),
+    },
+  };
+}
+
+/** The Overview "Get set up" checklist for each channel, for walking a new customer through it. */
+async function setupProgress(ownerId: string): Promise<ToolResult> {
+  const db = await getDb();
+  const rows = await db
+    .select({ id: bots.id, name: bots.name, channel: bots.channel, status: bots.status })
+    .from(bots)
+    .where(eq(bots.ownerId, ownerId))
+    .limit(10);
+  if (rows.length === 0) {
+    return { output: { channels: [], next: { label: "Connect your first channel", href: "/channels" } } };
+  }
+  const channels = await Promise.all(
+    rows.map(async (bot) => {
+      const steps = await loadChecklist(bot.id);
+      return {
+        botId: bot.id,
+        name: bot.name,
+        network: bot.channel,
+        status: bot.status,
+        done: steps.filter((item) => item.done).length,
+        total: steps.length,
+        steps: steps.map((item) => ({ label: item.label, done: item.done, href: item.href, hint: item.hint })),
+      };
+    }),
+  );
+  return { output: { channels } };
+}
+
 export const AGENT_TOOLS: {
   name: string;
   description: string;
@@ -436,6 +539,37 @@ export const AGENT_TOOLS: {
     run: (ownerId, input) => searchContacts(ownerId, input),
   },
   {
+    name: "get_setup_progress",
+    label: "Checking your setup",
+    description: "The Get set up checklist for each channel: connect, teach the AI, first comment-to-DM flow, first run, growth link, team. Each step has its page. Use it to guide a new customer.",
+    input_schema: { type: "object", properties: {} },
+    run: (ownerId) => setupProgress(ownerId),
+  },
+  {
+    name: "list_funnel_templates",
+    label: "Looking through templates",
+    description: "Ready-made funnels (comment-to-DM lead magnet, giveaway, follow to unlock, story replies, welcome menu, AI qualifier, booking, Stripe checkout and more) with the networks each suits.",
+    input_schema: { type: "object", properties: {} },
+    run: () => listFunnelTemplates(),
+  },
+  {
+    name: "create_funnel_from_template",
+    label: "Setting up a funnel from a template",
+    description:
+      "Install one template on one channel as a draft that is off. keywords replaces the template's trigger keyword (comma-separated). It is NOT activated; the user reviews it and turns it on.",
+    input_schema: {
+      type: "object",
+      properties: {
+        botId: { type: "string" },
+        templateId: { type: "string" },
+        name: { type: "string" },
+        keywords: { type: "string" },
+      },
+      required: ["botId", "templateId"],
+    },
+    run: (ownerId, input) => createFunnelFromTemplate(ownerId, input),
+  },
+  {
     name: "create_draft_flow",
     label: "Saving a draft flow",
     description:
@@ -446,7 +580,12 @@ export const AGENT_TOOLS: {
         botId: { type: "string" },
         name: { type: "string" },
         triggerType: { type: "string", enum: [...TRIGGERS] },
-        keywords: { type: "string", description: "Comma-separated keywords. Empty for start or default." },
+        keywords: { type: "string", description: "Comma-separated keywords. Empty for start or default. A comment trigger with no keyword answers every comment." },
+        publicReplies: {
+          type: "array",
+          items: { type: "string" },
+          description: "Comment triggers only: two or three short public replies posted under the comment, like \"Sent you a DM 📩\".",
+        },
         steps: {
           type: "array",
           items: {
@@ -486,6 +625,7 @@ export const AGENT_TOOLS: {
         name: { type: "string" },
         triggerType: { type: "string", enum: [...TRIGGERS] },
         keywords: { type: "string" },
+        publicReplies: { type: "array", items: { type: "string" } },
         steps: { type: "array" },
       },
       required: ["flowId", "triggerType", "steps"],

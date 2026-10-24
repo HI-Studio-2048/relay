@@ -427,4 +427,16 @@ CREATE TABLE IF NOT EXISTS agent_messages (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS agent_messages_owner_idx ON agent_messages(owner_id, created_at);
+
+-- Overview assistant spend on the server's Claude key, per login and UTC month (agent/budget.ts).
+CREATE TABLE IF NOT EXISTS assistant_usage (
+  owner_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  period text NOT NULL,
+  cost_micros bigint NOT NULL DEFAULT 0,
+  input_tokens bigint NOT NULL DEFAULT 0,
+  output_tokens bigint NOT NULL DEFAULT 0,
+  requests integer NOT NULL DEFAULT 0,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (owner_id, period)
+);
 `;
