@@ -13,20 +13,32 @@ function openRouterReply(message: Record<string, unknown>) {
   return new Response(JSON.stringify({ choices: [{ message }] }), { status: 200, headers: { "content-type": "application/json" } });
 }
 
-function anthropicReply(text: string) {
-  return new Response(
-    JSON.stringify({
-      id: "msg_1",
-      type: "message",
-      role: "assistant",
-      model: "claude-opus-5-5",
-      content: [{ type: "text", text }],
-      stop_reason: "end_turn",
-      stop_sequence: null,
-      usage: { input_tokens: 1, output_tokens: 1 },
-    }),
-    { status: 200, headers: { "content-type": "application/json" } },
-  );
+/** A streamed Claude answer, the way the assistant now asks for it. */
+function anthropicStream(text: string, usage = { input_tokens: 1000, output_tokens: 200 }) {
+  const events = [
+    {
+      type: "message_start",
+      message: {
+        id: "msg_1",
+        type: "message",
+        role: "assistant",
+        model: "claude-opus-5-5",
+        content: [],
+        stop_reason: null,
+        stop_sequence: null,
+        usage: { input_tokens: usage.input_tokens, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+      },
+    },
+    { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+    { type: "content_block_delta", index: 0, delta: { type: "text_delta", text } },
+    { type: "content_block_stop", index: 0 },
+    { type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: usage.output_tokens } },
+    { type: "message_stop" },
+  ];
+  return new Response(events.map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join(""), {
+    status: 200,
+    headers: { "content-type": "text/event-stream" },
+  });
 }
 
 function urlOf(input: unknown) {
@@ -139,19 +151,40 @@ describe("growth agent provider and limits", () => {
     expect(tool.content).not.toContain("Not yours");
   });
 
-  it("falls back to the server key when no account has an OpenRouter key", async () => {
+  it("falls back to the server key when no account has an OpenRouter key, streams, and counts the cost", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "server-key");
     (globalThis as { relayAnthropic?: unknown }).relayAnthropic = undefined;
-    const fetchMock = vi.fn(async () => anthropicReply("Hello from Claude"));
+    const fetchMock = vi.fn(async () => anthropicStream("Hello from Claude"));
     vi.stubGlobal("fetch", fetchMock);
     const { runWorkspaceAgent } = await import("@/lib/agent/run");
     const { workspaceAiProvider } = await import("@/lib/agent/provider");
     const provider = await workspaceAiProvider("owner-nokey");
-    const result = await runWorkspaceAgent({ ownerId: "owner-nokey", history: [], message: "hi", provider });
+    const deltas: string[] = [];
+    const result = await runWorkspaceAgent({
+      ownerId: "owner-nokey",
+      history: [],
+      message: "hi",
+      provider,
+      context: "Workspace facts: none",
+      onEvent: (event) => {
+        if (event.type === "delta") deltas.push(event.text);
+      },
+    });
     expect(result.reply).toBe("Hello from Claude");
-    const urls = (fetchMock.mock.calls as unknown as Call[]).map(([input]) => urlOf(input));
-    expect(urls.length).toBeGreaterThan(0);
-    expect(urls.every((url) => url.startsWith("https://api.anthropic.com/"))).toBe(true);
+    expect(deltas.join("")).toBe("Hello from Claude");
+    const calls = fetchMock.mock.calls as unknown as Call[];
+    expect(calls.length).toBe(1);
+    expect(calls.every(([input]) => urlOf(input).startsWith("https://api.anthropic.com/"))).toBe(true);
+    const [, init] = calls[0];
+    const sent = JSON.parse(init.body as string);
+    expect(sent).toMatchObject({ model: "claude-opus-5-5", stream: true, fallbacks: "default", cache_control: { type: "ephemeral" }, output_config: { effort: "medium" } });
+    expect(sent.system[0].cache_control).toEqual({ type: "ephemeral" });
+    expect(sent.system[1].text).toBe("Workspace facts: none");
+    expect(sent.tools.map((tool: { name: string }) => tool.name)).toContain("create_funnel_from_template");
+    expect(new Headers(init.headers).get("anthropic-beta")).toContain("server-side-fallback-2026-07-01");
+    const { readAssistantBudget } = await import("@/lib/agent/budget");
+    // 1,000 input tokens at $4 and 200 output tokens at $20 per million.
+    expect((await readAssistantBudget("owner-nokey")).spentUsd).toBeCloseTo(0.008, 6);
     (globalThis as { relayAnthropic?: unknown }).relayAnthropic = undefined;
   });
 

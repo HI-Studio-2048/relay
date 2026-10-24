@@ -31,3 +31,9 @@ export async function appendAgentMessage(input: { ownerId: string; role: "user" 
   if (extra.length) await db.delete(agentMessages).where(inArray(agentMessages.id, extra.map((row) => row.id)));
   return id;
 }
+
+/** "New chat": the login's whole conversation goes. Drafts it saved stay where they are. */
+export async function clearAgentHistory(ownerId: string) {
+  const db = await getDb();
+  await db.delete(agentMessages).where(eq(agentMessages.ownerId, ownerId));
+}

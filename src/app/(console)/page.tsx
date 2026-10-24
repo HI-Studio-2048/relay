@@ -9,8 +9,7 @@ import { StatusPill } from "@/components/chrome/status-pill";
 import { CanvasCard, ToneChip, type ToneName } from "@/components/chrome/tone";
 import { Button } from "@/components/ui/button";
 import { CHANNELS } from "@/lib/channels/types";
-import { aiConfigured } from "@/lib/ai";
-import { AgentChat } from "@/components/agent-chat";
+import { AssistantPanel } from "@/components/assistant/assistant-panel";
 import { ChannelSwitcher } from "@/components/channel-switcher";
 import { OverviewAggregate } from "@/components/overview-aggregate";
 import { consoleScope } from "@/lib/current-bot";
@@ -84,6 +83,7 @@ export default async function OverviewPage() {
           title="Recatch is ready for your accounts"
           description="Comment-to-DM, story replies, AI conversations, a shared inbox and segmented broadcasts across every social network."
         />
+        <AssistantPanel />
         <ConnectPrompt />
       </div>
     );
@@ -127,6 +127,8 @@ export default async function OverviewPage() {
           </Button>
         </Panel>
       ) : null}
+
+      <AssistantPanel />
 
       {remaining.length > 0 ? (
         <CanvasCard className="space-y-3 p-4">
@@ -364,14 +366,6 @@ export default async function OverviewPage() {
           </div>
         </CanvasCard>
       ) : null}
-
-      <section className="space-y-3">
-        <div>
-          <p className="text-[11px] font-semibold tracking-[0.14em] text-[#8b95a1] uppercase">Advanced</p>
-          <h2 className="font-heading text-[15px] text-[#1b1f24]">Workspace agent</h2>
-        </div>
-        <AgentChat initialConfigured={aiConfigured()} />
-      </section>
     </div>
   );
 }

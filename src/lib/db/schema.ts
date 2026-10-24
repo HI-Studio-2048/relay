@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   customType,
   doublePrecision,
@@ -273,6 +274,26 @@ export const agentMessages = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("agent_messages_owner_idx").on(table.ownerId, table.createdAt)],
+);
+
+/** What the Overview assistant cost on the server's Claude key, per login and UTC month. See agent/budget.ts. */
+export const assistantUsage = pgTable(
+  "assistant_usage",
+  {
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** UTC month, YYYY-MM. */
+    period: text("period").notNull(),
+    /** Millionths of a US dollar. */
+    costMicros: bigint("cost_micros", { mode: "number" }).notNull().default(0),
+    inputTokens: bigint("input_tokens", { mode: "number" }).notNull().default(0),
+    outputTokens: bigint("output_tokens", { mode: "number" }).notNull().default(0),
+    /** Model calls, several per message when tools run. */
+    requests: integer("requests").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.ownerId, table.period] })],
 );
 
 export const broadcasts = pgTable("broadcasts", {

@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import * as z from "zod/v4";
 import { openRouterParse, openRouterToolTurn, OpenRouterError, type AiProvider, type OpenRouterMessage } from "@/lib/ai-provider";
+import { priceUsage, type AgentUsage } from "@/lib/agent/pricing";
 import { log } from "@/lib/logger";
 import type { ContactRecord } from "@/lib/types";
 
@@ -38,19 +39,44 @@ function client() {
 export type AgentToolCall = { id: string; name: string; input: unknown };
 export type AgentMessage =
   | { role: "user"; content: string }
-  | { role: "assistant"; content: string; toolCalls: AgentToolCall[] }
-  | { role: "tool"; id: string; content: string };
+  | {
+      role: "assistant";
+      content: string;
+      toolCalls: AgentToolCall[];
+      /** Claude's content blocks as returned, so its thinking goes back unchanged within one tool loop. */
+      blocks?: Anthropic.Beta.BetaContentBlockParam[];
+    }
+  | { role: "tool"; id: string; content: string; isError?: boolean };
 export type AgentToolSpec = { name: string; description: string; input_schema: Record<string, unknown> };
+export type AgentEffort = "low" | "medium" | "high";
 
-function toAnthropic(messages: AgentMessage[]): Anthropic.MessageParam[] {
-  const out: Anthropic.MessageParam[] = [];
+/** One model turn of the agent loop. */
+export type AgentTurn = {
+  text: string;
+  toolCalls: AgentToolCall[];
+  blocks?: Anthropic.Beta.BetaContentBlockParam[];
+  /** True when the text already went out through `onText` while it was written. */
+  streamed?: boolean;
+  /** end_turn, tool_use, max_tokens, refusal... Absent on an OpenRouter key. */
+  stopReason?: string | null;
+};
+
+/** Room for adaptive thinking plus a funnel's worth of tool input. */
+const AGENT_MAX_TOKENS = 8000;
+
+function toAnthropic(messages: AgentMessage[]): Anthropic.Beta.BetaMessageParam[] {
+  const out: Anthropic.Beta.BetaMessageParam[] = [];
   for (const message of messages) {
     if (message.role === "user") {
       out.push({ role: "user", content: message.content });
       continue;
     }
     if (message.role === "assistant") {
-      const content: Anthropic.ContentBlockParam[] = [];
+      if (message.blocks?.length) {
+        out.push({ role: "assistant", content: message.blocks });
+        continue;
+      }
+      const content: Anthropic.Beta.BetaContentBlockParam[] = [];
       if (message.content.trim()) content.push({ type: "text", text: message.content });
       for (const call of message.toolCalls) {
         const input = call.input && typeof call.input === "object" ? (call.input as Record<string, unknown>) : {};
@@ -59,7 +85,12 @@ function toAnthropic(messages: AgentMessage[]): Anthropic.MessageParam[] {
       out.push({ role: "assistant", content: content.length ? content : [{ type: "text", text: "" }] });
       continue;
     }
-    const block: Anthropic.ToolResultBlockParam = { type: "tool_result", tool_use_id: message.id, content: message.content };
+    const block: Anthropic.Beta.BetaToolResultBlockParam = {
+      type: "tool_result",
+      tool_use_id: message.id,
+      content: message.content,
+      ...(message.isError ? { is_error: true } : {}),
+    };
     const previous = out[out.length - 1];
     if (previous && previous.role === "user" && Array.isArray(previous.content)) {
       previous.content.push(block);
@@ -92,20 +123,62 @@ function toOpenRouter(system: string, messages: AgentMessage[]): OpenRouterMessa
 }
 
 /**
- * One tool-using turn for the Overview growth agent. With `provider` (an OpenRouter key saved on one
- * of the login's accounts, see agent/provider.ts) the call goes to OpenRouter and bills that key;
- * without it, the server's Anthropic key.
+ * What goes back to Claude from one turn. A refusal that fell back to another model part way through
+ * leaves a `fallback` block; before it, only the declined attempt's text may be echoed, and only the
+ * tool calls after it are real.
+ */
+function splitAtFallback(content: Anthropic.Beta.BetaContentBlock[]) {
+  const boundary = content.map((block) => block.type).lastIndexOf("fallback");
+  const kept = content.filter((block, index) => index > boundary || block.type === "text");
+  return { blocks: kept as unknown as Anthropic.Beta.BetaContentBlockParam[], live: content.slice(boundary + 1) };
+}
+
+/** Claude errors in words the person chatting can act on. A stop they asked for is passed through as is. */
+function agentError(error: unknown) {
+  if (error instanceof Anthropic.APIUserAbortError) return error;
+  if (error instanceof Anthropic.RateLimitError) return new AiUnavailableError("Claude is busy right now. Try again in a minute.");
+  if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError) {
+    log.error("Anthropic refused the server key", error.message);
+    return new AiUnavailableError("The assistant is not available right now.");
+  }
+  if (error instanceof Anthropic.APIConnectionError || error instanceof Anthropic.InternalServerError) {
+    return new AiUnavailableError("Claude could not be reached. Try again in a minute.");
+  }
+  return error;
+}
+
+async function reportUsage(onUsage: ((usage: AgentUsage) => Promise<void> | void) | undefined, message: Anthropic.Beta.BetaMessage) {
+  if (!onUsage) return;
+  try {
+    await onUsage(priceUsage(message.usage, message.model));
+  } catch (error) {
+    log.error("Could not record assistant usage", error);
+  }
+}
+
+/**
+ * One tool-using turn of the Overview assistant. With `provider` (an OpenRouter key saved on one of
+ * the login's accounts, see agent/provider.ts) the call goes to OpenRouter and bills that key. Without
+ * it, Claude on the server's key, streamed: `onText` gets the answer as it is written, and `onUsage`
+ * what the call cost, once, whether it finished or was stopped part way.
  */
 export async function createAgentCompletion(input: {
+  /** The fixed instructions. Cached together with the tools. */
   system: string;
+  /** Facts that change between messages (channels, setup, voice), placed after the cache breakpoint. */
+  context?: string;
   messages: AgentMessage[];
   tools: AgentToolSpec[];
   provider?: AiProvider;
-}): Promise<{ text: string; toolCalls: AgentToolCall[] }> {
+  effort?: AgentEffort;
+  onText?: (delta: string) => void;
+  onUsage?: (usage: AgentUsage) => Promise<void> | void;
+  signal?: AbortSignal;
+}): Promise<AgentTurn> {
   if (input.provider) {
     try {
       return await openRouterToolTurn(input.provider, {
-        messages: toOpenRouter(input.system, input.messages),
+        messages: toOpenRouter([input.system, input.context].filter(Boolean).join("\n\n"), input.messages),
         tools: input.tools.map((tool) => ({ type: "function", function: { name: tool.name, description: tool.description, parameters: tool.input_schema } })),
         maxTokens: 4096,
       });
@@ -115,24 +188,62 @@ export async function createAgentCompletion(input: {
     }
   }
   if (!aiConfigured()) {
-    throw new AiUnavailableError("The growth agent is off. Save an OpenRouter key on the AI assistant page, or set ANTHROPIC_API_KEY on the server.");
+    throw new AiUnavailableError("The assistant is off. Save an OpenRouter key on the AI assistant page, or set ANTHROPIC_API_KEY on the server.");
   }
-  const response = await client().messages.create({
-    model: AI_MODEL,
-    max_tokens: 4096,
-    system: input.system,
-    messages: toAnthropic(input.messages),
-    tools: input.tools.map((tool) => ({ name: tool.name, description: tool.description, input_schema: tool.input_schema as Anthropic.Tool.InputSchema })),
+  const stream = client().beta.messages.stream(
+    {
+      model: AI_MODEL,
+      max_tokens: AGENT_MAX_TOKENS,
+      betas: [FALLBACK_BETA],
+      fallbacks: "default",
+      // The automatic breakpoint caches the conversation so far, so each tool round reads it back at the cache rate.
+      cache_control: { type: "ephemeral" },
+      system: [
+        { type: "text", text: input.system, cache_control: { type: "ephemeral" } },
+        ...(input.context ? [{ type: "text" as const, text: input.context }] : []),
+      ],
+      messages: toAnthropic(input.messages),
+      tools: input.tools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        input_schema: tool.input_schema as Anthropic.Beta.BetaTool.InputSchema,
+      })),
+      output_config: { effort: input.effort ?? "medium" },
+    },
+    { signal: input.signal },
+  );
+  let snapshot: Anthropic.Beta.BetaMessage | undefined;
+  let textBlocks = 0;
+  stream.on("streamEvent", (event, message) => {
+    snapshot = message;
+    // Separate a second text block from the first, the same way the returned text joins them.
+    if (event.type === "content_block_start" && event.content_block.type === "text" && textBlocks++ > 0) input.onText?.("\n\n");
   });
-  const text = response.content
-    .filter((block): block is Anthropic.TextBlock => block.type === "text")
+  stream.on("text", (delta) => input.onText?.(delta));
+  let message: Anthropic.Beta.BetaMessage;
+  try {
+    message = await stream.finalMessage();
+  } catch (error) {
+    // A stream that failed or was stopped part way still billed what it had read and written.
+    if (snapshot) await reportUsage(input.onUsage, snapshot);
+    throw agentError(error);
+  }
+  await reportUsage(input.onUsage, message);
+  if (message.stop_reason === "refusal") log.warn("The assistant declined a request", message.stop_details?.category ?? "uncategorized");
+  const { blocks, live } = splitAtFallback(message.content);
+  const text = message.content
+    .filter((block): block is Anthropic.Beta.BetaTextBlock => block.type === "text")
     .map((block) => block.text)
-    .join("\n")
+    .join("\n\n")
     .trim();
-  const toolCalls = response.content
-    .filter((block): block is Anthropic.ToolUseBlock => block.type === "tool_use")
-    .map((block) => ({ id: block.id, name: block.name, input: block.input }));
-  return { text, toolCalls };
+  // A refusal can cut a tool call off part way, so that turn's tools never run.
+  const toolCalls =
+    message.stop_reason === "refusal"
+      ? []
+      : live
+          .filter((block): block is Anthropic.Beta.BetaToolUseBlock => block.type === "tool_use")
+          .map((block) => ({ id: block.id, name: block.name, input: block.input }));
+  return { text, toolCalls, blocks, streamed: Boolean(input.onText), stopReason: message.stop_reason };
 }
 
 /** Per-account AI settings, stored on bots.settings.ai. */
