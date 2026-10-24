@@ -58,7 +58,7 @@ describe("growth agent provider and limits", () => {
     process.chdir(mkdtempSync(path.join(tmpdir(), "recatch-agent-provider-")));
     const { getDb } = await import("@/lib/db");
     const { users, bots } = await import("@/lib/db/schema");
-    const { withOpenRouter } = await import("@/lib/ai-provider");
+    const { withAiKey } = await import("@/lib/ai-provider");
     const db = await getDb();
     await db.insert(users).values([
       { id: "owner-key", email: "key@example.test", name: "Key", passwordHash: "x" },
@@ -73,7 +73,7 @@ describe("growth agent provider and limits", () => {
         id: "old-key",
         ownerId: "owner-key",
         name: "Old key",
-        settings: withOpenRouter({}, { apiKey: "sk-or-old", model: "old/model" }),
+        settings: withAiKey({}, { provider: "openrouter", apiKey: "sk-or-old", model: "old/model" }),
         updatedAt: new Date("2026-10-01T00:00:00Z"),
       },
       {
@@ -81,7 +81,7 @@ describe("growth agent provider and limits", () => {
         id: "new-key",
         ownerId: "owner-key",
         name: "New key",
-        settings: withOpenRouter({}, { apiKey: "sk-or-new", model: "vendor/tool-model" }),
+        settings: withAiKey({}, { provider: "openrouter", apiKey: "sk-or-new", model: "vendor/tool-model" }),
         updatedAt: new Date("2026-10-10T00:00:00Z"),
       },
       { ...base, id: "nokey-bot", ownerId: "owner-nokey", name: "Shop" },
@@ -90,7 +90,7 @@ describe("growth agent provider and limits", () => {
         id: "other-bot",
         ownerId: "owner-other",
         name: "Not yours",
-        settings: withOpenRouter({}, { apiKey: "sk-or-other", model: "x/y" }),
+        settings: withAiKey({}, { provider: "openrouter", apiKey: "sk-or-other", model: "x/y" }),
       },
     ]);
   });

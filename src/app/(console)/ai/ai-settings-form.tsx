@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/lib/client";
 import { AiPlayground } from "@/components/ai-playground";
 import type { BotAiSettings, ConversationInsights } from "@/lib/ai";
-import { OpenRouterCard, type OpenRouterStatus } from "@/components/openrouter-card";
+import { AiKeyCard } from "@/components/ai-key-card";
+import type { AiKeyStatus } from "@/lib/ai-vendors";
 
 const EXAMPLES = [
   "When someone comments GUIDE on a post, DM them the free guide after they give their email, and tag them lead",
@@ -23,12 +24,12 @@ export function AiSettingsForm({
   botId,
   configured,
   initial,
-  openRouter,
+  aiKey,
 }: {
   botId: string;
   configured: boolean;
   initial: BotAiSettings;
-  openRouter: OpenRouterStatus;
+  aiKey: AiKeyStatus;
 }) {
   const router = useRouter();
   const [settings, setSettings] = useState(initial);
@@ -118,11 +119,11 @@ export function AiSettingsForm({
     <div className="space-y-5">
       {!configured ? (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-[13px] text-amber-900">
-          AI is off for this account. Add your OpenRouter key below to turn it on. Your settings still save.
+          AI is off for this account. Add your own AI key below (Anthropic, OpenAI, Google Gemini, OpenRouter and more) to turn it on. Your settings still save.
         </div>
       ) : null}
 
-      <OpenRouterCard botId={botId} initial={openRouter} />
+      <AiKeyCard botId={botId} initial={aiKey} />
 
       <Panel tone="action" icon={Wand2} label="Build a flow" title="Describe it, get a draft on the canvas">
         <div className="space-y-2">

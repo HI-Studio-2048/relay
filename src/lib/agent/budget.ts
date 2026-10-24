@@ -7,7 +7,7 @@ import { assistantUsage } from "@/lib/db/schema";
  * The Overview assistant runs on the company's Claude key, so every login gets a monthly allowance:
  * ASSISTANT_MONTHLY_BUDGET_USD, $5 when unset, and 0 turns the assistant off on the server key. Each
  * model call is priced (agent/pricing.ts) and added to that login's row for the UTC month. A login
- * whose account saved an OpenRouter key pays for itself and is never counted here.
+ * whose account saved its own AI key pays for itself and is never counted here.
  */
 export const DEFAULT_ASSISTANT_BUDGET_USD = 5;
 
@@ -82,5 +82,5 @@ export function formatResetDate(resetsAt: string) {
 
 /** The message shown once the month's allowance is used up. */
 export function budgetExhaustedMessage(budget: AssistantBudget) {
-  return `You've used this month's assistant allowance ($${budget.limitUsd.toFixed(2)}). It comes back on ${formatResetDate(budget.resetsAt)}. Anything I saved is still in your drafts, and you can keep going sooner by saving your own OpenRouter key on the AI assistant page.`;
+  return `You've used this month's assistant allowance ($${budget.limitUsd.toFixed(2)}). It comes back on ${formatResetDate(budget.resetsAt)}. Anything I saved is still in your drafts, and you can keep going sooner by saving your own AI key (Anthropic, OpenAI, OpenRouter and others) on the AI assistant page.`;
 }

@@ -111,6 +111,39 @@ describe("Overview assistant: monthly allowance, templates and setup help", () =
     expect(events.some((event) => event.type === "budget")).toBe(false);
   });
 
+  it("runs on the account's own Anthropic key, streamed, without touching the allowance", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "server-key");
+    const requests: RequestInit[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, init: RequestInit) => {
+        requests.push(init);
+        const events = [
+          { type: "message_start", message: { id: "m", type: "message", role: "assistant", model: "claude-sonnet-5-5", content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 10, output_tokens: 1 } } },
+          { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+          { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "On your own key." } },
+          { type: "content_block_stop", index: 0 },
+          { type: "message_delta", delta: { stop_reason: "end_turn", stop_sequence: null }, usage: { output_tokens: 5 } },
+          { type: "message_stop" },
+        ];
+        return new Response(events.map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join(""), { headers: { "content-type": "text/event-stream" } });
+      }),
+    );
+    const { runWorkspaceAgent } = await import("@/lib/agent/run");
+    const events: AgentEvent[] = [];
+    const result = await runWorkspaceAgent({
+      ownerId: "owner-capped",
+      history: [],
+      message: "hi",
+      provider: { kind: "anthropic", apiKey: "sk-ant-own", model: "claude-sonnet-5-5" },
+      onEvent: (event) => events.push(event),
+    });
+    expect(result.reply).toBe("On your own key.");
+    expect(new Headers(requests[0]?.headers).get("x-api-key")).toBe("sk-ant-own");
+    expect(JSON.parse(requests[0]?.body as string)).toMatchObject({ model: "claude-sonnet-5-5", stream: true, fallbacks: "default" });
+    expect(events.some((event) => event.type === "budget")).toBe(false);
+  });
+
   it("answers 429 with the reset date once the allowance is gone, and shows the allowance", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "server-key");
     const fetchMock = vi.fn();

@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const ownerId = await requireUserId();
     const provider = await workspaceAiProvider(ownerId);
     if (!aiConfigured(provider)) {
-      return json({ error: "The assistant isn't switched on for this workspace yet. Saving your own OpenRouter key on the AI assistant page turns it on now." }, 503);
+      return json({ error: "The assistant isn't switched on for this workspace yet. Saving your own AI key (Anthropic, OpenAI, OpenRouter and others) on the AI assistant page turns it on now." }, 503);
     }
     const body = await readJson<{ message?: string; voice?: boolean }>(request);
     const message = body.message?.trim().slice(0, 4000) ?? "";

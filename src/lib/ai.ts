@@ -1,16 +1,25 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import * as z from "zod/v4";
-import { openRouterParse, openRouterToolTurn, OpenRouterError, type AiProvider, type OpenRouterMessage } from "@/lib/ai-provider";
+import {
+  AiKeyError,
+  anthropicClientFor,
+  anthropicKeyError,
+  compatibleParse,
+  compatibleToolTurn,
+  type AiProvider,
+  type CompatibleMessage,
+} from "@/lib/ai-provider";
 import { priceUsage, type AgentUsage } from "@/lib/agent/pricing";
 import { log } from "@/lib/logger";
 import type { ContactRecord } from "@/lib/types";
 
 /**
  * Recatch's AI layer. One place for the client, model, structured outputs and refusal handling.
- * Claude through the server's own key by default; an account that saved an OpenRouter key (see
- * ai-provider.ts) sends its calls there instead. Anthropic calls opt into server-side refusal
- * fallbacks ("default" routes by category).
+ * Claude through the server's own key by default; an account that saved its own key (Anthropic,
+ * OpenAI, Google, xAI, Mistral, Groq, DeepSeek or OpenRouter, see ai-provider.ts) sends its calls there
+ * instead. Claude calls opt into server-side refusal fallbacks ("default" routes by category) on the
+ * models that take them.
  */
 export const AI_MODEL = "claude-opus-5-5";
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
@@ -35,6 +44,17 @@ function client() {
   return globalForAi.relayAnthropic;
 }
 
+/** Models that take the "default" refusal fallbacks. Others are sent without them. */
+const FALLBACK_MODELS = new Set(["claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"]);
+
+/** Which Claude to call: the account's own Anthropic key and model, or the server's key and AI_MODEL. */
+function claudeTarget(provider?: AiProvider) {
+  if (provider?.kind === "anthropic") {
+    return { anthropic: anthropicClientFor(provider.apiKey), model: provider.model, fallbacks: FALLBACK_MODELS.has(provider.model), own: true };
+  }
+  return { anthropic: client(), model: AI_MODEL, fallbacks: true, own: false };
+}
+
 /** Provider-neutral agent conversation, converted to Anthropic or OpenAI-style messages per call. */
 export type AgentToolCall = { id: string; name: string; input: unknown };
 export type AgentMessage =
@@ -57,7 +77,7 @@ export type AgentTurn = {
   blocks?: Anthropic.Beta.BetaContentBlockParam[];
   /** True when the text already went out through `onText` while it was written. */
   streamed?: boolean;
-  /** end_turn, tool_use, max_tokens, refusal... Absent on an OpenRouter key. */
+  /** end_turn, tool_use, max_tokens, refusal... Absent on an OpenAI-compatible key. */
   stopReason?: string | null;
 };
 
@@ -101,8 +121,8 @@ function toAnthropic(messages: AgentMessage[]): Anthropic.Beta.BetaMessageParam[
   return out;
 }
 
-function toOpenRouter(system: string, messages: AgentMessage[]): OpenRouterMessage[] {
-  const out: OpenRouterMessage[] = [{ role: "system", content: system }];
+function toCompatible(system: string, messages: AgentMessage[]): CompatibleMessage[] {
+  const out: CompatibleMessage[] = [{ role: "system", content: system }];
   for (const message of messages) {
     if (message.role === "user") out.push({ role: "user", content: message.content });
     else if (message.role === "tool") out.push({ role: "tool", tool_call_id: message.id, content: message.content });
@@ -134,8 +154,12 @@ function splitAtFallback(content: Anthropic.Beta.BetaContentBlock[]) {
 }
 
 /** Claude errors in words the person chatting can act on. A stop they asked for is passed through as is. */
-function agentError(error: unknown) {
+function agentError(error: unknown, own: boolean) {
   if (error instanceof Anthropic.APIUserAbortError) return error;
+  if (own) {
+    const explained = anthropicKeyError(error);
+    if (explained instanceof AiKeyError) return new AiUnavailableError(explained.message);
+  }
   if (error instanceof Anthropic.RateLimitError) return new AiUnavailableError("Claude is busy right now. Try again in a minute.");
   if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError) {
     log.error("Anthropic refused the server key", error.message);
@@ -157,10 +181,10 @@ async function reportUsage(onUsage: ((usage: AgentUsage) => Promise<void> | void
 }
 
 /**
- * One tool-using turn of the Overview assistant. With `provider` (an OpenRouter key saved on one of
- * the login's accounts, see agent/provider.ts) the call goes to OpenRouter and bills that key. Without
- * it, Claude on the server's key, streamed: `onText` gets the answer as it is written, and `onUsage`
- * what the call cost, once, whether it finished or was stopped part way.
+ * One tool-using turn of the Overview assistant. With `provider` (a key saved on one of the login's
+ * accounts, see agent/provider.ts) the call goes to that provider and bills that key; an Anthropic key
+ * takes the same streamed Claude path as the server's key. Claude streams: `onText` gets the answer as
+ * it is written, and `onUsage` what the call cost, once, whether it finished or was stopped part way.
  */
 export async function createAgentCompletion(input: {
   /** The fixed instructions. Cached together with the tools. */
@@ -175,27 +199,27 @@ export async function createAgentCompletion(input: {
   onUsage?: (usage: AgentUsage) => Promise<void> | void;
   signal?: AbortSignal;
 }): Promise<AgentTurn> {
-  if (input.provider) {
+  if (input.provider && input.provider.kind !== "anthropic") {
     try {
-      return await openRouterToolTurn(input.provider, {
-        messages: toOpenRouter([input.system, input.context].filter(Boolean).join("\n\n"), input.messages),
+      return await compatibleToolTurn(input.provider, {
+        messages: toCompatible([input.system, input.context].filter(Boolean).join("\n\n"), input.messages),
         tools: input.tools.map((tool) => ({ type: "function", function: { name: tool.name, description: tool.description, parameters: tool.input_schema } })),
         maxTokens: 4096,
       });
     } catch (error) {
-      if (error instanceof OpenRouterError) throw new AiUnavailableError(error.message);
+      if (error instanceof AiKeyError) throw new AiUnavailableError(error.message);
       throw error;
     }
   }
-  if (!aiConfigured()) {
-    throw new AiUnavailableError("The assistant is off. Save an OpenRouter key on the AI assistant page, or set ANTHROPIC_API_KEY on the server.");
+  if (!aiConfigured(input.provider)) {
+    throw new AiUnavailableError("The assistant is off. Save your own AI key on the AI assistant page, or set ANTHROPIC_API_KEY on the server.");
   }
-  const stream = client().beta.messages.stream(
+  const target = claudeTarget(input.provider);
+  const stream = target.anthropic.beta.messages.stream(
     {
-      model: AI_MODEL,
+      model: target.model,
       max_tokens: AGENT_MAX_TOKENS,
-      betas: [FALLBACK_BETA],
-      fallbacks: "default",
+      ...(target.fallbacks ? { betas: [FALLBACK_BETA], fallbacks: "default" as const } : {}),
       // The automatic breakpoint caches the conversation so far, so each tool round reads it back at the cache rate.
       cache_control: { type: "ephemeral" },
       system: [
@@ -226,7 +250,7 @@ export async function createAgentCompletion(input: {
   } catch (error) {
     // A stream that failed or was stopped part way still billed what it had read and written.
     if (snapshot) await reportUsage(input.onUsage, snapshot);
-    throw agentError(error);
+    throw agentError(error, target.own);
   }
   await reportUsage(input.onUsage, message);
   if (message.stop_reason === "refusal") log.warn("The assistant declined a request", message.stop_details?.category ?? "uncategorized");
@@ -331,23 +355,31 @@ type ParseInput = {
 };
 
 async function parse<T extends z.ZodType>(schema: T, input: ParseInput): Promise<z.infer<T>> {
-  if (input.provider) {
+  if (input.provider && input.provider.kind !== "anthropic") {
     try {
-      return await openRouterParse(input.provider, schema, { system: input.system, user: input.user, maxTokens: input.maxTokens ?? 16000 });
+      return await compatibleParse(input.provider, schema, { system: input.system, user: input.user, maxTokens: input.maxTokens ?? 16000 });
     } catch (error) {
-      if (error instanceof OpenRouterError) throw new AiUnavailableError(error.message);
+      if (error instanceof AiKeyError) throw new AiUnavailableError(error.message);
       throw error;
     }
   }
-  const response = await client().beta.messages.parse({
-    model: AI_MODEL,
+  const target = claudeTarget(input.provider);
+  const request = {
+    model: target.model,
     max_tokens: input.maxTokens ?? 16000,
-    betas: [FALLBACK_BETA],
-    fallbacks: "default",
-    system: [{ type: "text", text: input.system, cache_control: { type: "ephemeral" } }],
-    messages: [{ role: "user", content: input.user }],
+    ...(target.fallbacks ? { betas: [FALLBACK_BETA], fallbacks: "default" as const } : {}),
+    system: [{ type: "text" as const, text: input.system, cache_control: { type: "ephemeral" as const } }],
+    messages: [{ role: "user" as const, content: input.user }],
     output_config: { effort: input.effort, format: betaZodOutputFormat(schema) },
-  });
+  };
+  let response;
+  try {
+    response = await target.anthropic.beta.messages.parse(request);
+  } catch (error) {
+    if (!target.own) throw error;
+    const explained = anthropicKeyError(error);
+    throw explained instanceof AiKeyError ? new AiUnavailableError(explained.message) : explained;
+  }
   if (response.stop_reason === "refusal") {
     log.warn("AI declined a request", response.stop_details?.category ?? "uncategorized");
     throw new AiUnavailableError("The AI declined to answer this one");
