@@ -81,3 +81,28 @@ export function rankVoices<T extends VoiceLike>(voices: T[], lang: string): T[] 
     .filter((item) => item.score >= 0);
   return scored.sort((a, b) => b.score - a.score).map((item) => item.voice);
 }
+
+/** Short words that count as an interruption on their own. */
+const STOP_WORDS = new Set(["stop", "wait", "hold", "pause", "sorry", "hey", "no", "actually", "okay", "ok", "enough", "quiet"]);
+
+function wordsOf(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s']/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+/**
+ * True when what the microphone heard is the person talking over the answer, rather than the answer
+ * coming back through their speakers. Words the assistant itself is saying don't count, so an echo
+ * never interrupts it: it takes two new words, mostly new, or one stop word like "wait".
+ */
+export function isBargeIn(heard: string, speaking: string) {
+  const heardWords = wordsOf(heard);
+  if (heardWords.length === 0) return false;
+  const spoken = new Set(wordsOf(speaking));
+  const fresh = heardWords.filter((word) => !spoken.has(word));
+  if (fresh.some((word) => STOP_WORDS.has(word))) return true;
+  return fresh.length >= 2 && fresh.length / heardWords.length >= 0.5;
+}

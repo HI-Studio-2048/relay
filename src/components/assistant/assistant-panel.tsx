@@ -197,6 +197,13 @@ function AssistantBody({ fill }: { fill?: boolean }) {
         {a.voiceError ? <p className="max-w-md text-center text-[12px] text-red-600">{a.voiceError}</p> : null}
         {!a.support.speak ? <p className="text-[12px] text-[#6b7280]">This browser can&apos;t speak, so answers show as text.</p> : null}
         <p className="max-w-xs text-center text-[11px] text-[#8b95a1]">Keep talking while you move around Recatch. Ask it to open a page and it will.</p>
+        {a.support.listen ? (
+          <label className="flex items-center gap-2 text-[12px] text-[#1b1f24]">
+            <input type="checkbox" checked={a.bargeIn} onChange={(event) => a.chooseBargeIn(event.target.checked)} className="size-3.5 accent-[#0084ff]" />
+            Interrupt by talking
+            <span className="text-[#8b95a1]">(best with headphones)</span>
+          </label>
+        ) : null}
         <div className="flex flex-wrap items-center justify-center gap-2">
           {a.voices.length > 1 ? (
             <select

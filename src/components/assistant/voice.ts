@@ -124,6 +124,7 @@ export class Speaker {
   private buffer = "";
   private generation = 0;
   private waiters: (() => void)[] = [];
+  private said: string[] = [];
   voice: SpeechSynthesisVoice | null = null;
 
   constructor(
@@ -166,6 +167,11 @@ export class Speaker {
     return this.pending > 0;
   }
 
+  /** The last few sentences queued or spoken, so the microphone can tell its own echo from the person. */
+  get recentText() {
+    return this.said.join(" ");
+  }
+
   idle(): Promise<void> {
     if (this.pending === 0) return Promise.resolve();
     return new Promise((resolve) => this.waiters.push(resolve));
@@ -173,6 +179,7 @@ export class Speaker {
 
   private say(text: string) {
     if (!canSpeak()) return;
+    this.said = [...this.said.slice(-5), text];
     const generation = this.generation;
     const utterance = new SpeechSynthesisUtterance(text);
     if (this.voice) {
@@ -222,4 +229,30 @@ export function useVoices(lang: string) {
     };
   }, [lang]);
   return voices;
+}
+
+/**
+ * Listens while the assistant is thinking or speaking, for the person talking over it. `isBargeIn`
+ * decides whether what was heard is them rather than the assistant's own voice coming back through the
+ * speakers; the first time it says yes, `onBargeIn` runs (stop speaking, drop the answer) and listening
+ * carries on until they pause. `interrupted` tells the two endings apart: an interruption with what
+ * they said, or a stretch with nothing but echo, after which the caller starts another watch.
+ */
+export function watchForBargeIn(
+  lang: string,
+  isBargeIn: (heard: string) => boolean,
+  onBargeIn: (heard: string) => void,
+  onHearing: (heard: string) => void,
+) {
+  const watch = {
+    interrupted: false,
+    ...listenOnce(lang, (heard) => {
+      if (watch.interrupted) onHearing(heard);
+      else if (isBargeIn(heard)) {
+        watch.interrupted = true;
+        onBargeIn(heard);
+      }
+    }),
+  };
+  return watch;
 }
