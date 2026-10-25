@@ -1,4 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
+import { pageDescription } from "@/lib/assistant-pages";
 import { CHANNELS, type ChannelId } from "@/lib/channels/types";
 import { loadChecklist } from "@/lib/dashboard";
 import { getDb } from "@/lib/db";
@@ -24,7 +25,7 @@ export async function ownerFirstName(ownerId: string) {
  * has got, and whether they are talking out loud. They go after the prompt's cache breakpoint, so they
  * can change without paying for the instructions and tools again.
  */
-export async function loadAssistantContext(ownerId: string, options: { voice?: boolean; now?: Date } = {}) {
+export async function loadAssistantContext(ownerId: string, options: { voice?: boolean; page?: string; now?: Date } = {}) {
   const now = options.now ?? new Date();
   const db = await getDb();
   const [firstName, channels, flowRows] = await Promise.all([
@@ -45,6 +46,8 @@ export async function loadAssistantContext(ownerId: string, options: { voice?: b
     `- Today is ${new Intl.DateTimeFormat("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(now)} (UTC).`,
   ];
   if (firstName) lines.push(`- The person signed in is ${firstName}.`);
+  const page = options.page ? pageDescription(options.page) : null;
+  if (page) lines.push(`- They are looking at ${page} right now.`);
   if (channels.length === 0) {
     lines.push("- No channels are connected yet. Connecting the first one on [Channels](/channels) comes before anything else.");
   } else {

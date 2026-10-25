@@ -6,6 +6,7 @@ import { validateFlowDefinition } from "@/lib/agent/validate-flow";
 import { getDb } from "@/lib/db";
 import { bots, broadcasts, contactTags, contacts, customFields, flows, tags } from "@/lib/db/schema";
 import { loadChecklist, loadWorkspaceOverview } from "@/lib/dashboard";
+import { assistantHref, recordOf } from "@/lib/assistant-pages";
 import { FLOW_TEMPLATES, findTemplate } from "@/lib/flow-templates";
 import type { TriggerType } from "@/lib/types";
 
@@ -38,6 +39,8 @@ export type DraftLink = {
 export type ToolResult = {
   output: unknown;
   draft?: DraftLink;
+  /** A page to open in the person's browser while the conversation carries on. */
+  navigate?: string;
 };
 
 type SketchStep = {
@@ -64,6 +67,7 @@ type Sketch = {
   body?: string;
   query?: string;
   limit?: number;
+  path?: string;
 };
 
 function asSketch(input: unknown): Sketch {
@@ -481,6 +485,25 @@ async function setupProgress(ownerId: string): Promise<ToolResult> {
   return { output: { channels } };
 }
 
+/** Open one of the console pages, or a flow, broadcast or contact of this workspace, in the person's browser. */
+async function openPage(ownerId: string, input: unknown): Promise<ToolResult> {
+  const href = assistantHref(asSketch(input).path ?? "");
+  if (!href) return { output: { error: "Not a page you can open. Use a page path like /flows, or /flows/<id> for one flow." } };
+  const record = recordOf(href);
+  if (record) {
+    const db = await getDb();
+    const table = record.kind === "flows" ? flows : record.kind === "broadcasts" ? broadcasts : contacts;
+    const [row] = await db
+      .select({ id: table.id })
+      .from(table)
+      .innerJoin(bots, eq(bots.id, table.botId))
+      .where(and(eq(table.id, record.id), eq(bots.ownerId, ownerId)))
+      .limit(1);
+    if (!row) return { output: { error: "Nothing with that id in this workspace" } };
+  }
+  return { output: { opened: href, note: "The page is opening in their browser. Keep talking; the conversation carries on there." }, navigate: href };
+}
+
 export const AGENT_TOOLS: {
   name: string;
   description: string;
@@ -537,6 +560,14 @@ export const AGENT_TOOLS: {
       },
     },
     run: (ownerId, input) => searchContacts(ownerId, input),
+  },
+  {
+    name: "open_page",
+    label: "Opening the page",
+    description:
+      "Open a page in the person's browser while you keep talking: a console page such as /flows, /inbox, /contacts, /channels, /broadcasts, /ai, /growth or /setup, or one record such as /flows/<id> (a flow in the editor), /broadcasts/<id> or /contacts/<id>. Use it when they ask to see or go somewhere, or to show a draft you just saved.",
+    input_schema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
+    run: (ownerId, input) => openPage(ownerId, input),
   },
   {
     name: "get_setup_progress",
