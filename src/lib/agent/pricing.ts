@@ -68,3 +68,14 @@ export function priceUsage(usage: UsageReport, model: string): AgentUsage {
   }
   return { costMicros: Math.ceil(micros), inputTokens, outputTokens };
 }
+
+/**
+ * The assistant's natural voice (OpenAI gpt-4o-mini-tts) returns audio with no usage attached, so it is
+ * priced from the text. OpenAI estimates about $0.015 a minute of speech, and a minute is roughly 900
+ * characters, so 20 millionths of a dollar a character (about $0.018 a minute) errs on the safe side.
+ */
+export const SPEECH_MICROS_PER_CHAR = 20;
+
+export function priceSpeech(text: string): AgentUsage {
+  return { costMicros: Math.ceil(text.length * SPEECH_MICROS_PER_CHAR), inputTokens: 0, outputTokens: 0 };
+}

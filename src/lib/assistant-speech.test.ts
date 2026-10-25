@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rankVoices, speakableText, takeSentences } from "@/lib/assistant-speech";
+import { DEFAULT_NATURAL_VOICE, isNaturalVoice, NATURAL_VOICES, rankVoices, speakableText, takeSentences } from "@/lib/assistant-speech";
 
 describe("assistant voice text", () => {
   it("reads links by their name and drops markdown, URLs and emoji", () => {
@@ -40,5 +40,14 @@ describe("assistant voice text", () => {
       "Fred",
     ]);
     expect(rankVoices(voices, "fr-FR").map((voice) => voice.name)).toEqual(["Amélie"]);
+  });
+});
+
+describe("natural voices", () => {
+  it("knows its own voices and nothing else", () => {
+    expect(isNaturalVoice(DEFAULT_NATURAL_VOICE)).toBe(true);
+    expect(NATURAL_VOICES.map((voice) => voice.id)).toContain("cedar");
+    expect(isNaturalVoice("robot-9000")).toBe(false);
+    expect(isNaturalVoice(undefined)).toBe(false);
   });
 });

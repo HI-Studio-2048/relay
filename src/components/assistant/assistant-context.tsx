@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { browserLanguage, canListen, canSpeak, listenErrorMessage, listenOnce, Speaker, useVoices } from "@/components/assistant/voice";
+import { DEFAULT_NATURAL_VOICE, isNaturalVoice, NATURAL_VOICES } from "@/lib/assistant-speech";
 import { api } from "@/lib/client";
 
 export type DraftLink = { kind: "flow" | "broadcast"; id: string; name: string; href: string; botName: string };
@@ -15,6 +16,8 @@ export type AssistantState = {
   /** The provider of the account's own key, like "Anthropic", when billing is "own". */
   ownKey: string | null;
   budget: Budget | null;
+  /** The server can speak in a natural voice (an OpenAI key, the account's or the company's). */
+  naturalVoice: boolean;
   suggestions: string[];
   firstName: string;
   messages: ServerMessage[];
@@ -29,7 +32,9 @@ type StreamEvent =
   | { type: "done" };
 export type Phase = "listening" | "thinking" | "speaking" | "paused";
 
+/** The chosen voice: "natural:<id>" for a server voice, or a browser voice's voiceURI. */
 const VOICE_KEY = "recatch.assistant.voice";
+const NATURAL_PREFIX = "natural:";
 
 let localMessages = 0;
 /** Ids for messages not saved yet. */
@@ -56,6 +61,7 @@ function useAssistantState() {
   const [heard, setHeard] = useState("");
   const [hearing, setHearing] = useState(false);
   const [voiceError, setVoiceError] = useState("");
+  const [voiceNote, setVoiceNote] = useState("");
   const [voiceURI, setVoiceURI] = useState("");
   const [reading, setReading] = useState<string | null>(null);
   const [live, setLive] = useState("");
@@ -89,18 +95,32 @@ function useAssistantState() {
   }, []);
 
   useEffect(() => {
-    const speaker = new Speaker(lang, (speaking) => {
-      if (speaking && voiceOnRef.current) setPhase("speaking");
-      if (!speaking) setReading(null);
-    });
+    const speaker = new Speaker(
+      lang,
+      (speaking) => {
+        if (speaking && voiceOnRef.current) setPhase("speaking");
+        if (!speaking) setReading(null);
+      },
+      setVoiceNote,
+    );
     speakerRef.current = speaker;
     return () => speaker.cancel();
   }, [lang]);
 
   const voice = voices.find((item) => item.voiceURI === voiceURI) ?? voices[0] ?? null;
+  // A natural voice when the server has one, unless a browser voice was picked on purpose.
+  const chosenNatural = voiceURI.startsWith(NATURAL_PREFIX) ? voiceURI.slice(NATURAL_PREFIX.length) : "";
+  const naturalVoice =
+    state?.naturalVoice !== true ? null : isNaturalVoice(chosenNatural) ? chosenNatural : voiceURI && !chosenNatural ? null : DEFAULT_NATURAL_VOICE;
+  const naturalVoices = state?.naturalVoice === true ? NATURAL_VOICES : [];
+  const voiceChoice = naturalVoice ? `${NATURAL_PREFIX}${naturalVoice}` : (voice?.voiceURI ?? "");
   useEffect(() => {
     if (speakerRef.current) speakerRef.current.voice = voice;
   }, [voice]);
+  useEffect(() => {
+    speakerRef.current?.setNatural(naturalVoice);
+    setVoiceNote("");
+  }, [naturalVoice, lang]);
 
   useEffect(
     () => () => {
@@ -311,6 +331,9 @@ function useAssistantState() {
 
   const chooseVoice = (uri: string) => {
     setVoiceURI(uri);
+    // Picking again gives the natural voice another try after it fell back.
+    speakerRef.current?.setNatural(uri.startsWith(NATURAL_PREFIX) && state?.naturalVoice === true ? uri.slice(NATURAL_PREFIX.length) : null);
+    setVoiceNote("");
     try {
       window.localStorage.setItem(VOICE_KEY, uri);
     } catch {
@@ -344,8 +367,11 @@ function useAssistantState() {
     heard,
     hearing,
     voiceError,
+    voiceNote,
     voices,
     voice,
+    naturalVoices,
+    voiceChoice,
     reading,
     live,
     exhausted,

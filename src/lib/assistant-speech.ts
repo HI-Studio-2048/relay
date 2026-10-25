@@ -81,3 +81,30 @@ export function rankVoices<T extends VoiceLike>(voices: T[], lang: string): T[] 
     .filter((item) => item.score >= 0);
   return scored.sort((a, b) => b.score - a.score).map((item) => item.voice);
 }
+
+/**
+ * The natural voices the server can speak with (OpenAI's text to speech, agent/speech.ts). Marin and
+ * Cedar are OpenAI's most lifelike, so Marin is the default. The picker stores them as "natural:<id>"
+ * beside the browser's own voices, which are kept as the fallback.
+ */
+export const NATURAL_VOICES = [
+  { id: "marin", label: "Marin" },
+  { id: "cedar", label: "Cedar" },
+  { id: "coral", label: "Coral" },
+  { id: "sage", label: "Sage" },
+  { id: "ballad", label: "Ballad" },
+  { id: "ash", label: "Ash" },
+  { id: "verse", label: "Verse" },
+  { id: "alloy", label: "Alloy" },
+] as const;
+
+export type NaturalVoiceId = (typeof NATURAL_VOICES)[number]["id"];
+
+export const DEFAULT_NATURAL_VOICE: NaturalVoiceId = "marin";
+
+export function isNaturalVoice(id: unknown): id is NaturalVoiceId {
+  return NATURAL_VOICES.some((voice) => voice.id === id);
+}
+
+/** The longest text sent to the server in one go. The speaker sends a sentence at a time, well under it. */
+export const MAX_SPEECH_CHARS = 1000;

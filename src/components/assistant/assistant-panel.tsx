@@ -195,21 +195,35 @@ function AssistantBody({ fill }: { fill?: boolean }) {
         {a.live ? <p className="line-clamp-4 max-w-md text-center text-[13px] text-[#1b1f24]">{speakableText(a.live)}</p> : null}
         {status && a.phase === "thinking" ? <p className="text-[12px] text-[#6b7280]">{status}</p> : null}
         {a.voiceError ? <p className="max-w-md text-center text-[12px] text-red-600">{a.voiceError}</p> : null}
-        {!a.support.speak ? <p className="text-[12px] text-[#6b7280]">This browser can&apos;t speak, so answers show as text.</p> : null}
+        {a.voiceNote ? <p className="max-w-md text-center text-[12px] text-[#6b7280]">{a.voiceNote}</p> : null}
+        {!a.support.speak && a.naturalVoices.length === 0 ? <p className="text-[12px] text-[#6b7280]">This browser can&apos;t speak, so answers show as text.</p> : null}
         <p className="max-w-xs text-center text-[11px] text-[#8b95a1]">Keep talking while you move around Recatch. Ask it to open a page and it will.</p>
         <div className="flex flex-wrap items-center justify-center gap-2">
-          {a.voices.length > 1 ? (
+          {a.naturalVoices.length > 0 || a.voices.length > 1 ? (
             <select
-              value={a.voice?.voiceURI ?? ""}
+              value={a.voiceChoice}
               onChange={(event) => a.chooseVoice(event.target.value)}
               aria-label="Assistant voice"
               className="max-w-56 rounded-lg border border-[#e5e7eb] bg-white px-2 py-1 text-[12px] text-[#1b1f24]"
             >
-              {a.voices.map((item) => (
-                <option key={item.voiceURI} value={item.voiceURI}>
-                  {item.name}
-                </option>
-              ))}
+              {a.naturalVoices.length > 0 ? (
+                <optgroup label="Natural voices">
+                  {a.naturalVoices.map((item) => (
+                    <option key={item.id} value={`natural:${item.id}`}>
+                      {item.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              {a.voices.length > 0 ? (
+                <optgroup label="This browser's voices">
+                  {a.voices.map((item) => (
+                    <option key={item.voiceURI} value={item.voiceURI}>
+                      {item.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
             </select>
           ) : null}
           <Button variant="outline" size="sm" onClick={a.endVoice}>
@@ -260,7 +274,7 @@ function AssistantBody({ fill }: { fill?: boolean }) {
                     {message.body ? <MessageText text={message.body} /> : <TypingDots />}
                   </div>
                   <DraftChips drafts={message.drafts} />
-                  {message.body && a.support.speak && message.id !== a.streamingId ? (
+                  {message.body && (a.support.speak || a.naturalVoices.length > 0) && message.id !== a.streamingId ? (
                     <button
                       type="button"
                       onClick={() => a.readAloud(message)}
