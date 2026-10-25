@@ -26,6 +26,7 @@ export const ASSISTANT_SYSTEM = [
   "- When they ask you to send, publish or turn something on, save the draft (or say you will not) and tell them which button to press themselves.",
   "- Put a new flow on the channel they name. With several channels connected and none named, ask which one before creating it. Use the channel ids from the workspace facts.",
   "- Only do what they asked. If a request is vague, ask one short question, and never more than one at a time.",
+  "- You stay with them on every page of Recatch, and the conversation (spoken or typed) carries on while they move around. Open a page for them with open_page when they ask to see or go somewhere (\"show me my flows\"), or to show a draft you just saved, then keep talking about what is on it. The workspace facts say which page they are on.",
   "",
   "Building funnels (a funnel is a flow: a trigger, then steps):",
   "- Triggers: a keyword in a comment on their posts (Instagram, Facebook, YouTube, Bluesky), a keyword in a DM, a story reply or story mention (Instagram), or the first message someone sends.",
@@ -65,6 +66,7 @@ export type AgentEvent =
   | { type: "status"; text: string }
   | { type: "delta"; text: string }
   | { type: "draft"; draft: DraftLink }
+  | { type: "navigate"; href: string }
   | { type: "budget"; budget: AssistantBudget };
 
 export type AgentComplete = (input: {
@@ -216,6 +218,7 @@ export async function runWorkspaceAgent(input: {
         drafts.push(result.draft);
         input.onEvent?.({ type: "draft", draft: result.draft });
       }
+      if (result.navigate) input.onEvent?.({ type: "navigate", href: result.navigate });
       const output = result.output;
       const isError = failed || Boolean(output && typeof output === "object" && "error" in output);
       messages.push({ role: "tool", id: call.id, content: JSON.stringify(output).slice(0, 12000), isError });

@@ -2,6 +2,8 @@ import { inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { Fragment } from "react";
 import { AppShell } from "@/components/app-shell";
+import { AssistantProvider } from "@/components/assistant/assistant-context";
+import { AssistantDock } from "@/components/assistant/assistant-panel";
 import { BotProvider } from "@/components/bot-provider";
 import { currentUser, ensureOwnerAccount } from "@/lib/auth";
 import { workspaceGate } from "@/lib/billing/gate";
@@ -36,13 +38,18 @@ export default async function ConsoleLayout({ children }: { children: React.Reac
   }
   return (
     <BotProvider initialBots={bots} initialBotId={bot?.id ?? null} initialScope={scope.aggregate ? ALL_CHANNELS : bot?.id ?? null}>
-      <AppShell user={user} inboxCount={inboxCount} confirmCount={confirmCount}>
-        {/* Pages copy their server data into state, so switching accounts has to remount them.
-            Without this the Flows list kept showing the old account while New flow saved to the new one.
-            The key carries the account even in All channels, because single-account pages still
-            switch accounts while Overview and Live Chat stay merged. */}
-        <Fragment key={`${scope.aggregate ? ALL_CHANNELS : "one"}:${bot?.id ?? "none"}`}>{children}</Fragment>
-      </AppShell>
+      {/* One assistant for every page: it lives above the page area, so a conversation (and voice)
+          carries on while people move around, and the dock shows it everywhere but Overview. */}
+      <AssistantProvider>
+        <AppShell user={user} inboxCount={inboxCount} confirmCount={confirmCount}>
+          {/* Pages copy their server data into state, so switching accounts has to remount them.
+              Without this the Flows list kept showing the old account while New flow saved to the new one.
+              The key carries the account even in All channels, because single-account pages still
+              switch accounts while Overview and Live Chat stay merged. */}
+          <Fragment key={`${scope.aggregate ? ALL_CHANNELS : "one"}:${bot?.id ?? "none"}`}>{children}</Fragment>
+          <AssistantDock />
+        </AppShell>
+      </AssistantProvider>
     </BotProvider>
   );
 }

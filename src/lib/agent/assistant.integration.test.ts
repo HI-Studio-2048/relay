@@ -241,6 +241,34 @@ describe("Overview assistant: monthly allowance, templates and setup help", () =
     expect(saved?.isActive).toBe(false);
   });
 
+  it("opens pages and its own records for them, never someone else's, and says so as it goes", async () => {
+    const { getDb } = await import("@/lib/db");
+    const { flows } = await import("@/lib/db/schema");
+    await (await getDb()).insert(flows).values([
+      { id: "mine-flow", botId: "ig", name: "Mine", triggerType: "keyword", triggerValue: "hi", isActive: false, definition: { startStepId: "s1", steps: [{ id: "s1", type: "end", text: "hi" }] } },
+      { id: "their-flow", botId: "other-ig", name: "Theirs", triggerType: "keyword", triggerValue: "hi", isActive: false, definition: { startStepId: "s1", steps: [{ id: "s1", type: "end", text: "hi" }] } },
+    ]);
+    const { runAgentTool } = await import("@/lib/agent/tools");
+    expect(await runAgentTool("owner-a", "open_page", { path: "/flows" })).toMatchObject({ navigate: "/flows" });
+    expect(await runAgentTool("owner-a", "open_page", { path: "/flows/mine-flow" })).toMatchObject({ navigate: "/flows/mine-flow" });
+    const foreign = await runAgentTool("owner-a", "open_page", { path: "/flows/their-flow" });
+    expect(foreign.navigate).toBeUndefined();
+    expect(JSON.stringify(foreign.output)).toMatch(/Nothing with that id/);
+    expect((await runAgentTool("owner-a", "open_page", { path: "https://example.com" })).navigate).toBeUndefined();
+
+    const { runWorkspaceAgent } = await import("@/lib/agent/run");
+    let step = 0;
+    const complete = vi.fn<AgentComplete>(async () => {
+      step += 1;
+      return step === 1
+        ? { text: "", toolCalls: [{ id: "call-open", name: "open_page", input: { path: "/flows" } }] }
+        : { text: "Here are your flows.", toolCalls: [] };
+    });
+    const events: AgentEvent[] = [];
+    await runWorkspaceAgent({ ownerId: "owner-a", history: [], message: "show me my flows", complete, onEvent: (event) => events.push(event) });
+    expect(events).toContainEqual({ type: "navigate", href: "/flows" });
+  });
+
   it("walks setup from the checklist, and tells Claude what is connected", async () => {
     const { runAgentTool } = await import("@/lib/agent/tools");
     const progress = (await runAgentTool("owner-a", "get_setup_progress", {})).output as {
@@ -254,7 +282,8 @@ describe("Overview assistant: monthly allowance, templates and setup help", () =
     expect(templates.templates.map((template) => template.id)).toContain("comment-lead-magnet");
 
     const { assistantSuggestions, loadAssistantContext } = await import("@/lib/agent/context");
-    const context = await loadAssistantContext("owner-a", { voice: true, now: OCTOBER });
+    const context = await loadAssistantContext("owner-a", { voice: true, page: "/flows/abc", now: OCTOBER });
+    expect(context).toContain("They are looking at a flow in the editor (/flows/abc) right now.");
     expect(context).toContain("Thursday, October 15, 2026");
     expect(context).toContain("The person signed in is Ada.");
     expect(context).toContain('"Shop" (Telegram, connected, @shopbot, id tg)');

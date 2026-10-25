@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     if (!aiConfigured(provider)) {
       return json({ error: "The assistant isn't switched on for this workspace yet. Saving your own AI key (Anthropic, OpenAI, OpenRouter and others) on the AI assistant page turns it on now." }, 503);
     }
-    const body = await readJson<{ message?: string; voice?: boolean }>(request);
+    const body = await readJson<{ message?: string; voice?: boolean; page?: string }>(request);
     const message = body.message?.trim().slice(0, 4000) ?? "";
     if (!message) return json({ error: "Message is required" }, 400);
     const voice = body.voice === true;
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       return json({ error: `That's ${MESSAGES_PER_HOUR} messages to the assistant this hour, which is the limit. Try again in a bit.` }, 429);
     }
     await appendAgentMessage({ ownerId, role: "user", body: message });
-    const [history, context] = await Promise.all([listAgentHistory(ownerId), loadAssistantContext(ownerId, { voice })]);
+    const [history, context] = await Promise.all([listAgentHistory(ownerId), loadAssistantContext(ownerId, { voice, page: typeof body.page === "string" ? body.page.slice(0, 200) : undefined })]);
     const abort = new AbortController();
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
