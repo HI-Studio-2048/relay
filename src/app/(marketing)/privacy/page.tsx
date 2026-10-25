@@ -83,7 +83,7 @@ export default function PrivacyPage() {
         <p>Only the services needed to run Recatch, and only what each one needs:</p>
         <ul>
           <li>The messaging platforms themselves (Telegram, Meta, and the others), to send and receive messages.</li>
-          <li>Anthropic, for the AI features described above, and OpenRouter (with the model provider you pick there) for accounts that connect their own OpenRouter key.</li>
+          <li>Anthropic, for the AI features described above. A business that connects its own AI key sends those requests to the provider it picked instead: Anthropic, OpenAI, Google, xAI, Mistral, Groq, DeepSeek or OpenRouter (and the model provider chosen there).</li>
           <li>Zernio, which carries Instagram, Messenger and WhatsApp messages and comments for businesses that connect those accounts.</li>
           <li>Our hosting provider, which runs the servers and database.</li>
           <li>Stripe, to take Recatch subscription payments, and also when a business connects Stripe, Slack, Discord or Microsoft Teams.</li>

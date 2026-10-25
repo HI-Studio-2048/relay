@@ -4,9 +4,9 @@ import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
 
 /**
- * Which key pays for the growth agent. The agent works across the whole login, while OpenRouter keys
- * are saved per account (bot). So: the login's own bots, most recently updated first, and the first
- * one with a readable OpenRouter key wins. Saving or changing a key bumps that bot's updated_at, so
+ * Which key pays for the Overview assistant. It works across the whole login, while AI keys (any
+ * provider, see ai-provider.ts) are saved per account (bot). So: the login's own bots, most recently
+ * updated first, and the first one with a readable key wins. Saving or changing a key bumps that bot's updated_at, so
  * the key most recently saved is usually the one used. No key on any bot means undefined, which
  * falls back to the server's ANTHROPIC_API_KEY.
  */

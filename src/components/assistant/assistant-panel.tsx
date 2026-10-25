@@ -16,7 +16,9 @@ type ChatMessage = { id: string; role: string; body: string; drafts?: DraftLink[
 type ServerMessage = { id: string; role: string; body: string; meta?: { drafts?: DraftLink[] } };
 type AssistantState = {
   configured: boolean;
-  billing: "server" | "openrouter";
+  billing: "server" | "own";
+  /** The provider of the account's own key, like "Anthropic", when billing is "own". */
+  ownKey: string | null;
   budget: Budget | null;
   suggestions: string[];
   firstName: string;
@@ -132,9 +134,9 @@ function resetLabel(resetsAt: string) {
   return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(resetsAt));
 }
 
-function AllowanceChip({ billing, budget }: { billing: AssistantState["billing"]; budget: Budget | null }) {
-  if (billing === "openrouter") {
-    return <span className="rounded-full bg-[#f8fafc] px-2.5 py-1 text-[11px] text-[#6b7280] ring-1 ring-[#e5e7eb]">On your OpenRouter key</span>;
+function AllowanceChip({ billing, ownKey, budget }: { billing: AssistantState["billing"]; ownKey: string | null; budget: Budget | null }) {
+  if (billing === "own") {
+    return <span className="rounded-full bg-[#f8fafc] px-2.5 py-1 text-[11px] text-[#6b7280] ring-1 ring-[#e5e7eb]">On your {ownKey ?? "own"} key</span>;
   }
   if (!budget) return null;
   const used = budget.limitUsd > 0 ? Math.min(1, budget.spentUsd / budget.limitUsd) : 1;
@@ -177,7 +179,7 @@ function TypingDots() {
 
 /**
  * The Overview assistant, for every login: chat or talk (voice in and out through the browser), with
- * drafts it saves linked under its answers. It runs on the account's OpenRouter key when one is saved,
+ * drafts it saves linked under its answers. It runs on the account's own AI key when one is saved,
  * otherwise on the company's Claude key within a monthly allowance the chip shows.
  */
 export function AssistantPanel() {
@@ -485,7 +487,7 @@ export function AssistantPanel() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {state?.configured ? <AllowanceChip billing={state.billing} budget={state.budget} /> : null}
+          {state?.configured ? <AllowanceChip billing={state.billing} ownKey={state.ownKey} budget={state.budget} /> : null}
           {messages.length > 0 ? (
             <Button variant="ghost" size="sm" onClick={() => void newChat()} disabled={busy}>
               <SquarePen />
@@ -497,7 +499,7 @@ export function AssistantPanel() {
 
       {state && !state.configured ? (
         <p className="rounded-xl bg-[#f8fafc] px-3 py-2 text-[13px] text-[#1b1f24] ring-1 ring-[#e5e7eb]">
-          The assistant isn&apos;t switched on for this workspace yet. Saving your own OpenRouter key on the{" "}
+          The assistant isn&apos;t switched on for this workspace yet. Saving your own AI key (Anthropic, OpenAI, OpenRouter and others) on the{" "}
           <Link href="/ai" className="font-medium text-[#0084ff] hover:underline">
             AI assistant
           </Link>{" "}
@@ -605,7 +607,7 @@ export function AssistantPanel() {
 
           {exhausted && state?.budget ? (
             <p className="rounded-xl bg-[#fff8eb] px-3 py-2 text-[13px] text-[#1b1f24] ring-1 ring-[#fde7b0]">
-              You&apos;ve used this month&apos;s ${state.budget.limitUsd.toFixed(2)} assistant allowance. It comes back on {resetLabel(state.budget.resetsAt)}, or save your own OpenRouter key on the{" "}
+              You&apos;ve used this month&apos;s ${state.budget.limitUsd.toFixed(2)} assistant allowance. It comes back on {resetLabel(state.budget.resetsAt)}, or save your own AI key on the{" "}
               <Link href="/ai" className="font-medium text-[#0084ff] hover:underline">
                 AI assistant
               </Link>{" "}

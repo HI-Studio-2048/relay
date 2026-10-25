@@ -47,7 +47,7 @@ export function AutoTagsCard({ botId, configured }: { botId: string; configured:
       <p className="text-[13px] text-[#6b7280]">
         Describe a tag in plain words. When a message fits, Claude adds the tag, which can start sequences, rules and webhooks.
         Each tag is added once; people who already have it are skipped.
-        {configured ? "" : " Add your OpenRouter key above to turn this on."}
+        {configured ? "" : " Add your AI key above to turn this on."}
       </p>
       <div className="space-y-2">
         {rules.map((rule, index) => (

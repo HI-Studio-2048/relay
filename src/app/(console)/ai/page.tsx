@@ -1,7 +1,7 @@
 import { Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/chrome/page-header";
 import { aiConfigured, readAiSettings } from "@/lib/ai";
-import { openRouterStatus, readAiProvider } from "@/lib/ai-provider";
+import { aiKeyStatus, readAiProvider } from "@/lib/ai-provider";
 import { currentBot } from "@/lib/current-bot";
 import { getDb } from "@/lib/db";
 import { bots } from "@/lib/db/schema";
@@ -26,7 +26,7 @@ export default async function AiPage() {
         tone="action"
         description="Teach the assistant your business once. It powers AI Steps in flows, answers messages nothing else catches, drafts replies in Live Chat, and builds flows from a sentence."
       />
-      <AiSettingsForm botId={bot.id} configured={configured} initial={readAiSettings(row?.settings)} openRouter={openRouterStatus(row?.settings)} />
+      <AiSettingsForm botId={bot.id} configured={configured} initial={readAiSettings(row?.settings)} aiKey={aiKeyStatus(row?.settings)} />
       <AutoTagsCard botId={bot.id} configured={configured} />
     </div>
   );
