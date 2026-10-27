@@ -3,7 +3,8 @@
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { browserLanguage, canListen, canSpeak, listenErrorMessage, listenOnce, Speaker, useVoices } from "@/components/assistant/voice";
-import { DEFAULT_NATURAL_VOICE, isNaturalVoice, NATURAL_VOICES } from "@/lib/assistant-speech";
+import { kokoroEngine, type NaturalStatus } from "@/components/assistant/kokoro";
+import { defaultNaturalVoice, isNaturalVoice, NATURAL_VOICE_DOWNLOAD_MB, NATURAL_VOICES, naturalVoiceFits } from "@/lib/assistant-speech";
 import { api } from "@/lib/client";
 
 export type DraftLink = { kind: "flow" | "broadcast"; id: string; name: string; href: string; botName: string };
@@ -16,8 +17,6 @@ export type AssistantState = {
   /** The provider of the account's own key, like "Anthropic", when billing is "own". */
   ownKey: string | null;
   budget: Budget | null;
-  /** The server can speak in a natural voice (an OpenAI key, the account's or the company's). */
-  naturalVoice: boolean;
   suggestions: string[];
   firstName: string;
   messages: ServerMessage[];
@@ -32,7 +31,7 @@ type StreamEvent =
   | { type: "done" };
 export type Phase = "listening" | "thinking" | "speaking" | "paused";
 
-/** The chosen voice: "natural:<id>" for a server voice, or a browser voice's voiceURI. */
+/** The chosen voice: "natural:<id>" for a Kokoro voice, or a browser voice's voiceURI. */
 const VOICE_KEY = "recatch.assistant.voice";
 const NATURAL_PREFIX = "natural:";
 
@@ -62,6 +61,8 @@ function useAssistantState() {
   const [hearing, setHearing] = useState(false);
   const [voiceError, setVoiceError] = useState("");
   const [voiceNote, setVoiceNote] = useState("");
+  const [naturalFits, setNaturalFits] = useState(false);
+  const [naturalState, setNaturalState] = useState<{ status: NaturalStatus; progress: number }>({ status: "idle", progress: 0 });
   const [voiceURI, setVoiceURI] = useState("");
   const [reading, setReading] = useState<string | null>(null);
   const [live, setLive] = useState("");
@@ -79,6 +80,19 @@ function useAssistantState() {
     const timer = window.setTimeout(() => {
       setSupport({ listen: canListen(), speak: canSpeak() });
       setLang(browserLanguage());
+      const scope = navigator as Navigator & { userAgentData?: { mobile?: boolean }; deviceMemory?: number; connection?: { saveData?: boolean } };
+      setNaturalFits(
+        naturalVoiceFits({
+          lang: browserLanguage(),
+          userAgent: navigator.userAgent,
+          mobile: scope.userAgentData?.mobile,
+          maxTouchPoints: navigator.maxTouchPoints ?? 0,
+          deviceMemory: scope.deviceMemory,
+          saveData: scope.connection?.saveData,
+          workers: typeof Worker !== "undefined",
+          wasm: typeof WebAssembly !== "undefined",
+        }),
+      );
       try {
         setVoiceURI(window.localStorage.getItem(VOICE_KEY) ?? "");
       } catch {
@@ -101,26 +115,43 @@ function useAssistantState() {
         if (speaking && voiceOnRef.current) setPhase("speaking");
         if (!speaking) setReading(null);
       },
-      setVoiceNote,
+      { onFallback: setVoiceNote, engine: naturalFits ? kokoroEngine() : null },
     );
     speakerRef.current = speaker;
     return () => speaker.cancel();
-  }, [lang]);
+  }, [lang, naturalFits]);
+
+  useEffect(() => {
+    if (!naturalFits) return;
+    const engine = kokoroEngine();
+    const sync = () => {
+      setNaturalState({ status: engine.status, progress: engine.progress });
+      if (engine.status === "failed") setVoiceNote("The natural voice couldn't download, so the browser's voice is speaking. Pick a natural voice again to retry.");
+      if (engine.status === "ready") setVoiceNote("");
+    };
+    sync();
+    return engine.subscribe(sync);
+  }, [naturalFits]);
 
   const voice = voices.find((item) => item.voiceURI === voiceURI) ?? voices[0] ?? null;
-  // A natural voice when the server has one, unless a browser voice was picked on purpose.
+  // A natural voice where it fits the device, unless a browser voice was picked on purpose.
   const chosenNatural = voiceURI.startsWith(NATURAL_PREFIX) ? voiceURI.slice(NATURAL_PREFIX.length) : "";
-  const naturalVoice =
-    state?.naturalVoice !== true ? null : isNaturalVoice(chosenNatural) ? chosenNatural : voiceURI && !chosenNatural ? null : DEFAULT_NATURAL_VOICE;
-  const naturalVoices = state?.naturalVoice === true ? NATURAL_VOICES : [];
+  const naturalVoice = !naturalFits ? null : isNaturalVoice(chosenNatural) ? chosenNatural : voiceURI && !chosenNatural ? null : defaultNaturalVoice(lang);
+  const naturalVoices = naturalFits ? NATURAL_VOICES : [];
   const voiceChoice = naturalVoice ? `${NATURAL_PREFIX}${naturalVoice}` : (voice?.voiceURI ?? "");
+  /** What the voice menu says about the natural voices: the one-time download, or how far along it is. */
+  const naturalLabel =
+    naturalState.status === "ready"
+      ? "Natural voices"
+      : naturalState.status === "loading"
+        ? `Natural voices (downloading, ${Math.round(naturalState.progress * 100)}%)`
+        : `Natural voices (one-time ${NATURAL_VOICE_DOWNLOAD_MB} MB download)`;
   useEffect(() => {
     if (speakerRef.current) speakerRef.current.voice = voice;
-  }, [voice]);
+  }, [voice, lang, naturalFits]);
   useEffect(() => {
     speakerRef.current?.setNatural(naturalVoice);
-    setVoiceNote("");
-  }, [naturalVoice, lang]);
+  }, [naturalVoice, lang, naturalFits]);
 
   useEffect(
     () => () => {
@@ -332,7 +363,7 @@ function useAssistantState() {
   const chooseVoice = (uri: string) => {
     setVoiceURI(uri);
     // Picking again gives the natural voice another try after it fell back.
-    speakerRef.current?.setNatural(uri.startsWith(NATURAL_PREFIX) && state?.naturalVoice === true ? uri.slice(NATURAL_PREFIX.length) : null);
+    speakerRef.current?.setNatural(uri.startsWith(NATURAL_PREFIX) && naturalFits ? uri.slice(NATURAL_PREFIX.length) : null);
     setVoiceNote("");
     try {
       window.localStorage.setItem(VOICE_KEY, uri);
@@ -371,6 +402,8 @@ function useAssistantState() {
     voices,
     voice,
     naturalVoices,
+    naturalLabel,
+    naturalState,
     voiceChoice,
     reading,
     live,

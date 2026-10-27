@@ -196,6 +196,11 @@ function AssistantBody({ fill }: { fill?: boolean }) {
         {status && a.phase === "thinking" ? <p className="text-[12px] text-[#6b7280]">{status}</p> : null}
         {a.voiceError ? <p className="max-w-md text-center text-[12px] text-red-600">{a.voiceError}</p> : null}
         {a.voiceNote ? <p className="max-w-md text-center text-[12px] text-[#6b7280]">{a.voiceNote}</p> : null}
+        {a.naturalState.status === "loading" && a.voiceChoice.startsWith("natural:") ? (
+          <p className="max-w-md text-center text-[12px] text-[#6b7280]">
+            Downloading the natural voice ({Math.round(a.naturalState.progress * 100)}%). It happens once, and the browser&apos;s voice speaks until it&apos;s ready.
+          </p>
+        ) : null}
         {!a.support.speak && a.naturalVoices.length === 0 ? <p className="text-[12px] text-[#6b7280]">This browser can&apos;t speak, so answers show as text.</p> : null}
         <p className="max-w-xs text-center text-[11px] text-[#8b95a1]">Keep talking while you move around Recatch. Ask it to open a page and it will.</p>
         <div className="flex flex-wrap items-center justify-center gap-2">
@@ -207,7 +212,7 @@ function AssistantBody({ fill }: { fill?: boolean }) {
               className="max-w-56 rounded-lg border border-[#e5e7eb] bg-white px-2 py-1 text-[12px] text-[#1b1f24]"
             >
               {a.naturalVoices.length > 0 ? (
-                <optgroup label="Natural voices">
+                <optgroup label={a.naturalLabel}>
                   {a.naturalVoices.map((item) => (
                     <option key={item.id} value={`natural:${item.id}`}>
                       {item.label}

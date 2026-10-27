@@ -4,7 +4,6 @@ import { readAssistantBudget } from "@/lib/agent/budget";
 import { assistantSuggestions, ownerFirstName } from "@/lib/agent/context";
 import { clearAgentHistory, listAgentHistory } from "@/lib/agent/history";
 import { workspaceAiProvider } from "@/lib/agent/provider";
-import { speechKey } from "@/lib/agent/speech";
 import { requireUserId } from "@/lib/auth";
 import { fail, json } from "@/lib/http";
 
@@ -12,23 +11,21 @@ export const dynamic = "force-dynamic";
 
 /**
  * The signed-in login's assistant: chat history, whether it has a key to run on (its own AI key or the
- * server's), on the server's key how much of this month's allowance is left, and whether it can speak in
- * the natural voice (agent/speech.ts) or only the browser's.
+ * server's), and on the server's key how much of this month's allowance is left.
  */
 export async function GET() {
   try {
     const ownerId = await requireUserId();
-    const [messages, provider, suggestions, firstName, speech] = await Promise.all([
+    const [messages, provider, suggestions, firstName] = await Promise.all([
       listAgentHistory(ownerId),
       workspaceAiProvider(ownerId),
       assistantSuggestions(ownerId),
       ownerFirstName(ownerId),
-      speechKey(ownerId),
     ]);
     const configured = aiConfigured(provider);
     const budget = configured && !provider ? await readAssistantBudget(ownerId) : null;
     const ownKey = provider ? vendorInfo(provider.kind).label.replace(/ \(.*\)$/, "") : null;
-    return json({ configured, billing: provider ? "own" : "server", ownKey, budget, naturalVoice: speech !== null, suggestions, firstName, messages });
+    return json({ configured, billing: provider ? "own" : "server", ownKey, budget, suggestions, firstName, messages });
   } catch (error) {
     return fail(error);
   }

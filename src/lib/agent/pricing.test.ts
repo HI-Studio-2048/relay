@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { priceSpeech, priceUsage, SPEECH_MICROS_PER_CHAR } from "@/lib/agent/pricing";
+import { priceUsage } from "@/lib/agent/pricing";
 
 describe("assistant call pricing", () => {
   it("prices input, output and both cache rates for Claude Opus 5.5", () => {
@@ -40,12 +40,5 @@ describe("assistant call pricing", () => {
     expect(priceUsage({ input_tokens: 1000 }, "claude-opus-5").costMicros).toBe(5000);
     expect(priceUsage({ input_tokens: 1000 }, "claude-opus-5-5-20261001").costMicros).toBe(4000);
     expect(priceUsage({ input_tokens: 1000 }, "some-new-model").costMicros).toBe(10_000);
-  });
-});
-
-describe("speech pricing", () => {
-  it("prices the natural voice per character", () => {
-    expect(priceSpeech("Hello there.")).toEqual({ costMicros: 12 * SPEECH_MICROS_PER_CHAR, inputTokens: 0, outputTokens: 0 });
-    expect(priceSpeech("")).toEqual({ costMicros: 0, inputTokens: 0, outputTokens: 0 });
   });
 });

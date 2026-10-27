@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { NaturalClip, NaturalEngine, NaturalStatus } from "@/components/assistant/kokoro";
 
-/** Stand-ins for the browser: an audio element that "plays" a clip in a tick, and the browser's voice. */
+/** Stand-ins for the browser: an audio element that "plays" a clip in a tick, the browser's voice, and Kokoro. */
 const played: string[] = [];
 const spoken: string[] = [];
 const clipText = new Map<string, string>();
@@ -39,16 +40,27 @@ const synth = {
   cancel: vi.fn(),
 };
 
-function speechReplies(handler: (text: string) => Promise<Response> | Response) {
-  const fetchMock = vi.fn(async (_url: string, init: RequestInit) => handler(JSON.parse(String(init.body)).text as string));
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
+type Make = (text: string) => Promise<NaturalClip> | NaturalClip;
+
+/** A Kokoro stand-in: a clip carries its sentence, so the fake player can report what it played. */
+function fakeEngine(status: NaturalStatus, make: Make = (text) => clip(text)) {
+  const engine = {
+    status,
+    progress: 0,
+    load: vi.fn(() => {
+      if (engine.status !== "ready") engine.status = "loading";
+    }),
+    speak: vi.fn(async (text: string, _voice: string, signal?: AbortSignal) => {
+      if (signal?.aborted) throw new DOMException("Stopped", "AbortError");
+      return make(text);
+    }),
+    subscribe: () => () => {},
+  };
+  return engine satisfies NaturalEngine;
 }
 
-/** An MP3 stand-in that remembers which sentence it is, so the fake player can report what it played. */
-function clip(text: string) {
-  const blob = new Blob([text], { type: "audio/mpeg" });
-  return new Response(blob, { status: 200, headers: { "content-type": "audio/mpeg" } });
+function clip(text: string, took = 0.1, seconds = 1): NaturalClip {
+  return { clip: new Blob([text], { type: "audio/wav" }), seconds, took };
 }
 
 describe("assistant speaker", () => {
@@ -72,78 +84,124 @@ describe("assistant speaker", () => {
     vi.restoreAllMocks();
   });
 
-  it("speaks each sentence in the natural voice, in order, even when the audio arrives out of order", async () => {
+  it("speaks each sentence in the natural voice, in order, even when the clips are made out of order", async () => {
     const { Speaker } = await import("@/components/assistant/voice");
-    const fetchMock = speechReplies(async (text) => {
+    const engine = fakeEngine("ready", async (text) => {
       // The first sentence comes back last.
       await new Promise((resolve) => setTimeout(resolve, text.startsWith("First") ? 20 : 1));
       return clip(text);
     });
     const states: boolean[] = [];
-    const speaker = new Speaker("en-US", (speaking) => states.push(speaking));
-    speaker.setNatural("cedar");
+    const speaker = new Speaker("en-US", (speaking) => states.push(speaking), { engine });
+    speaker.setNatural("bf_emma");
     speaker.feed("First sentence. Second one! Third");
     speaker.flush();
     await speaker.idle();
     expect(played).toEqual(["First sentence.", "Second one!", "Third"]);
     expect(spoken).toEqual([]);
     expect(states).toEqual([true, false]);
-    expect(JSON.parse(String(fetchMock.mock.calls[0]![1].body))).toEqual({ text: "First sentence.", voice: "cedar" });
+    expect(engine.speak.mock.calls[0]!.slice(0, 2)).toEqual(["First sentence.", "bf_emma"]);
+    expect(engine.load).not.toHaveBeenCalled();
   });
 
-  it("hands the rest of the session to the browser's voice after a refusal, and says why", async () => {
+  it("starts the download on first use and lets the browser speak until it is in", async () => {
     const { Speaker } = await import("@/components/assistant/voice");
-    const fetchMock = speechReplies(() => Response.json({ error: "You've used this month's assistant allowance." }, { status: 429 }));
+    const engine = fakeEngine("idle");
+    const speaker = new Speaker("en-US", () => {}, { engine });
+    speaker.setNatural("af_heart");
+    speaker.feed("While it downloads. Still the browser.");
+    expect(engine.load).toHaveBeenCalled();
+    // The model arrives mid-answer; the answer keeps the voice it started with.
+    engine.status = "ready";
+    speaker.flush();
+    await speaker.idle();
+    expect(spoken).toEqual(["While it downloads.", "Still the browser."]);
+    expect(engine.speak).not.toHaveBeenCalled();
+
+    speaker.feed("Now the natural voice.");
+    speaker.flush();
+    await speaker.idle();
+    expect(played).toEqual(["Now the natural voice."]);
+  });
+
+  it("hands the rest of the session to the browser's voice when the engine fails, and says why", async () => {
+    const { Speaker } = await import("@/components/assistant/voice");
+    const engine = fakeEngine("ready", () => {
+      throw new Error("out of memory");
+    });
     const onFallback = vi.fn();
-    const speaker = new Speaker("en-US", () => {}, onFallback);
-    speaker.setNatural("marin");
+    const speaker = new Speaker("en-US", () => {}, { engine, onFallback });
+    speaker.setNatural("af_heart");
     speaker.feed("One. Two. Three.");
     speaker.flush();
     await speaker.idle();
     expect(spoken).toEqual(["One.", "Two.", "Three."]);
     expect(onFallback).toHaveBeenCalledTimes(1);
-    expect(onFallback.mock.calls[0]![0]).toMatch(/allowance\. The browser's voice is speaking instead\./);
-    const calls = fetchMock.mock.calls.length;
+    expect(onFallback.mock.calls[0]![0]).toBe("The natural voice stopped working. The browser's voice is speaking instead.");
+    const calls = engine.speak.mock.calls.length;
 
     speaker.feed("Four.");
     speaker.flush();
     await speaker.idle();
     expect(spoken).toEqual(["One.", "Two.", "Three.", "Four."]);
-    expect(fetchMock.mock.calls.length).toBe(calls);
+    expect(engine.speak.mock.calls.length).toBe(calls);
 
     // Choosing a natural voice again gives it another try.
-    speechReplies((text) => clip(text));
-    speaker.setNatural("marin");
+    engine.speak.mockImplementation(async (text: string) => clip(text));
+    speaker.setNatural("af_heart");
     speaker.feed("Five.");
     speaker.flush();
     await speaker.idle();
     expect(played).toEqual(["Five."]);
   });
 
-  it("uses the browser's voice when no natural voice is chosen", async () => {
+  it("gives way to the browser's voice on a machine too slow to keep up", async () => {
     const { Speaker } = await import("@/components/assistant/voice");
-    const fetchMock = speechReplies((text) => clip(text));
-    const speaker = new Speaker("en-US", () => {});
+    // Each clip takes three seconds to make one second of speech.
+    const engine = fakeEngine("ready", (text) => clip(text, 3, 1));
+    const onFallback = vi.fn();
+    const speaker = new Speaker("en-US", () => {}, { engine, onFallback });
+    speaker.setNatural("af_heart");
+    speaker.feed("Warm up. Slow one. Slow two. After.");
+    speaker.flush();
+    await speaker.idle();
+    expect(onFallback).toHaveBeenCalledWith("This computer is too slow for the natural voice. The browser's voice is speaking instead.");
+    speaker.feed("Next answer.");
+    speaker.flush();
+    await speaker.idle();
+    expect(spoken).toContain("Next answer.");
+  });
+
+  it("uses the browser's voice when no natural voice is chosen or the device has none", async () => {
+    const { Speaker } = await import("@/components/assistant/voice");
+    const engine = fakeEngine("ready");
+    const speaker = new Speaker("en-US", () => {}, { engine });
     speaker.feed("Just the browser.");
     speaker.flush();
     await speaker.idle();
-    expect(spoken).toEqual(["Just the browser."]);
-    expect(fetchMock).not.toHaveBeenCalled();
+    const phone = new Speaker("en-US", () => {});
+    phone.setNatural("af_heart");
+    phone.feed("A phone.");
+    phone.flush();
+    await phone.idle();
+    expect(spoken).toEqual(["Just the browser.", "A phone."]);
+    expect(engine.speak).not.toHaveBeenCalled();
   });
 
-  it("stops at once when cancelled and aborts what it was fetching", async () => {
+  it("stops at once when cancelled and drops what it was making", async () => {
     const { Speaker } = await import("@/components/assistant/voice");
     const signals: AbortSignal[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((_url: string, init: RequestInit) => {
-        signals.push(init.signal!);
-        return new Promise<Response>((_resolve, reject) => init.signal!.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
-      }),
+    const engine = fakeEngine("ready");
+    engine.speak.mockImplementation(
+      (_text: string, _voice: string, signal?: AbortSignal) =>
+        new Promise<NaturalClip>((_resolve, reject) => {
+          signals.push(signal!);
+          signal!.addEventListener("abort", () => reject(new DOMException("Stopped", "AbortError")));
+        }),
     );
     const onFallback = vi.fn();
-    const speaker = new Speaker("en-US", () => {}, onFallback);
-    speaker.setNatural("marin");
+    const speaker = new Speaker("en-US", () => {}, { engine, onFallback });
+    speaker.setNatural("af_heart");
     speaker.feed("Never heard. Nor this.");
     expect(speaker.speaking).toBe(true);
     speaker.cancel();

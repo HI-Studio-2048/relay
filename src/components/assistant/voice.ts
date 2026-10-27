@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { NaturalClip, NaturalEngine } from "@/components/assistant/kokoro";
 import { rankVoices, takeSentences } from "@/lib/assistant-speech";
 
 /**
  * Speech for the assistant: SpeechRecognition to hear the person (Chrome, Edge and Safari; not Firefox),
- * and to answer out loud the natural voice from the server (agent/speech.ts) when it is on, with the
- * browser's own speechSynthesis as the fallback. Listening and the browser's voice cost nothing.
+ * and to answer out loud the natural voice (Kokoro, run in this browser by kokoro.ts) when it fits the
+ * device, with the browser's own speechSynthesis as the fallback. None of it costs Recatch anything.
  */
 
 type RecognitionAlternative = { transcript: string };
@@ -139,14 +140,24 @@ function silentWav() {
 
 type Line = { text: string; audio: Promise<Blob | null> | null };
 
-/** Sentences fetched ahead in the natural voice, so the next one is ready when this one ends. */
+/** Sentences made ahead in the natural voice, so the next one is ready when this one ends. */
 const PREFETCH = 2;
+
+/** A clip that takes this much longer to make than to play means the machine can't keep up. */
+const TOO_SLOW = 1.2;
+
+type SpeakerOptions = {
+  /** Said once when the natural voice gives way to the browser's for the rest of the session. */
+  onFallback?: (message: string) => void;
+  engine?: NaturalEngine | null;
+};
 
 /**
  * Speaks streamed text sentence by sentence, so the answer starts while it is still being written.
- * With `natural` set, each sentence is spoken by the server (/api/agent/speech, OpenAI) and played in
- * order; the first refusal (no key, allowance used up, OpenAI down) hands the rest of the session to
- * the browser's own voice and says why through `onFallback`. `idle()` resolves once everything queued
+ * With a natural voice set, the first sentence starts the engine's one-time download, and until it is
+ * in, answers are spoken by the browser. Each answer keeps the voice it started with, so voices never
+ * change mid-answer. If the engine fails or this machine is too slow for it, the rest of the session
+ * speaks in the browser's voice and `onFallback` says why. `idle()` resolves once everything queued
  * has been said or cancelled.
  */
 export class Speaker {
@@ -160,22 +171,32 @@ export class Speaker {
   private stopPlaying: (() => void) | null = null;
   private natural: string | null = null;
   private naturalOff = false;
+  /** Whether the answer playing now is in the natural voice. */
+  private runNatural = false;
+  private clipsMade = 0;
+  private slowClips = 0;
+  private readonly onFallback: (message: string) => void;
+  private readonly engine: NaturalEngine | null;
   voice: SpeechSynthesisVoice | null = null;
 
   constructor(
     private readonly lang: string,
     private readonly onSpeaking: (speaking: boolean) => void,
-    private readonly onFallback: (message: string) => void = () => {},
-  ) {}
+    options: SpeakerOptions = {},
+  ) {
+    this.onFallback = options.onFallback ?? (() => {});
+    this.engine = options.engine ?? null;
+  }
 
   /** The natural voice to speak in, or null for the browser's. Choosing again retries after a fallback. */
   setNatural(voice: string | null) {
     this.natural = voice;
     this.naturalOff = false;
+    this.slowClips = 0;
   }
 
   private get usingNatural() {
-    return this.natural !== null && !this.naturalOff && typeof Audio !== "undefined";
+    return this.natural !== null && !this.naturalOff && this.engine !== null && typeof Audio !== "undefined";
   }
 
   /** iOS only plays sound after a tap, so call this from the tap that turns voice on. */
@@ -229,6 +250,8 @@ export class Speaker {
 
   private say(text: string) {
     if (!this.usingNatural && !canSpeak()) return;
+    // First use: start the download. The browser speaks until it is in.
+    if (this.usingNatural && this.engine!.status !== "ready") this.engine!.load();
     this.queue.push({ text, audio: null });
     if (this.active) this.prefetch();
     else void this.run();
@@ -238,6 +261,7 @@ export class Speaker {
   private async run() {
     const generation = this.generation;
     this.active = true;
+    this.runNatural = this.usingNatural && this.engine!.status === "ready";
     this.onSpeaking(true);
     for (;;) {
       this.prefetch();
@@ -256,30 +280,31 @@ export class Speaker {
   }
 
   private prefetch() {
-    if (!this.usingNatural) return;
-    for (const line of this.queue.slice(0, PREFETCH)) line.audio ??= this.fetchAudio(line.text);
+    if (!this.runNatural || !this.usingNatural) return;
+    for (const line of this.queue.slice(0, PREFETCH)) line.audio ??= this.make(line.text);
   }
 
-  private async fetchAudio(text: string): Promise<Blob | null> {
+  private async make(text: string): Promise<Blob | null> {
     const request = new AbortController();
     this.requests.add(request);
     try {
-      const response = await fetch("/api/agent/speech", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text, voice: this.natural }),
-        signal: request.signal,
-      });
-      if (response.ok) return await response.blob();
-      const data = (await response.json().catch(() => ({}))) as { error?: string };
-      this.fallBack(data.error || "The natural voice is unavailable right now.");
-      return null;
+      const made = await this.engine!.speak(text, this.natural!, request.signal);
+      this.checkPace(made);
+      return made.clip;
     } catch {
-      if (!request.signal.aborted) this.fallBack("The natural voice is unavailable right now.");
+      if (!request.signal.aborted) this.fallBack("The natural voice stopped working.");
       return null;
     } finally {
       this.requests.delete(request);
     }
+  }
+
+  /** The first clip includes warming up, so it doesn't count. Two slow ones after it and the browser takes over. */
+  private checkPace(made: NaturalClip) {
+    this.clipsMade += 1;
+    if (this.clipsMade === 1 || made.took <= made.seconds * TOO_SLOW) return;
+    this.slowClips += 1;
+    if (this.slowClips >= 2) this.fallBack("This computer is too slow for the natural voice.");
   }
 
   /** Switch to the browser's voice for the rest of the session rather than mixing voices sentence by sentence. */
