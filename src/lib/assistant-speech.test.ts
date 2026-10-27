@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rankVoices, speakableText, takeSentences } from "@/lib/assistant-speech";
+import { defaultNaturalVoice, isNaturalVoice, NATURAL_VOICES, naturalVoiceFits, rankVoices, speakableText, takeSentences } from "@/lib/assistant-speech";
 
 describe("assistant voice text", () => {
   it("reads links by their name and drops markdown, URLs and emoji", () => {
@@ -40,5 +40,41 @@ describe("assistant voice text", () => {
       "Fred",
     ]);
     expect(rankVoices(voices, "fr-FR").map((voice) => voice.name)).toEqual(["Amélie"]);
+  });
+});
+
+describe("natural voices", () => {
+  it("knows its own voices and picks one for the browser's English", () => {
+    expect(isNaturalVoice("af_heart")).toBe(true);
+    expect(isNaturalVoice("robot-9000")).toBe(false);
+    expect(isNaturalVoice(undefined)).toBe(false);
+    expect(defaultNaturalVoice("en-US")).toBe("af_heart");
+    expect(defaultNaturalVoice("en-GB")).toBe("bf_emma");
+    expect(defaultNaturalVoice("en-AU")).toBe("bf_emma");
+    expect(NATURAL_VOICES.every((voice) => isNaturalVoice(voice.id))).toBe(true);
+  });
+
+  it("runs on English desktops and keeps the browser's voice everywhere else", () => {
+    const desktop = {
+      lang: "en-US",
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36",
+      maxTouchPoints: 0,
+      deviceMemory: 8,
+      workers: true,
+      wasm: true,
+    };
+    expect(naturalVoiceFits(desktop)).toBe(true);
+    expect(naturalVoiceFits({ ...desktop, lang: "en-GB" })).toBe(true);
+    expect(naturalVoiceFits({ ...desktop, lang: "nl-NL" })).toBe(false);
+    expect(naturalVoiceFits({ ...desktop, mobile: true })).toBe(false);
+    expect(naturalVoiceFits({ ...desktop, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile/15E148" })).toBe(false);
+    expect(naturalVoiceFits({ ...desktop, userAgent: "Mozilla/5.0 (Linux; Android 15; Pixel 9) Chrome/141.0 Mobile Safari/537.36" })).toBe(false);
+    // An iPad says it is a Mac, but has a touch screen.
+    expect(naturalVoiceFits({ ...desktop, userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/18.0 Safari/605.1.15", maxTouchPoints: 5 })).toBe(false);
+    expect(naturalVoiceFits({ ...desktop, userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/18.0 Safari/605.1.15" })).toBe(true);
+    expect(naturalVoiceFits({ ...desktop, deviceMemory: 2 })).toBe(false);
+    expect(naturalVoiceFits({ ...desktop, deviceMemory: undefined })).toBe(true);
+    expect(naturalVoiceFits({ ...desktop, saveData: true })).toBe(false);
+    expect(naturalVoiceFits({ ...desktop, wasm: false })).toBe(false);
   });
 });

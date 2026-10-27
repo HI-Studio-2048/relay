@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { NaturalClip, NaturalEngine } from "@/components/assistant/kokoro";
 import { rankVoices, takeSentences } from "@/lib/assistant-speech";
 
 /**
- * The browser's own speech: SpeechRecognition to hear the person (Chrome, Edge and Safari; not Firefox)
- * and speechSynthesis to answer out loud. Nothing here costs anything or leaves the browser except
- * what the browser itself sends to its speech service.
+ * Speech for the assistant: SpeechRecognition to hear the person (Chrome, Edge and Safari; not Firefox),
+ * and to answer out loud the natural voice (Kokoro, run in this browser by kokoro.ts) when it fits the
+ * device, with the browser's own speechSynthesis as the fallback. None of it costs Recatch anything.
  */
 
 type RecognitionAlternative = { transcript: string };
@@ -115,24 +116,96 @@ export function listenOnce(lang: string, onHearing: (text: string) => void) {
   };
 }
 
+/** A tenth of a second of silence, played from the tap that turns voice on so iOS lets audio play afterwards. */
+function silentWav() {
+  const samples = 800;
+  const bytes = new Uint8Array(44 + samples);
+  const view = new DataView(bytes.buffer);
+  const ascii = (offset: number, text: string) => [...text].forEach((char, index) => (bytes[offset + index] = char.charCodeAt(0)));
+  ascii(0, "RIFF");
+  view.setUint32(4, 36 + samples, true);
+  ascii(8, "WAVEfmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, 8000, true);
+  view.setUint32(28, 8000, true);
+  view.setUint16(32, 1, true);
+  view.setUint16(34, 8, true);
+  ascii(36, "data");
+  view.setUint32(40, samples, true);
+  bytes.fill(128, 44);
+  return `data:audio/wav;base64,${btoa(String.fromCharCode(...bytes))}`;
+}
+
+type Line = { text: string; audio: Promise<Blob | null> | null };
+
+/** Sentences made ahead in the natural voice, so the next one is ready when this one ends. */
+const PREFETCH = 2;
+
+/** A clip that takes this much longer to make than to play means the machine can't keep up. */
+const TOO_SLOW = 1.2;
+
+type SpeakerOptions = {
+  /** Said once when the natural voice gives way to the browser's for the rest of the session. */
+  onFallback?: (message: string) => void;
+  engine?: NaturalEngine | null;
+};
+
 /**
  * Speaks streamed text sentence by sentence, so the answer starts while it is still being written.
- * `idle()` resolves once everything queued has been said or cancelled.
+ * With a natural voice set, the first sentence starts the engine's one-time download, and until it is
+ * in, answers are spoken by the browser. Each answer keeps the voice it started with, so voices never
+ * change mid-answer. If the engine fails or this machine is too slow for it, the rest of the session
+ * speaks in the browser's voice and `onFallback` says why. `idle()` resolves once everything queued
+ * has been said or cancelled.
  */
 export class Speaker {
-  private pending = 0;
+  private queue: Line[] = [];
+  private active = false;
   private buffer = "";
   private generation = 0;
   private waiters: (() => void)[] = [];
+  private requests = new Set<AbortController>();
+  private player: HTMLAudioElement | null = null;
+  private stopPlaying: (() => void) | null = null;
+  private natural: string | null = null;
+  private naturalOff = false;
+  /** Whether the answer playing now is in the natural voice. */
+  private runNatural = false;
+  private clipsMade = 0;
+  private slowClips = 0;
+  private readonly onFallback: (message: string) => void;
+  private readonly engine: NaturalEngine | null;
   voice: SpeechSynthesisVoice | null = null;
 
   constructor(
     private readonly lang: string,
     private readonly onSpeaking: (speaking: boolean) => void,
-  ) {}
+    options: SpeakerOptions = {},
+  ) {
+    this.onFallback = options.onFallback ?? (() => {});
+    this.engine = options.engine ?? null;
+  }
 
-  /** iOS only speaks after a tap, so call this from the tap that turns voice on. */
+  /** The natural voice to speak in, or null for the browser's. Choosing again retries after a fallback. */
+  setNatural(voice: string | null) {
+    this.natural = voice;
+    this.naturalOff = false;
+    this.slowClips = 0;
+  }
+
+  private get usingNatural() {
+    return this.natural !== null && !this.naturalOff && this.engine !== null && typeof Audio !== "undefined";
+  }
+
+  /** iOS only plays sound after a tap, so call this from the tap that turns voice on. */
   unlock() {
+    if (this.usingNatural) {
+      const player = this.audio();
+      player.src = silentWav();
+      void player.play().catch(() => {});
+    }
     if (!canSpeak()) return;
     const utterance = new SpeechSynthesisUtterance(" ");
     utterance.volume = 0;
@@ -157,51 +230,146 @@ export class Speaker {
   cancel() {
     this.generation += 1;
     this.buffer = "";
-    this.pending = 0;
+    this.queue = [];
+    this.active = false;
+    for (const request of this.requests) request.abort();
+    this.requests.clear();
+    this.stopPlaying?.();
     if (canSpeak()) window.speechSynthesis.cancel();
     this.settle();
   }
 
   get speaking() {
-    return this.pending > 0;
+    return this.active || this.queue.length > 0;
   }
 
   idle(): Promise<void> {
-    if (this.pending === 0) return Promise.resolve();
+    if (!this.speaking) return Promise.resolve();
     return new Promise((resolve) => this.waiters.push(resolve));
   }
 
   private say(text: string) {
-    if (!canSpeak()) return;
+    if (!this.usingNatural && !canSpeak()) return;
+    // First use: start the download. The browser speaks until it is in.
+    if (this.usingNatural && this.engine!.status !== "ready") this.engine!.load();
+    this.queue.push({ text, audio: null });
+    if (this.active) this.prefetch();
+    else void this.run();
+  }
+
+  /** Play the queue in order until it is empty or cancelled. */
+  private async run() {
     const generation = this.generation;
-    const utterance = new SpeechSynthesisUtterance(text);
-    if (this.voice) {
-      utterance.voice = this.voice;
-      utterance.lang = this.voice.lang;
-    } else {
-      utterance.lang = this.lang;
-    }
-    utterance.rate = 1.03;
-    let finished = false;
-    // Some browsers drop the end event now and then; never wait longer than the sentence could take.
-    const watchdog = window.setTimeout(() => done(), 4000 + text.length * 110);
-    const done = () => {
-      if (finished) return;
-      finished = true;
-      window.clearTimeout(watchdog);
+    this.active = true;
+    this.runNatural = this.usingNatural && this.engine!.status === "ready";
+    this.onSpeaking(true);
+    for (;;) {
+      this.prefetch();
+      const line = this.queue.shift();
+      if (!line) break;
+      this.prefetch();
+      const audio = line.audio ? await line.audio : null;
       if (generation !== this.generation) return;
-      this.pending = Math.max(0, this.pending - 1);
-      this.settle();
-    };
-    utterance.onend = done;
-    utterance.onerror = done;
-    if (this.pending === 0) this.onSpeaking(true);
-    this.pending += 1;
-    window.speechSynthesis.speak(utterance);
+      const played = audio ? await this.play(audio) : false;
+      if (generation !== this.generation) return;
+      if (!played) await this.speakInBrowser(line.text);
+      if (generation !== this.generation) return;
+    }
+    this.active = false;
+    this.settle();
+  }
+
+  private prefetch() {
+    if (!this.runNatural || !this.usingNatural) return;
+    for (const line of this.queue.slice(0, PREFETCH)) line.audio ??= this.make(line.text);
+  }
+
+  private async make(text: string): Promise<Blob | null> {
+    const request = new AbortController();
+    this.requests.add(request);
+    try {
+      const made = await this.engine!.speak(text, this.natural!, request.signal);
+      this.checkPace(made);
+      return made.clip;
+    } catch {
+      if (!request.signal.aborted) this.fallBack("The natural voice stopped working.");
+      return null;
+    } finally {
+      this.requests.delete(request);
+    }
+  }
+
+  /** The first clip includes warming up, so it doesn't count. Two slow ones after it and the browser takes over. */
+  private checkPace(made: NaturalClip) {
+    this.clipsMade += 1;
+    if (this.clipsMade === 1 || made.took <= made.seconds * TOO_SLOW) return;
+    this.slowClips += 1;
+    if (this.slowClips >= 2) this.fallBack("This computer is too slow for the natural voice.");
+  }
+
+  /** Switch to the browser's voice for the rest of the session rather than mixing voices sentence by sentence. */
+  private fallBack(reason: string) {
+    if (this.naturalOff) return;
+    this.naturalOff = true;
+    this.onFallback(canSpeak() ? `${reason} The browser's voice is speaking instead.` : reason);
+  }
+
+  private audio() {
+    this.player ??= new Audio();
+    return this.player;
+  }
+
+  /** Resolves true once the clip has played (or was stopped), false if it would not play. */
+  private play(clip: Blob) {
+    return new Promise<boolean>((resolve) => {
+      const player = this.audio();
+      const url = URL.createObjectURL(clip);
+      let finished = false;
+      const finish = (played: boolean) => {
+        if (finished) return;
+        finished = true;
+        player.onended = null;
+        player.onerror = null;
+        this.stopPlaying = null;
+        URL.revokeObjectURL(url);
+        resolve(played);
+      };
+      this.stopPlaying = () => {
+        player.pause();
+        finish(true);
+      };
+      player.onended = () => finish(true);
+      player.onerror = () => finish(false);
+      player.src = url;
+      player.play().catch(() => finish(false));
+    });
+  }
+
+  private speakInBrowser(text: string) {
+    return new Promise<void>((resolve) => {
+      if (!canSpeak()) return resolve();
+      const utterance = new SpeechSynthesisUtterance(text);
+      if (this.voice) {
+        utterance.voice = this.voice;
+        utterance.lang = this.voice.lang;
+      } else {
+        utterance.lang = this.lang;
+      }
+      utterance.rate = 1.03;
+      // Some browsers drop the end event now and then; never wait longer than the sentence could take.
+      const watchdog = window.setTimeout(() => done(), 4000 + text.length * 110);
+      const done = () => {
+        window.clearTimeout(watchdog);
+        resolve();
+      };
+      utterance.onend = done;
+      utterance.onerror = done;
+      window.speechSynthesis.speak(utterance);
+    });
   }
 
   private settle() {
-    if (this.pending > 0) return;
+    if (this.speaking) return;
     this.onSpeaking(false);
     for (const resolve of this.waiters.splice(0)) resolve();
   }

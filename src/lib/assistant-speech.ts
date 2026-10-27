@@ -81,3 +81,62 @@ export function rankVoices<T extends VoiceLike>(voices: T[], lang: string): T[] 
     .filter((item) => item.score >= 0);
   return scored.sort((a, b) => b.score - a.score).map((item) => item.voice);
 }
+
+/**
+ * The natural voices: Kokoro, an open (Apache 2.0) speech model that runs in the person's own browser
+ * (components/assistant/kokoro.ts), so speaking costs Recatch nothing. It only speaks English, and the
+ * model is a one-time download, so phones, tablets, data saver and small machines keep the browser's
+ * voice. The picker stores these as "natural:<id>" beside the browser's voices.
+ */
+export const NATURAL_VOICES = [
+  { id: "af_heart", label: "Heart (American)" },
+  { id: "af_bella", label: "Bella (American)" },
+  { id: "am_michael", label: "Michael (American)" },
+  { id: "am_fenrir", label: "Fenrir (American)" },
+  { id: "bf_emma", label: "Emma (British)" },
+  { id: "bm_george", label: "George (British)" },
+] as const;
+
+export type NaturalVoiceId = (typeof NATURAL_VOICES)[number]["id"];
+
+export function isNaturalVoice(id: unknown): id is NaturalVoiceId {
+  return NATURAL_VOICES.some((voice) => voice.id === id);
+}
+
+/** The natural voice that suits the browser's English: British for en-GB and nearby, American otherwise. */
+export function defaultNaturalVoice(lang: string): NaturalVoiceId {
+  return /^en-(gb|ie|au|nz|za|in)\b/i.test(lang) ? "bf_emma" : "af_heart";
+}
+
+/** The model download, for telling people what they are getting before it starts. */
+export const NATURAL_VOICE_DOWNLOAD_MB = 92;
+
+export type DeviceTraits = {
+  lang: string;
+  userAgent: string;
+  /** navigator.userAgentData.mobile where the browser has it. */
+  mobile?: boolean;
+  maxTouchPoints: number;
+  /** navigator.deviceMemory in GB, where the browser has it (Chrome, Edge). */
+  deviceMemory?: number;
+  /** The person asked for less data (navigator.connection.saveData). */
+  saveData?: boolean;
+  workers: boolean;
+  wasm: boolean;
+};
+
+/**
+ * Whether this browser should run the natural voice. Phones and tablets keep the browser's voice: the
+ * download is large and the model is slow and memory hungry there. iPads report a Mac, so a Mac with
+ * a touch screen counts as a tablet.
+ */
+export function naturalVoiceFits(device: DeviceTraits) {
+  if (!device.workers || !device.wasm) return false;
+  if (!/^en\b/i.test(device.lang)) return false;
+  if (device.saveData) return false;
+  if (device.deviceMemory !== undefined && device.deviceMemory < 4) return false;
+  if (device.mobile) return false;
+  if (/android|iphone|ipad|ipod|mobile|silk|kindle/i.test(device.userAgent)) return false;
+  if (/macintosh/i.test(device.userAgent) && device.maxTouchPoints > 1) return false;
+  return true;
+}
