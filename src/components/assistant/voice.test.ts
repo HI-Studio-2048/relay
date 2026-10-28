@@ -104,6 +104,30 @@ describe("assistant speaker", () => {
     expect(engine.load).not.toHaveBeenCalled();
   });
 
+  it("splits a long first sentence so the opening words play while the rest is made", async () => {
+    const { Speaker } = await import("@/components/assistant/voice");
+    const engine = fakeEngine("ready");
+    const speaker = new Speaker("en-US", () => {}, { engine });
+    speaker.setNatural("af_heart");
+    speaker.feed("I drafted a reply to each one, and you can review them before anything is sent. Then I stopped, as asked by you.");
+    speaker.flush();
+    await speaker.idle();
+    expect(played).toEqual([
+      "I drafted a reply to each one,",
+      "and you can review them before anything is sent.",
+      "Then I stopped, as asked by you.",
+    ]);
+  });
+
+  it("starts loading when voice is turned on, before any answer", async () => {
+    const { Speaker } = await import("@/components/assistant/voice");
+    const engine = fakeEngine("idle");
+    const speaker = new Speaker("en-US", () => {}, { engine });
+    speaker.setNatural("af_heart");
+    speaker.unlock();
+    expect(engine.load).toHaveBeenCalled();
+  });
+
   it("starts the download on first use and lets the browser speak until it is in", async () => {
     const { Speaker } = await import("@/components/assistant/voice");
     const engine = fakeEngine("idle");

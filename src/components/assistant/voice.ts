@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { NaturalClip, NaturalEngine } from "@/components/assistant/kokoro";
-import { rankVoices, takeSentences } from "@/lib/assistant-speech";
+import { rankVoices, splitFirstClause, takeSentences } from "@/lib/assistant-speech";
 
 /**
  * Speech for the assistant: SpeechRecognition to hear the person (Chrome, Edge and Safari; not Firefox),
@@ -199,9 +199,13 @@ export class Speaker {
     return this.natural !== null && !this.naturalOff && this.engine !== null && typeof Audio !== "undefined";
   }
 
-  /** iOS only plays sound after a tap, so call this from the tap that turns voice on. */
+  /**
+   * iOS only plays sound after a tap, so call this from the tap that turns voice on. It also starts
+   * loading the natural voice, so it is ready by the time the first answer comes back.
+   */
   unlock() {
     if (this.usingNatural) {
+      if (this.engine!.status !== "ready") this.engine!.load();
       const player = this.audio();
       player.src = silentWav();
       void player.play().catch(() => {});
@@ -252,7 +256,9 @@ export class Speaker {
     if (!this.usingNatural && !canSpeak()) return;
     // First use: start the download. The browser speaks until it is in.
     if (this.usingNatural && this.engine!.status !== "ready") this.engine!.load();
-    this.queue.push({ text, audio: null });
+    // The first line of an answer is made while the person waits, so keep it short.
+    const lines = !this.active && this.queue.length === 0 && this.usingNatural && this.engine!.status === "ready" ? splitFirstClause(text) : [text];
+    for (const line of lines) this.queue.push({ text: line, audio: null });
     if (this.active) this.prefetch();
     else void this.run();
   }

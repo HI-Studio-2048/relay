@@ -121,6 +121,16 @@ export function createKokoroEngine(makeWorker: () => Worker = startKokoroWorker)
   return new KokoroEngine(makeWorker);
 }
 
+/** Whether this browser can run the model on the graphics card, which is several times faster. */
+export async function webGpuAvailable() {
+  try {
+    const gpu = (navigator as Navigator & { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
+    return Boolean(await gpu?.requestAdapter());
+  } catch {
+    return false;
+  }
+}
+
 let shared: NaturalEngine | null = null;
 
 /** The console's one engine. Nothing downloads until something calls load(). */
