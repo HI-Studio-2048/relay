@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultNaturalVoice, isNaturalVoice, NATURAL_VOICES, naturalVoiceFits, rankVoices, speakableText, takeSentences } from "@/lib/assistant-speech";
+import { defaultNaturalVoice, isNaturalVoice, NATURAL_VOICES, naturalVoiceDownloadMb, naturalVoiceEnglishOnly, naturalVoiceSupport, rankVoices, splitFirstClause, speakableText, takeSentences } from "@/lib/assistant-speech";
 
 describe("assistant voice text", () => {
   it("reads links by their name and drops markdown, URLs and emoji", () => {
@@ -54,7 +54,7 @@ describe("natural voices", () => {
     expect(NATURAL_VOICES.every((voice) => isNaturalVoice(voice.id))).toBe(true);
   });
 
-  it("runs on English desktops and keeps the browser's voice everywhere else", () => {
+  it("is on by default on English desktops and offered to everyone else who can run it", () => {
     const desktop = {
       lang: "en-US",
       userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36",
@@ -62,19 +62,49 @@ describe("natural voices", () => {
       deviceMemory: 8,
       workers: true,
       wasm: true,
+      webgpu: true,
     };
-    expect(naturalVoiceFits(desktop)).toBe(true);
-    expect(naturalVoiceFits({ ...desktop, lang: "en-GB" })).toBe(true);
-    expect(naturalVoiceFits({ ...desktop, lang: "nl-NL" })).toBe(false);
-    expect(naturalVoiceFits({ ...desktop, mobile: true })).toBe(false);
-    expect(naturalVoiceFits({ ...desktop, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile/15E148" })).toBe(false);
-    expect(naturalVoiceFits({ ...desktop, userAgent: "Mozilla/5.0 (Linux; Android 15; Pixel 9) Chrome/141.0 Mobile Safari/537.36" })).toBe(false);
+    expect(naturalVoiceSupport(desktop)).toBe("default");
+    expect(naturalVoiceSupport({ ...desktop, lang: "en-GB" })).toBe("default");
+    expect(naturalVoiceSupport({ ...desktop, deviceMemory: undefined })).toBe("default");
+    expect(naturalVoiceSupport({ ...desktop, userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/18.0 Safari/605.1.15" })).toBe("default");
+    // Everyone else can still pick it. Without WebGPU it is too slow to start on its own.
+    expect(naturalVoiceSupport({ ...desktop, webgpu: false })).toBe("offer");
+    expect(naturalVoiceSupport({ ...desktop, lang: "nl-NL" })).toBe("offer");
+    expect(naturalVoiceSupport({ ...desktop, mobile: true })).toBe("offer");
+    expect(naturalVoiceSupport({ ...desktop, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile/15E148" })).toBe("offer");
+    expect(naturalVoiceSupport({ ...desktop, userAgent: "Mozilla/5.0 (Linux; Android 15; Pixel 9) Chrome/141.0 Mobile Safari/537.36" })).toBe("offer");
     // An iPad says it is a Mac, but has a touch screen.
-    expect(naturalVoiceFits({ ...desktop, userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/18.0 Safari/605.1.15", maxTouchPoints: 5 })).toBe(false);
-    expect(naturalVoiceFits({ ...desktop, userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/18.0 Safari/605.1.15" })).toBe(true);
-    expect(naturalVoiceFits({ ...desktop, deviceMemory: 2 })).toBe(false);
-    expect(naturalVoiceFits({ ...desktop, deviceMemory: undefined })).toBe(true);
-    expect(naturalVoiceFits({ ...desktop, saveData: true })).toBe(false);
-    expect(naturalVoiceFits({ ...desktop, wasm: false })).toBe(false);
+    expect(naturalVoiceSupport({ ...desktop, userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/18.0 Safari/605.1.15", maxTouchPoints: 5 })).toBe("offer");
+    expect(naturalVoiceSupport({ ...desktop, deviceMemory: 2 })).toBe("offer");
+    expect(naturalVoiceSupport({ ...desktop, saveData: true })).toBe("offer");
+    // Only a browser that can't run it at all goes without.
+    expect(naturalVoiceSupport({ ...desktop, wasm: false })).toBe("none");
+    expect(naturalVoiceSupport({ ...desktop, workers: false })).toBe("none");
+    expect(naturalVoiceEnglishOnly("en-CA")).toBe(false);
+    expect(naturalVoiceEnglishOnly("fr-FR")).toBe(true);
+  });
+
+  it("names the download for the model this browser will get", () => {
+    expect(naturalVoiceDownloadMb(true)).toBe(155);
+    expect(naturalVoiceDownloadMb(false)).toBe(92);
+  });
+
+  it("splits a long first sentence at its first comma so the opening words play sooner", () => {
+    expect(splitFirstClause("Sure, here it is.")).toEqual(["Sure, here it is."]);
+    expect(splitFirstClause("I drafted a reply to each one, and you can review them before anything is sent.")).toEqual([
+      "I drafted a reply to each one,",
+      "and you can review them before anything is sent.",
+    ]);
+    // A comma too early or too late leaves it whole.
+    expect(splitFirstClause("Yes, you have three new comments waiting on your giveaway post.")).toEqual([
+      "Yes, you have three new comments waiting on your giveaway post.",
+    ]);
+    expect(splitFirstClause("You have three new comments waiting on your giveaway post, too.")).toEqual([
+      "You have three new comments waiting on your giveaway post, too.",
+    ]);
+    expect(splitFirstClause("You have three new comments waiting on your giveaway post today.")).toEqual([
+      "You have three new comments waiting on your giveaway post today.",
+    ]);
   });
 });

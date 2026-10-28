@@ -84,9 +84,9 @@ export function rankVoices<T extends VoiceLike>(voices: T[], lang: string): T[] 
 
 /**
  * The natural voices: Kokoro, an open (Apache 2.0) speech model that runs in the person's own browser
- * (components/assistant/kokoro.ts), so speaking costs Recatch nothing. It only speaks English, and the
- * model is a one-time download, so phones, tablets, data saver and small machines keep the browser's
- * voice. The picker stores these as "natural:<id>" beside the browser's voices.
+ * (components/assistant/kokoro.ts), so speaking costs Recatch nothing. Every browser that can run it
+ * lists them; see naturalVoiceSupport for where they start on their own. The picker stores these as
+ * "natural:<id>" beside the browser's voices.
  */
 export const NATURAL_VOICES = [
   { id: "af_heart", label: "Heart (American)" },
@@ -108,8 +108,21 @@ export function defaultNaturalVoice(lang: string): NaturalVoiceId {
   return /^en-(gb|ie|au|nz|za|in)\b/i.test(lang) ? "bf_emma" : "af_heart";
 }
 
-/** The model download, for telling people what they are getting before it starts. */
-export const NATURAL_VOICE_DOWNLOAD_MB = 92;
+/** The model download, for telling people what they are getting before it starts (kokoro.worker.ts picks the model). */
+export function naturalVoiceDownloadMb(webgpu: boolean) {
+  return webgpu ? 155 : 92;
+}
+
+/**
+ * The first sentence of an answer is made before anything is heard, so a long one is split at its
+ * first comma: the opening words play while the rest is made. Short sentences stay whole.
+ */
+export function splitFirstClause(sentence: string): string[] {
+  if (sentence.split(/\s+/).length <= 8) return [sentence];
+  const match = /^(\S+(?:\s+\S+){2,}?[,;:])\s+(\S[\s\S]*)$/.exec(sentence);
+  if (!match || match[2].split(/\s+/).length < 3) return [sentence];
+  return [match[1], match[2]];
+}
 
 export type DeviceTraits = {
   lang: string;
@@ -123,20 +136,33 @@ export type DeviceTraits = {
   saveData?: boolean;
   workers: boolean;
   wasm: boolean;
+  /** The browser can run the model on the graphics card (navigator.gpu gave an adapter). */
+  webgpu: boolean;
 };
 
 /**
- * Whether this browser should run the natural voice. Phones and tablets keep the browser's voice: the
- * download is large and the model is slow and memory hungry there. iPads report a Mac, so a Mac with
- * a touch screen counts as a tablet.
+ * Whether the natural voices are on by default ("default"), listed for the person to pick ("offer"),
+ * or out of reach ("none", a browser without workers or WebAssembly). Everyone who can run them gets
+ * them. They start on their own only on English desktops whose browser has WebGPU: without it the model
+ * is too slow to keep up with speech (see kokoro.worker.ts), and elsewhere the download is large for a
+ * phone plan, the model is memory hungry, or the voices can't speak the browser's language. There the
+ * browser's voice stays first until someone picks one. iPads report a Mac, so a Mac with a touch
+ * screen counts as a tablet.
  */
-export function naturalVoiceFits(device: DeviceTraits) {
-  if (!device.workers || !device.wasm) return false;
-  if (!/^en\b/i.test(device.lang)) return false;
-  if (device.saveData) return false;
-  if (device.deviceMemory !== undefined && device.deviceMemory < 4) return false;
-  if (device.mobile) return false;
-  if (/android|iphone|ipad|ipod|mobile|silk|kindle/i.test(device.userAgent)) return false;
-  if (/macintosh/i.test(device.userAgent) && device.maxTouchPoints > 1) return false;
-  return true;
+export function naturalVoiceSupport(device: DeviceTraits): "default" | "offer" | "none" {
+  if (!device.workers || !device.wasm) return "none";
+  const fitsDefault =
+    device.webgpu &&
+    /^en\b/i.test(device.lang) &&
+    !device.saveData &&
+    !(device.deviceMemory !== undefined && device.deviceMemory < 4) &&
+    !device.mobile &&
+    !/android|iphone|ipad|ipod|mobile|silk|kindle/i.test(device.userAgent) &&
+    !(/macintosh/i.test(device.userAgent) && device.maxTouchPoints > 1);
+  return fitsDefault ? "default" : "offer";
+}
+
+/** Kokoro only speaks English, which the voice menu says to people whose browser is in another language. */
+export function naturalVoiceEnglishOnly(lang: string) {
+  return !/^en\b/i.test(lang);
 }

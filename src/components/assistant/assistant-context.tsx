@@ -3,8 +3,15 @@
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { browserLanguage, canListen, canSpeak, listenErrorMessage, listenOnce, Speaker, useVoices } from "@/components/assistant/voice";
-import { kokoroEngine, type NaturalStatus } from "@/components/assistant/kokoro";
-import { defaultNaturalVoice, isNaturalVoice, NATURAL_VOICE_DOWNLOAD_MB, NATURAL_VOICES, naturalVoiceFits } from "@/lib/assistant-speech";
+import { kokoroEngine, type NaturalStatus, webGpuAvailable } from "@/components/assistant/kokoro";
+import {
+  defaultNaturalVoice,
+  isNaturalVoice,
+  naturalVoiceDownloadMb,
+  NATURAL_VOICES,
+  naturalVoiceEnglishOnly,
+  naturalVoiceSupport,
+} from "@/lib/assistant-speech";
 import { api } from "@/lib/client";
 
 export type DraftLink = { kind: "flow" | "broadcast"; id: string; name: string; href: string; botName: string };
@@ -61,7 +68,9 @@ function useAssistantState() {
   const [hearing, setHearing] = useState(false);
   const [voiceError, setVoiceError] = useState("");
   const [voiceNote, setVoiceNote] = useState("");
-  const [naturalFits, setNaturalFits] = useState(false);
+  const [naturalSupport, setNaturalSupport] = useState<"default" | "offer" | "none">("none");
+  const [webgpu, setWebgpu] = useState(false);
+  const naturalFits = naturalSupport !== "none";
   const [naturalState, setNaturalState] = useState<{ status: NaturalStatus; progress: number }>({ status: "idle", progress: 0 });
   const [voiceURI, setVoiceURI] = useState("");
   const [reading, setReading] = useState<string | null>(null);
@@ -81,18 +90,22 @@ function useAssistantState() {
       setSupport({ listen: canListen(), speak: canSpeak() });
       setLang(browserLanguage());
       const scope = navigator as Navigator & { userAgentData?: { mobile?: boolean }; deviceMemory?: number; connection?: { saveData?: boolean } };
-      setNaturalFits(
-        naturalVoiceFits({
-          lang: browserLanguage(),
-          userAgent: navigator.userAgent,
-          mobile: scope.userAgentData?.mobile,
-          maxTouchPoints: navigator.maxTouchPoints ?? 0,
-          deviceMemory: scope.deviceMemory,
-          saveData: scope.connection?.saveData,
-          workers: typeof Worker !== "undefined",
-          wasm: typeof WebAssembly !== "undefined",
-        }),
-      );
+      void webGpuAvailable().then((gpu) => {
+        setWebgpu(gpu);
+        setNaturalSupport(
+          naturalVoiceSupport({
+            lang: browserLanguage(),
+            userAgent: navigator.userAgent,
+            mobile: scope.userAgentData?.mobile,
+            maxTouchPoints: navigator.maxTouchPoints ?? 0,
+            deviceMemory: scope.deviceMemory,
+            saveData: scope.connection?.saveData,
+            workers: typeof Worker !== "undefined",
+            wasm: typeof WebAssembly !== "undefined",
+            webgpu: gpu,
+          }),
+        );
+      });
       try {
         setVoiceURI(window.localStorage.getItem(VOICE_KEY) ?? "");
       } catch {
@@ -136,16 +149,23 @@ function useAssistantState() {
   const voice = voices.find((item) => item.voiceURI === voiceURI) ?? voices[0] ?? null;
   // A natural voice where it fits the device, unless a browser voice was picked on purpose.
   const chosenNatural = voiceURI.startsWith(NATURAL_PREFIX) ? voiceURI.slice(NATURAL_PREFIX.length) : "";
-  const naturalVoice = !naturalFits ? null : isNaturalVoice(chosenNatural) ? chosenNatural : voiceURI && !chosenNatural ? null : defaultNaturalVoice(lang);
+  const naturalVoice = !naturalFits
+    ? null
+    : isNaturalVoice(chosenNatural)
+      ? chosenNatural
+      : voiceURI || naturalSupport !== "default"
+        ? null
+        : defaultNaturalVoice(lang);
   const naturalVoices = naturalFits ? NATURAL_VOICES : [];
   const voiceChoice = naturalVoice ? `${NATURAL_PREFIX}${naturalVoice}` : (voice?.voiceURI ?? "");
   /** What the voice menu says about the natural voices: the one-time download, or how far along it is. */
+  const naturalName = naturalVoiceEnglishOnly(lang) ? "Natural voices, English only" : "Natural voices";
   const naturalLabel =
     naturalState.status === "ready"
-      ? "Natural voices"
+      ? naturalName
       : naturalState.status === "loading"
-        ? `Natural voices (downloading, ${Math.round(naturalState.progress * 100)}%)`
-        : `Natural voices (one-time ${NATURAL_VOICE_DOWNLOAD_MB} MB download)`;
+        ? `${naturalName} (downloading, ${Math.round(naturalState.progress * 100)}%)`
+        : `${naturalName} (one-time ${naturalVoiceDownloadMb(webgpu)} MB download)`;
   useEffect(() => {
     if (speakerRef.current) speakerRef.current.voice = voice;
   }, [voice, lang, naturalFits]);
