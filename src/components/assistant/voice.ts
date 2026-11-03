@@ -166,6 +166,7 @@ export class Speaker {
   private buffer = "";
   private generation = 0;
   private waiters: (() => void)[] = [];
+  private said: string[] = [];
   private requests = new Set<AbortController>();
   private player: HTMLAudioElement | null = null;
   private stopPlaying: (() => void) | null = null;
@@ -243,6 +244,11 @@ export class Speaker {
     return this.active || this.queue.length > 0;
   }
 
+  /** The last few sentences queued or spoken, so the microphone can tell its own echo from the person. */
+  get recentText() {
+    return this.said.join(" ");
+  }
+
   idle(): Promise<void> {
     if (!this.speaking) return Promise.resolve();
     return new Promise((resolve) => this.waiters.push(resolve));
@@ -250,6 +256,7 @@ export class Speaker {
 
   private say(text: string) {
     if (!this.usingNatural && !canSpeak()) return;
+    this.said = [...this.said.slice(-5), text];
     // First use: start the download. The browser speaks until it is in.
     if (this.usingNatural && this.engine!.status !== "ready") this.engine!.load();
     this.queue.push({ text, audio: null });
@@ -390,4 +397,30 @@ export function useVoices(lang: string) {
     };
   }, [lang]);
   return voices;
+}
+
+/**
+ * Listens while the assistant is thinking or speaking, for the person talking over it. `isBargeIn`
+ * decides whether what was heard is them rather than the assistant's own voice coming back through the
+ * speakers; the first time it says yes, `onBargeIn` runs (stop speaking, drop the answer) and listening
+ * carries on until they pause. `interrupted` tells the two endings apart: an interruption with what
+ * they said, or a stretch with nothing but echo, after which the caller starts another watch.
+ */
+export function watchForBargeIn(
+  lang: string,
+  isBargeIn: (heard: string) => boolean,
+  onBargeIn: (heard: string) => void,
+  onHearing: (heard: string) => void,
+) {
+  const watch = {
+    interrupted: false,
+    ...listenOnce(lang, (heard) => {
+      if (watch.interrupted) onHearing(heard);
+      else if (isBargeIn(heard)) {
+        watch.interrupted = true;
+        onBargeIn(heard);
+      }
+    }),
+  };
+  return watch;
 }

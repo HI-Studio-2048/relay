@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultNaturalVoice, isNaturalVoice, NATURAL_VOICES, naturalVoiceFits, rankVoices, speakableText, takeSentences } from "@/lib/assistant-speech";
+import { defaultNaturalVoice, isBargeIn, isNaturalVoice, NATURAL_VOICES, naturalVoiceFits, rankVoices, speakableText, takeSentences } from "@/lib/assistant-speech";
 
 describe("assistant voice text", () => {
   it("reads links by their name and drops markdown, URLs and emoji", () => {
@@ -40,6 +40,23 @@ describe("assistant voice text", () => {
       "Fred",
     ]);
     expect(rankVoices(voices, "fr-FR").map((voice) => voice.name)).toEqual(["Amélie"]);
+  });
+});
+
+describe("talking over the assistant", () => {
+  const speaking = "I saved your comment funnel as a draft. Open it from the link, then press Test.";
+
+  it("ignores its own voice coming back through the speakers", () => {
+    expect(isBargeIn("I saved your comment funnel", speaking)).toBe(false);
+    expect(isBargeIn("open it from the link then", speaking)).toBe(false);
+    expect(isBargeIn("", speaking)).toBe(false);
+  });
+
+  it("stops for new words, or a single stop word", () => {
+    expect(isBargeIn("make it for Telegram instead", speaking)).toBe(true);
+    expect(isBargeIn("wait", speaking)).toBe(true);
+    expect(isBargeIn("draft press stop", speaking)).toBe(true);
+    expect(isBargeIn("funnel Telegram", speaking)).toBe(false);
   });
 });
 

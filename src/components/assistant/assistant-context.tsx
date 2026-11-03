@@ -2,9 +2,9 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { browserLanguage, canListen, canSpeak, listenErrorMessage, listenOnce, Speaker, useVoices } from "@/components/assistant/voice";
+import { browserLanguage, canListen, canSpeak, listenErrorMessage, listenOnce, Speaker, useVoices, watchForBargeIn } from "@/components/assistant/voice";
 import { kokoroEngine, type NaturalStatus } from "@/components/assistant/kokoro";
-import { defaultNaturalVoice, isNaturalVoice, NATURAL_VOICE_DOWNLOAD_MB, NATURAL_VOICES, naturalVoiceFits } from "@/lib/assistant-speech";
+import { defaultNaturalVoice, isBargeIn, isNaturalVoice, NATURAL_VOICE_DOWNLOAD_MB, NATURAL_VOICES, naturalVoiceFits } from "@/lib/assistant-speech";
 import { api } from "@/lib/client";
 
 export type DraftLink = { kind: "flow" | "broadcast"; id: string; name: string; href: string; botName: string };
@@ -33,6 +33,7 @@ export type Phase = "listening" | "thinking" | "speaking" | "paused";
 
 /** The chosen voice: "natural:<id>" for a Kokoro voice, or a browser voice's voiceURI. */
 const VOICE_KEY = "recatch.assistant.voice";
+const BARGE_KEY = "recatch.assistant.bargeIn";
 const NATURAL_PREFIX = "natural:";
 
 let localMessages = 0;
@@ -74,6 +75,9 @@ function useAssistantState() {
   const voiceOnRef = useRef(false);
   const cycleRef = useRef(0);
   const silenceRef = useRef(0);
+  const bargeRef = useRef<ReturnType<typeof watchForBargeIn> | null>(null);
+  const [bargeIn, setBargeIn] = useState(true);
+  const bargeInRef = useRef(true);
   const hearingTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -95,6 +99,9 @@ function useAssistantState() {
       );
       try {
         setVoiceURI(window.localStorage.getItem(VOICE_KEY) ?? "");
+        const barge = window.localStorage.getItem(BARGE_KEY) !== "off";
+        bargeInRef.current = barge;
+        setBargeIn(barge);
       } catch {
         // Storage can be blocked; the best voice is picked instead.
       }
@@ -253,7 +260,23 @@ function useAssistantState() {
     await send(message);
   };
 
-  /** One listen → answer → speak round of voice mode. A tap or End starts a new cycle, which stops this one. */
+  const showHearing = (words: string) => {
+    setHeard(words);
+    setHearing(true);
+    window.clearTimeout(hearingTimer.current);
+    hearingTimer.current = window.setTimeout(() => setHearing(false), 300);
+  };
+
+  /** Stop listening for interruptions. Resolves once the browser has let go of the microphone (Chrome won't start a second listener before that), or after a moment regardless. */
+  const stopBargeWatch = () => {
+    const watch = bargeRef.current;
+    bargeRef.current = null;
+    if (!watch) return Promise.resolve();
+    watch.abort();
+    return Promise.race([watch.result.then(() => undefined), new Promise<void>((resolve) => window.setTimeout(resolve, 600))]);
+  };
+
+  /** One listen, answer, speak round of voice mode. A tap, an interruption or End starts a new cycle, which stops this one. */
   const listen = async () => {
     if (!voiceOnRef.current) return;
     const cycle = ++cycleRef.current;
@@ -261,12 +284,7 @@ function useAssistantState() {
     setHeard("");
     setLive("");
     setVoiceError("");
-    const listener = listenOnce(lang, (words) => {
-      setHeard(words);
-      setHearing(true);
-      window.clearTimeout(hearingTimer.current);
-      hearingTimer.current = window.setTimeout(() => setHearing(false), 300);
-    });
+    const listener = listenOnce(lang, showHearing);
     listenerRef.current = listener;
     const result = await listener.result;
     if (listenerRef.current === listener) listenerRef.current = null;
@@ -283,16 +301,66 @@ function useAssistantState() {
       return;
     }
     if (result.kind !== "heard") return;
+    await respond(result.text, cycle);
+  };
+
+  /** Answer what they said while listening for them talking over it, then listen again. */
+  const respond = async (said: string, cycle: number) => {
     silenceRef.current = 0;
     setPhase("thinking");
-    const answered = await send(result.text, { voice: true });
+    watchBargeIn(cycle);
+    const answered = await send(said, { voice: true });
     if (cycle !== cycleRef.current || !voiceOnRef.current) return;
     if (!answered) {
+      void stopBargeWatch();
       setPhase("paused");
       return;
     }
     await speakerRef.current?.idle();
+    if (cycle !== cycleRef.current || !voiceOnRef.current) return;
+    await stopBargeWatch();
     if (cycle === cycleRef.current && voiceOnRef.current) void listen();
+  };
+
+  /**
+   * While the assistant thinks or speaks, keep an ear open, like ChatGPT and Grok voice: when the
+   * person starts talking (not the assistant's own voice through the speakers), drop the rest of the
+   * answer and take what they say as the next message.
+   */
+  const watchBargeIn = (cycle: number) => {
+    if (!bargeInRef.current || !voiceOnRef.current || cycle !== cycleRef.current) return;
+    let interruptCycle = -1;
+    const watch = watchForBargeIn(
+      lang,
+      (heard) => isBargeIn(heard, speakerRef.current?.recentText ?? ""),
+      (heard) => {
+        if (cycle !== cycleRef.current) return;
+        interruptCycle = ++cycleRef.current;
+        requestRef.current?.abort();
+        speakerRef.current?.cancel();
+        listenerRef.current = watch;
+        setPhase("listening");
+        setLive("");
+        showHearing(heard);
+      },
+      showHearing,
+    );
+    bargeRef.current = watch;
+    void watch.result.then((result) => {
+      if (bargeRef.current === watch) bargeRef.current = null;
+      if (listenerRef.current === watch) listenerRef.current = null;
+      if (!voiceOnRef.current) return;
+      if (watch.interrupted) {
+        if (cycleRef.current !== interruptCycle) return;
+        if (result.kind === "heard") void respond(result.text, interruptCycle);
+        else void listen();
+        return;
+      }
+      // Only echo or quiet so far: keep listening while the answer is still going.
+      if (result.kind !== "stopped" && result.kind !== "error" && cycle === cycleRef.current) {
+        window.setTimeout(() => watchBargeIn(cycle), 150);
+      }
+    });
   };
 
   const startVoice = () => {
@@ -310,6 +378,7 @@ function useAssistantState() {
   const endVoice = () => {
     voiceOnRef.current = false;
     cycleRef.current += 1;
+    void stopBargeWatch();
     listenerRef.current?.abort();
     listenerRef.current = null;
     requestRef.current?.abort();
@@ -327,11 +396,25 @@ function useAssistantState() {
       listenerRef.current?.stop();
       return;
     }
-    cycleRef.current += 1;
+    const cycle = ++cycleRef.current;
     requestRef.current?.abort();
     speakerRef.current?.cancel();
     silenceRef.current = 0;
-    void listen();
+    void stopBargeWatch().then(() => {
+      if (cycle === cycleRef.current) void listen();
+    });
+  };
+
+  /** Interrupting by talking can be switched off, for a noisy room or speakers turned up loud. */
+  const chooseBargeIn = (on: boolean) => {
+    bargeInRef.current = on;
+    setBargeIn(on);
+    if (!on) void stopBargeWatch();
+    try {
+      window.localStorage.setItem(BARGE_KEY, on ? "on" : "off");
+    } catch {
+      // Not remembered this time.
+    }
   };
 
   const readAloud = (message: ChatMessage) => {
@@ -373,11 +456,29 @@ function useAssistantState() {
   };
 
   const phaseLabel = {
-    listening: "Listening… tap the circle when you're done",
-    thinking: "Thinking… tap to stop",
-    speaking: "Speaking… tap to interrupt",
-    paused: "Paused. Tap the circle to talk",
+    listening: "Listening… pause or tap the circle when you're done",
+    thinking: bargeIn ? "Thinking… just talk, or press Space, to interrupt" : "Thinking… tap to stop",
+    speaking: bargeIn ? "Speaking… just talk, or press Space, to interrupt" : "Speaking… tap or press Space to interrupt",
+    paused: "Paused. Tap the circle or press Space to talk",
   }[phase];
+
+  // Space works like the circle while voice is on, unless someone is typing.
+  const tapRef = useRef(tapOrb);
+  useEffect(() => {
+    tapRef.current = tapOrb;
+  });
+  useEffect(() => {
+    if (!voiceOn) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.code !== "Space" || event.repeat) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(target.tagName))) return;
+      event.preventDefault();
+      tapRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [voiceOn]);
 
   useEffect(() => {
     pathRef.current = pathname;
@@ -418,6 +519,8 @@ function useAssistantState() {
     readAloud,
     newChat,
     chooseVoice,
+    bargeIn,
+    chooseBargeIn,
     dockOpen,
     setDockOpen,
   };
