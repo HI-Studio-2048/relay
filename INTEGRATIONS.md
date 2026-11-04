@@ -135,12 +135,15 @@ Open, for a person:
 - [ ] October 31st: giveaway winners. Contacts filtered by the tag `giveaway-oct-31`.
 - [ ] Renew the business registration certificate before 2026-12-16 (TikTok and Meta verification rely on it).
 - [ ] Plan limits (what Starter and Pro leave out): Dan's call. Every plan gets everything until then.
-- [ ] Stripe webhook: add the `charge.dispute.closed` event to the live endpoint (Developers, Webhooks, the `recatch.app` endpoint, Select events). A won dispute reopens the account through it. Nothing breaks without it, a won dispute just stays closed until the next renewal.
 
 Open, parked on purpose (the user said leave them for now):
 - [ ] Connect a WhatsApp number through Zernio, separately. It connects differently from Instagram.
 - [ ] Bluesky comments, live test: set up a comment automation on a post by `@hiiiiiiiiiii2048.bsky.social` (signed in as `lilrannee@gmail.com`, which owns that account), reply from `@ezzawan.bsky.social`, and check the public reply in the thread and the DM. Both accounts already poll notifications without errors.
 - [ ] YouTube quota: ask Google for more before a dozen channels connect.
+
+Done on 2026-11-04:
+- [x] The 2026-10-21 fixes below are pushed and live (commit `f7a671d`, deploy `eedb330a`).
+- [x] Stripe webhook: `charge.dispute.closed` added to the live endpoint, so a won dispute reopens the account.
 
 Done on 2026-10-21 (fixes from a full code review):
 - [x] Missed comments no longer retries the same refused DMs every round. Each Send click tries each person once, so the people behind a refused block still get theirs.
