@@ -64,12 +64,14 @@ export function MissedComments({ flowId, onClose }: { flowId: string; onClose: (
     setProgress({ sent, failed, total, done: false });
     try {
       for (let round = 0; round < 100; round++) {
-        const data = await api<{ sent: number; failed: number; remaining: number }>(`/api/flows/${flowId}/missed-comments`, {
+        const data = await api<{ sent: number; failed: number; remaining: number; tried?: string[] }>(`/api/flows/${flowId}/missed-comments`, {
           method: "POST",
           body: JSON.stringify({ accountId: post.accountId, postId: post.id, limit: 20, skip }),
         });
         sent += data.sent;
         failed += data.failed;
+        // Everyone in this batch has had their go, sent or refused. Don't offer them again this run.
+        skip.push(...(data.tried ?? []));
         setProgress({ sent, failed, total, done: false });
         if (data.remaining === 0 || data.sent + data.failed === 0) break;
       }

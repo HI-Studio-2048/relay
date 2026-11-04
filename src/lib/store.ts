@@ -267,11 +267,12 @@ export async function pauseContactAutomation(contactId: string, minutes = AGENT_
     .where(eq(contacts.id, contactId));
   const session = await loadActiveSession(contactId);
   if (!session || session.status === "paused") return;
+  // resumeAt stays: a paused session is skipped by the delay worker, and once the pause ends
+  // (or someone presses Resume) a pending "wait 2 days" follow-up still goes out.
   await persistSession(contactId, {
     ...session,
     status: "paused",
     awaitingInput: false,
-    resumeAt: null,
   });
 }
 
@@ -294,7 +295,7 @@ export async function resumeContactAutomation(contactId: string) {
     step?.type === "form" ||
     step?.type === "ai" ||
     (step?.type === "text" && (step.quickReplies ?? []).length > 0);
-  const next: FlowSessionState = { ...session, status: "active", awaitingInput, resumeAt: null };
+  const next: FlowSessionState = { ...session, status: "active", awaitingInput, resumeAt: session.resumeAt ?? null };
   await persistSession(contactId, next);
   return next;
 }
@@ -316,14 +317,28 @@ export async function persistSession(contactId: string, session: FlowSessionStat
   });
 }
 
+/**
+ * Delay steps whose time has come. Includes sessions a teammate's takeover paused once that pause
+ * has run out, the same as the webhook does when the contact writes again.
+ */
 export async function listDueDelaySessions() {
   const db = await getDb();
-  return db
-    .select()
+  const now = new Date();
+  const rows = await db
+    .select({ session: flowSessions })
     .from(flowSessions)
+    .innerJoin(contacts, eq(contacts.id, flowSessions.contactId))
     .where(
-      and(eq(flowSessions.status, "active"), isNotNull(flowSessions.resumeAt), lte(flowSessions.resumeAt, new Date())),
+      and(
+        isNotNull(flowSessions.resumeAt),
+        lte(flowSessions.resumeAt, now),
+        or(
+          eq(flowSessions.status, "active"),
+          and(eq(flowSessions.status, "paused"), isNotNull(contacts.botPausedUntil), lte(contacts.botPausedUntil, now)),
+        ),
+      ),
     );
+  return rows.map((row) => row.session);
 }
 
 export async function loadActiveFlows(botId: string): Promise<FlowRecord[]> {

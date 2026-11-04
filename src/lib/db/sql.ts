@@ -439,4 +439,11 @@ CREATE TABLE IF NOT EXISTS assistant_usage (
   updated_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (owner_id, period)
 );
+ALTER TABLE sequence_subscriptions ADD COLUMN IF NOT EXISTS attempts integer NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS sequence_subscriptions_due_idx ON sequence_subscriptions(status, next_at);
+CREATE INDEX IF NOT EXISTS flow_sessions_contact_idx ON flow_sessions(contact_id);
+CREATE INDEX IF NOT EXISTS flow_sessions_resume_idx ON flow_sessions(resume_at) WHERE resume_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS contact_tags_tag_idx ON contact_tags(tag_id);
+ALTER TABLE broadcast_recipients ADD COLUMN IF NOT EXISTS claimed_at timestamptz;
+CREATE INDEX IF NOT EXISTS broadcast_recipients_status_idx ON broadcast_recipients(broadcast_id, status);
 `;

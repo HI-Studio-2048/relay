@@ -346,6 +346,50 @@ describe("signup and billing", () => {
     expect((await billingOf("ada@example.test"))?.billingStatus).toBe("unpaid");
   });
 
+  it("keeps a held account closed from an old return link, ignores refunds, and reopens on a won dispute", async () => {
+    const row = await billingOf("ada@example.test");
+    expect(row?.billingStatus).toBe("unpaid");
+    vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_fake");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/checkout/sessions/cs_ada_old")) {
+          return stripeJson({
+            id: "cs_ada_old",
+            customer: "cus_ada",
+            client_reference_id: row!.id,
+            payment_status: "paid",
+            subscription: { id: "sub_ada", status: "active" },
+            metadata: { user_id: row!.id, plan_id: "pro" },
+          });
+        }
+        if (url.includes("/charges/ch_ada")) return stripeJson({ id: "ch_ada", customer: "cus_ada" });
+        if (url.includes("/subscriptions/sub_ada")) return stripeJson({ id: "sub_ada", status: "active" });
+        return realFetch(input);
+      }),
+    );
+    // The return page from browser history: the subscription is still active at Stripe, but the account stays held.
+    const { confirmCheckoutSession } = await import("@/lib/billing/checkout");
+    expect((await confirmCheckoutSession(row!.id, "cs_ada_old")).access).toBe(false);
+    expect((await billingOf("ada@example.test"))?.billingStatus).toBe("unpaid");
+
+    const { POST } = await import("@/app/api/billing/webhook/route");
+    const send = (event: object) => {
+      const raw = JSON.stringify(event);
+      return POST(new Request("https://recatch.test/api/billing/webhook", { method: "POST", body: raw, headers: { "stripe-signature": sign(raw, "whsec_test") } }));
+    };
+    // A dispute we lost changes nothing; a won one restores what the subscription says.
+    expect((await send({ id: "evt_dispute_lost", type: "charge.dispute.closed", data: { object: { charge: "ch_ada", status: "lost" } } })).status).toBe(200);
+    expect((await billingOf("ada@example.test"))?.billingStatus).toBe("unpaid");
+    expect((await send({ id: "evt_dispute_won", type: "charge.dispute.closed", data: { object: { charge: "ch_ada", status: "won" } } })).status).toBe(200);
+    expect((await billingOf("ada@example.test"))?.billingStatus).toBe("active");
+
+    // Refunding a charge (the duplicate from a double checkout, say) leaves the paying account open.
+    expect((await send({ id: "evt_refund", type: "charge.refunded", data: { object: { customer: "cus_ada", refunded: true } } })).status).toBe(200);
+    expect((await billingOf("ada@example.test"))?.billingStatus).toBe("active");
+  });
+
   it("starts Stripe Checkout for a new account and applies the first-month coupon", async () => {
     const seen: string[] = [];
     vi.stubEnv("STRIPE_SECRET_KEY", "sk_test_fake");

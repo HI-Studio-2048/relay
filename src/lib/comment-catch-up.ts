@@ -159,7 +159,9 @@ export async function sendMissedComments(input: {
           )
       : [];
     const sent = new Set(sentRows.map((row) => row.contactId)).size;
-    return { sent, failed: batch.length - sent, remaining: missed.length - batch.length };
+    // `tried` goes back into the page's skip list, so a refused DM (which puts the person back on the
+    // missed list) is not retried every round and the people behind them still get their turn.
+    return { sent, failed: batch.length - sent, remaining: missed.length - batch.length, tried: batch.map((comment) => comment.commentId) };
   } finally {
     running.delete(input.flowId);
   }

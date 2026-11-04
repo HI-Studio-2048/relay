@@ -18,6 +18,8 @@ export async function sendCsatSurvey(contactId: string) {
     const [bot] = await db.select().from(bots).where(eq(bots.id, contact.botId)).limit(1);
     const csat = readCsat(bot?.settings);
     if (!bot || !csat.enabled) return false;
+    // YouTube has no private messages: the survey would be posted as a public reply under their comment.
+    if (bot.channel === "youtube") return false;
     const [agentReply] = await db
       .select({ id: messages.id })
       .from(messages)

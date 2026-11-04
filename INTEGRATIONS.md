@@ -76,7 +76,7 @@ Nobody had retried after the last deploy when this was written, so there is stil
 
 **Instagram in real use (2026-10-16).** `@danielphilipwatch` runs a giveaway: post `18113813108030596` (instagram.com/p/DefrA2Rm9Ow), comment "enter", two winners on October 31st. The comment flow is "Giveaway entry (Oct 31)" (flow id `a85fcf19-83cf-4112-93a6-1470fdb03cf9`, keywords `dp, enter`): a public reply, a private-reply DM with a "Count me in" button, an email question (skippable), the tag `giveaway-oct-31`, and a closing message linking danielphilip.com. On the 31st, filter Contacts by that tag to pick winners. What the day taught us:
 - About 120 people commented "enter" before the flow had that keyword. The flow editor's Missed comments panel (comment flows on Meta accounts only) lists a post's comments through Zernio (`GET /v1/inbox/comments?accountId=` for posts, `/v1/inbox/comments/<postId>?accountId=` for comments, paged by `cursor`), shows who matched and never got the DM, and sends the DM as private replies, one per person, no public reply. Instagram allows a private reply for 7 days after a comment. 117 were sent with no refusals.
-- A save from a flow editor tab opened before a change silently overwrites that change. It reverted `dp, enter` to `dp` once. The editor has no stale-save check yet.
+- A save from a flow editor tab opened before a change silently overwrites that change. It reverted `dp, enter` to `dp` once. Fixed on 2026-10-19: a stale tab now gets a 409 and a Reload banner.
 - When a second comment's private reply failed (Instagram said the commenter's account was not found, likely a deleted comment), Recatch used to clear the person's waiting flow, so the button in the first DM did nothing. Fixed in `7f48ada`.
 - Pictures, GIFs and files people send now show in Live Chat, and Live Chat can send them (paperclip or paste). Recatch keeps its own copy because Instagram's links expire. Confirmed with real Instagram pictures and GIFs on 2026-10-19.
 
@@ -135,11 +135,20 @@ Open, for a person:
 - [ ] October 31st: giveaway winners. Contacts filtered by the tag `giveaway-oct-31`.
 - [ ] Renew the business registration certificate before 2026-12-16 (TikTok and Meta verification rely on it).
 - [ ] Plan limits (what Starter and Pro leave out): Dan's call. Every plan gets everything until then.
+- [ ] Stripe webhook: add the `charge.dispute.closed` event to the live endpoint (Developers, Webhooks, the `recatch.app` endpoint, Select events). A won dispute reopens the account through it. Nothing breaks without it, a won dispute just stays closed until the next renewal.
 
 Open, parked on purpose (the user said leave them for now):
 - [ ] Connect a WhatsApp number through Zernio, separately. It connects differently from Instagram.
 - [ ] Bluesky comments, live test: set up a comment automation on a post by `@hiiiiiiiiiii2048.bsky.social` (signed in as `lilrannee@gmail.com`, which owns that account), reply from `@ezzawan.bsky.social`, and check the public reply in the thread and the DM. Both accounts already poll notifications without errors.
 - [ ] YouTube quota: ask Google for more before a dozen channels connect.
+
+Done on 2026-10-21 (fixes from a full code review):
+- [x] Missed comments no longer retries the same refused DMs every round. Each Send click tries each person once, so the people behind a refused block still get theirs.
+- [x] A sequence step that fails backs off (1 min, 10 min, 1 hour) and marks the subscriber `failed` after 4 tries. It used to retry every 400 ms, and a flow step resent its first message each time. A billing-paused account just waits.
+- [x] A teammate's reply in Live Chat no longer drops a pending "wait 2 days" follow-up. It goes out once the takeover pause ends.
+- [x] The CSAT survey is never sent on YouTube (it would have been a public reply).
+- [x] Broadcasts cut off by a deploy, or held while billing was paused, are picked up again within a minute. A row cut off mid-send is marked failed, not re-sent. Large audiences are written in chunks inside one transaction.
+- [x] Billing: a refund no longer closes the account (refunding a double checkout's duplicate used to lock out the payer; cancel the subscription to cut someone off). An old return link can't reopen an account Stripe closed. An `unpaid` account is sent to the portal instead of checking out a second subscription. A won dispute reopens.
 
 Done on 2026-10-19:
 - [x] YouTube verified by Google (branding and data access), and the consent screen is In production, so anyone can connect.

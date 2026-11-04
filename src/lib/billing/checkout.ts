@@ -2,9 +2,9 @@ import { paymentsConfigured, automaticTaxEnabled } from "@/lib/billing/config";
 import { BillingError } from "@/lib/billing/errors";
 import { quotePlan } from "@/lib/billing/quote";
 import { isStripeHost, stripeGetOptional, stripeId, stripeRequest, type StripeObject } from "@/lib/billing/stripe-api";
-import { rememberStripeCustomer, saveBilling } from "@/lib/billing/account";
+import { loadAccountBilling, rememberStripeCustomer, saveBilling } from "@/lib/billing/account";
 import { recordBillingPayment } from "@/lib/billing/payments";
-import { billingStatusFromStripe } from "@/lib/billing/access";
+import { automationPaused, billingStatusFromStripe } from "@/lib/billing/access";
 import { publicUrl } from "@/lib/env";
 import { log } from "@/lib/logger";
 
@@ -138,8 +138,15 @@ function listOf(value: StripeObject): StripeObject[] {
  */
 async function clearEarlierCheckouts(customerId: string) {
   const subscriptions = await stripeRequest("GET", `/subscriptions?${new URLSearchParams({ customer: customerId, status: "all", limit: "20" }).toString()}`);
-  const live = listOf(subscriptions).some((subscription) => ["active", "past_due", "trialing"].includes(String(subscription.status)));
-  if (live) throw new BillingError("This account already has a plan. Manage it from the Billing page.", 409);
+  const statuses = listOf(subscriptions).map((subscription) => String(subscription.status));
+  if (statuses.some((status) => ["active", "past_due", "trialing"].includes(status))) {
+    throw new BillingError("This account already has a plan. Manage it from the Billing page.", 409);
+  }
+  // `unpaid` still holds open invoices. A second subscription would bill twice once the card is fixed,
+  // so they settle the old one in the billing portal instead.
+  if (statuses.includes("unpaid")) {
+    throw new BillingError("There's an unpaid invoice on this account. Use Manage billing to pay it and your plan picks up again.", 409);
+  }
   const sessions = await stripeRequest("GET", `/checkout/sessions?${new URLSearchParams({ customer: customerId, status: "open", limit: "20" }).toString()}`);
   for (const session of listOf(sessions)) {
     const id = stripeId(session);
@@ -224,6 +231,12 @@ export async function confirmCheckoutSession(userId: string, sessionId: string):
   }
   const subscription = asObject(session.subscription);
   const subscriptionId = stripeId(session.subscription);
+  // The webhook already closed this very subscription (refund, dispute, cancellation). An old return
+  // link from the browser history must not open it again; only Stripe's own events can.
+  const account = await loadAccountBilling(userId);
+  if (account && subscriptionId && account.stripeSubscriptionId === subscriptionId && automationPaused(account.billingStatus)) {
+    return { access: false, message: "This plan is no longer active. Open Billing to sort it out." };
+  }
   const stripeStatus = typeof subscription?.status === "string" ? subscription.status : "active";
   const planFromSub = typeof asObject(subscription?.metadata)?.plan_id === "string" ? String(asObject(subscription?.metadata)?.plan_id) : null;
   const planId = (typeof meta?.plan_id === "string" ? meta.plan_id : null) ?? planFromSub;

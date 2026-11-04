@@ -49,8 +49,15 @@ async function sendBroadcast(broadcastId: string) {
 
   const [bot] = await db.select().from(bots).where(eq(bots.id, broadcast.botId)).limit(1);
   if (!bot) return;
-  // Left queued rather than failed, so nothing is lost if the plan comes back.
+  // Left queued rather than failed; resumeStuckBroadcasts picks it up once the plan comes back.
   if (await botBillingPaused(bot.id)) return;
+  // Still being prepared (recipient rows go in as one transaction): don't start, and don't finish it empty.
+  const [anyRecipient] = await db
+    .select({ id: broadcastRecipients.id })
+    .from(broadcastRecipients)
+    .where(eq(broadcastRecipients.broadcastId, broadcastId))
+    .limit(1);
+  if (!anyRecipient) return;
   const account = accountFromRow(bot);
 
   await db
@@ -69,7 +76,7 @@ async function sendBroadcast(broadcastId: string) {
     // Claim the row first: another worker (or the confirm request) may be sending this broadcast too.
     const [claimed] = await db
       .update(broadcastRecipients)
-      .set({ status: "sending" })
+      .set({ status: "sending", claimedAt: new Date() })
       .where(and(eq(broadcastRecipients.id, recipient.id), eq(broadcastRecipients.status, "pending")))
       .returning();
     if (!claimed) continue;
@@ -174,6 +181,48 @@ async function releaseSmartRecipients() {
   for (const row of due) await handleBroadcast(row.id);
 }
 
+let lastStuckCheck = 0;
+const STUCK_AFTER_MS = 10 * 60_000;
+
+/**
+ * A broadcast's queue job is taken before any sending starts, so a deploy or crash mid-send used to
+ * leave it "sending" (or a paused account's one "queued") for good. Once a minute, pick those back up.
+ * Rows cut off mid-send are marked failed, not sent again: the message may already have gone out.
+ */
+export async function resumeStuckBroadcasts(now = Date.now()) {
+  if (now - lastStuckCheck < 60_000) return;
+  lastStuckCheck = now;
+  const db = await getDb();
+  const cutoff = new Date(now - STUCK_AFTER_MS);
+  const open = await db
+    .select({ id: broadcasts.id, startedAt: broadcasts.startedAt })
+    .from(broadcasts)
+    .where(inArray(broadcasts.status, ["queued", "sending"]));
+  for (const broadcast of open) {
+    if (inFlight.has(broadcast.id)) continue;
+    const startedLongAgo = broadcast.startedAt ? broadcast.startedAt.getTime() < cutoff.getTime() : false;
+    const cut = await db
+      .update(broadcastRecipients)
+      .set({ status: "failed", error: "Cut off by a restart while sending. It may or may not have gone out." })
+      .where(
+        and(
+          eq(broadcastRecipients.broadcastId, broadcast.id),
+          eq(broadcastRecipients.status, "sending"),
+          startedLongAgo
+            ? sql`(${broadcastRecipients.claimedAt} IS NULL OR ${broadcastRecipients.claimedAt} < ${cutoff.toISOString()}::timestamptz)`
+            : lte(broadcastRecipients.claimedAt, cutoff),
+        ),
+      )
+      .returning();
+    if (cut.length > 0) await bumpCounts(broadcast.id, 0, cut.length);
+    try {
+      await handleBroadcast(broadcast.id);
+    } catch (error) {
+      log.error("Broadcast resume failed", error instanceof Error ? error.message : error);
+    }
+  }
+}
+
 export async function drainJobs(max = 25) {
   for (let i = 0; i < max; i += 1) {
     const job = await dequeueJob();
@@ -195,6 +244,7 @@ export function startWorker() {
       await releaseDueBroadcasts();
       await drainJobs();
       await releaseSmartRecipients();
+      await resumeStuckBroadcasts();
       await sendDueScheduled();
       await resumeDueDelays();
       await resumeDueSequences();

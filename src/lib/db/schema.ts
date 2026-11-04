@@ -343,6 +343,8 @@ export const broadcastRecipients = pgTable(
     /** A/B test arm: "a" or "b". */
     variant: text("variant"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
+    /** When a worker took this row to send. A row left "sending" long after this was cut off by a restart. */
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
   },
   (table) => [uniqueIndex("broadcast_recipients_unique").on(table.broadcastId, table.contactId)],
 );
@@ -403,6 +405,8 @@ export const sequenceSubscriptions = pgTable(
     nextIndex: integer("next_index").notNull().default(0),
     nextAt: timestamp("next_at", { withTimezone: true }).notNull().defaultNow(),
     status: text("status").notNull().default("active"),
+    /** Failed tries at the current step. Reset when a step goes out. */
+    attempts: integer("attempts").notNull().default(0),
   },
   (table) => [uniqueIndex("sequence_subscriptions_unique").on(table.sequenceId, table.contactId)],
 );

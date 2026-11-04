@@ -40,7 +40,7 @@ async function userFor(source: StripeObject, extraUserId?: string | null): Promi
   });
 }
 
-/** Stripe gave up, or money came back (refund, dispute, fraud warning). Closes the workspace and pauses automations. */
+/** Stripe gave up, or money is at risk (dispute, fraud warning). Closes the workspace and pauses automations. */
 async function suspend(userId: string) {
   await saveBilling({ userId, billingStatus: "unpaid" });
 }
@@ -69,8 +69,8 @@ async function customerFromCharge(chargeId: string | null): Promise<string | nul
  * Subscription state lives here, not on the browser's return page. A Checkout session opens the
  * workspace only once Stripe reports `payment_status=paid` (including `async_payment_succeeded`).
  * `unpaid` and `no_payment_required` leave it closed. A failed renewal only marks it `past_due`
- * (still open) while Stripe retries the card. Stripe giving up (`unpaid`), a cancellation, a full
- * refund, a dispute or an early fraud warning closes it.
+ * (still open) while Stripe retries the card. Stripe giving up (`unpaid`), a cancellation, a dispute
+ * or an early fraud warning closes it. A refund alone does not; a won dispute reopens it.
  *
  * The plan comes from Checkout metadata (`plan_id`) and the price lookup key. Charged amounts
  * are stored on the payment row only: tax and Adaptive Pricing change them.
@@ -172,10 +172,24 @@ export async function handleBillingEvent(event: StripeEvent): Promise<{ ok: true
     return { ok: true };
   }
 
+  // A refund is something we do on purpose in Stripe, and it used to close the account. Refunding the
+  // duplicate from a double checkout (or a goodwill month) then shut a paying customer out, because both
+  // charges share one Customer. Access follows the subscription: to cut someone off, cancel it in Stripe.
   if (type === "charge.refunded") {
-    if (object.refunded !== true) return { ok: true, ignored: true };
-    const userId = await userFor(object);
-    if (userId) await suspend(userId);
+    if (object.refunded === true) log.info("A charge was fully refunded; access follows the subscription", stripeId(object.customer));
+    return { ok: true, ignored: true };
+  }
+
+  // A dispute we won: put back whatever the live subscription says (a lost one keeps the account closed).
+  if (type === "charge.dispute.closed") {
+    if (object.status !== "won") return { ok: true, ignored: true };
+    const customerId = await customerFromCharge(text(object.charge));
+    const userId = customerId ? await findBillingUser({ customerId }) : null;
+    const account = userId ? await loadAccountBilling(userId) : null;
+    if (!userId || !account?.stripeSubscriptionId) return { ok: true, ignored: true };
+    const subscription = await stripeRequest("GET", `/subscriptions/${encodeURIComponent(account.stripeSubscriptionId)}`);
+    const status = billingStatusFromStripe(text(subscription.status));
+    if (status !== "none") await saveBilling({ userId, billingStatus: status });
     return { ok: true };
   }
 

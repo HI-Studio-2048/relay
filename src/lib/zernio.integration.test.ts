@@ -393,15 +393,16 @@ describe("Meta accounts through the company Zernio key", () => {
         await route.POST(new Request("https://recatch.test/api/flows/giveaway/missed-comments", { method: "POST", body: JSON.stringify({ accountId: "a-3", postId: "post-9", limit: 1, skip }) }), params)
       ).json()) as { sent: number; failed: number; remaining: number };
     // People taken off the list on the page are left alone, and stay on the list for next time.
-    expect(await send(["c-a", "c-r"])).toEqual({ sent: 0, failed: 0, remaining: 0 });
+    expect(await send(["c-a", "c-r"])).toEqual({ sent: 0, failed: 0, remaining: 0, tried: [] });
     expect(sentBodies).toHaveLength(before);
     expect(await preview()).toHaveLength(2);
     // A live comment answered while the catch-up runs leaves its own "sent" event; it must not count here.
     const { flowEvents } = await import("@/lib/db/schema");
     const [done] = await db.select().from(contacts).where(eq(contacts.telegramUserId, "a-3:u-done"));
     await db.insert(flowEvents).values({ id: "live-dm", botId: row!.id, flowId: "giveaway", contactId: done!.id, kind: "sent", createdAt: new Date(Date.now() + 60_000) });
-    expect(await send()).toEqual({ sent: 1, failed: 0, remaining: 1 });
-    expect(await send()).toEqual({ sent: 1, failed: 0, remaining: 0 });
+    // Each batch reports who it tried, so the page can leave them out of the next round.
+    expect(await send()).toEqual({ sent: 1, failed: 0, remaining: 1, tried: ["c-a"] });
+    expect(await send(["c-a"])).toEqual({ sent: 1, failed: 0, remaining: 0, tried: ["c-r"] });
     expect(await preview()).toEqual([]);
 
     const paths = sentBodies.slice(before).map((body) => body.path);

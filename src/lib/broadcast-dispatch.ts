@@ -27,32 +27,50 @@ export async function materializeBroadcast(broadcastId: string, from: string[] =
     .where(and(eq(broadcasts.id, broadcastId), inArray(broadcasts.status, from)))
     .returning();
   if (!claimed) return null;
-  const audience = await broadcastAudience(claimed.botId, claimed.tagId, sanitizeSegment(claimed.segment));
-  if (audience.length === 0) {
-    await db.update(broadcasts).set({ status: claimed.scheduledAt ? "failed" : "awaiting_confirm", lastError: claimed.scheduledAt ? "Nobody matched the audience" : null }).where(eq(broadcasts.id, broadcastId));
-    throw new EmptyAudienceError();
-  }
+  // Claimed but not queued yet: put it back where a person can retry (a scheduled one is marked failed).
+  const giveBack = (lastError: string | null) =>
+    db
+      .update(broadcasts)
+      .set({ status: claimed.scheduledAt ? "failed" : "awaiting_confirm", lastError: claimed.scheduledAt ? lastError : null })
+      .where(eq(broadcasts.id, broadcastId));
+  try {
+    const audience = await broadcastAudience(claimed.botId, claimed.tagId, sanitizeSegment(claimed.segment));
+    if (audience.length === 0) {
+      await giveBack("Nobody matched the audience");
+      throw new EmptyAudienceError();
+    }
 
-  const sendAt = claimed.smartTiming ? await smartSendTimes(audience.map((contact) => contact.id)) : new Map<string, Date>();
-  await db.delete(broadcastRecipients).where(eq(broadcastRecipients.broadcastId, broadcastId));
-  const arms = claimed.bodyB?.trim() && !claimed.flowId ? splitArms(audience.length) : null;
-  await db.insert(broadcastRecipients).values(
-    audience.map((contact, index) => ({
+    const sendAt = claimed.smartTiming ? await smartSendTimes(audience.map((contact) => contact.id)) : new Map<string, Date>();
+    const arms = claimed.bodyB?.trim() && !claimed.flowId ? splitArms(audience.length) : null;
+    const rows = audience.map((contact, index) => ({
       id: crypto.randomUUID(),
       broadcastId,
       contactId: contact.id,
       status: "pending",
       sendAt: sendAt.get(contact.id) ?? null,
       variant: arms ? arms[index]! : null,
-    })),
-  );
-  const [updated] = await db
-    .update(broadcasts)
-    .set({ totalCount: audience.length, sentCount: 0, failedCount: 0 })
-    .where(eq(broadcasts.id, broadcastId))
-    .returning();
-  await enqueueBroadcast({ kind: "broadcast", broadcastId });
-  return updated!;
+    }));
+    // One transaction, so the worker never sees half an audience. Chunked, because a single insert of
+    // ten thousand rows runs past Postgres's limit on parameters in one statement.
+    const updated = await db.transaction(async (tx) => {
+      await tx.delete(broadcastRecipients).where(eq(broadcastRecipients.broadcastId, broadcastId));
+      for (let i = 0; i < rows.length; i += 1000) await tx.insert(broadcastRecipients).values(rows.slice(i, i + 1000));
+      const [row] = await tx
+        .update(broadcasts)
+        .set({ totalCount: audience.length, sentCount: 0, failedCount: 0 })
+        .where(eq(broadcasts.id, broadcastId))
+        .returning();
+      return row;
+    });
+    await enqueueBroadcast({ kind: "broadcast", broadcastId });
+    return updated!;
+  } catch (error) {
+    if (!(error instanceof EmptyAudienceError)) {
+      log.error("Broadcast could not be queued", error instanceof Error ? error.message : error);
+      await giveBack("Could not prepare the send").catch(() => undefined);
+    }
+    throw error;
+  }
 }
 
 /**

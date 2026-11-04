@@ -4,7 +4,7 @@ export type BillingStatus = "active" | "past_due" | "unpaid" | "canceled" | "non
  * Who gets into the workspace.
  * - `active`: a current subscription, or an account that existed before checkout.
  * - `past_due`: a renewal failed and Stripe is still retrying. The workspace stays open meanwhile.
- * - `unpaid`: Stripe gave up on the payment, or a refund, dispute or fraud warning came in. Closed.
+ * - `unpaid`: Stripe gave up on the payment, or a dispute or fraud warning came in. Closed.
  * - `canceled`: the subscription ended. Closed.
  * - `none`: signed up, checkout never finished. Closed.
  */
